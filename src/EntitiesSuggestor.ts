@@ -41,20 +41,18 @@ export class EntitiesSuggestor extends EditorSuggest<string> {
 	 * @returns An object with the start and end positions of the word and the word itself as the query, or null if the conditions are not met.
 	 */
 	onTrigger(cursor: EditorPosition, editor: Editor, file: TFile): EditorSuggestTriggerInfo | null {
-		// const currentFileToCursor = editor.getRange({line: 0, ch: 0}, cursor);
-
-		// Get last word in current line
+		// Get line to cursor and look for entities key character (e.g. @) and at least one character after it
 		const currentLineToCursor = editor.getLine(cursor.line).slice(0, cursor.ch);
-		const currentLineLastWordStart = currentLineToCursor.search(/:?[$\w\u0370-\u03FF]+$/);
+		const indexOfSearchStart = currentLineToCursor.search(/@.+/) + 1;
 		// if there is no word, return null
-		if (currentLineLastWordStart === -1) {
+		if (indexOfSearchStart === -1) {
 			return null;
 		}
 
 		return {
-			start: {line: cursor.line, ch: currentLineLastWordStart},
+			start: {line: cursor.line, ch: indexOfSearchStart},
 			end: cursor,
-			query: currentLineToCursor.slice(currentLineLastWordStart)
+			query: currentLineToCursor.slice(indexOfSearchStart)
 		};
 	}
 
@@ -66,15 +64,17 @@ export class EntitiesSuggestor extends EditorSuggest<string> {
 			// const currentFileToStart = context.editor.getRange({line: 0, ch: 0}, context.start);
 			// localSymbols = ...
 			// localSymbols = [...new Set(Array.from(matches, (match) => 'v|' + match[1]))];
+			localSymbols = ['p|test1', 'p|test2', 'p|test3'];
 
-			// this.localSuggestionCache = localSymbols;
-			// this.lastSuggestionListUpdate = performance.now();
+			this.localSuggestionCache = localSymbols;
+			this.lastSuggestionListUpdate = performance.now();
 		} else {
 			localSymbols = this.localSuggestionCache
 		}
 
 		let suggestions: string[] = [];
 		// ...
+		suggestions = localSymbols.filter((suggestion) => suggestion.toLowerCase().includes(context.query.split("|")[1].toLowerCase()));
 
 		return suggestions;
 	}
@@ -91,8 +91,8 @@ export class EntitiesSuggestor extends EditorSuggest<string> {
 		// eslint-disable-next-line @typescript-eslint/no-unused-vars
 		const [iconType, suggestionText, noteText] = value.split('|');
 
-		if (iconType === 'f') {
-			setIcon(suggestionFlair, 'function-square');		
+		if (iconType === 'p') {
+			setIcon(suggestionFlair, 'user');		
 		}
 		suggestionTitle.setText(suggestionText);
 		if (noteText) {
