@@ -1,22 +1,22 @@
 import Entities from "./main";
 import {
-    EditorSuggest,
-    EditorPosition,
-    Editor,
-    TFile,
-    EditorSuggestTriggerInfo,
-    EditorSuggestContext,
-    setIcon,
- } from "obsidian";
+	EditorSuggest,
+	EditorPosition,
+	Editor,
+	TFile,
+	EditorSuggestTriggerInfo,
+	EditorSuggestContext,
+	setIcon,
+} from "obsidian";
 
 export class EntitiesSuggestor extends EditorSuggest<string> {
 	plugin: Entities;
-	
+
 	/**
 	 * Time of last suggestion list update
-	 * @type {number}
+	 * @type {number | undefined}
 	 * @private */
-	private lastSuggestionListUpdate = 0;
+	private lastSuggestionListUpdate: number | undefined = undefined;
 
 	/**
 	 * List of possible suggestions based on current code block
@@ -40,27 +40,38 @@ export class EntitiesSuggestor extends EditorSuggest<string> {
 	 * @param file - The current file being edited.
 	 * @returns An object with the start and end positions of the word and the word itself as the query, or null if the conditions are not met.
 	 */
-	onTrigger(cursor: EditorPosition, editor: Editor, file: TFile): EditorSuggestTriggerInfo | null {
+	onTrigger(
+		cursor: EditorPosition,
+		editor: Editor,
+		file: TFile
+	): EditorSuggestTriggerInfo | null {
 		// Get line to cursor and look for entities key character (e.g. @) and at least one character after it
-		const currentLineToCursor = editor.getLine(cursor.line).slice(0, cursor.ch);
-		const indexOfSearchStart = currentLineToCursor.search(/@.+/) + 1;
+		const currentLineToCursor = editor
+			.getLine(cursor.line)
+			.slice(0, cursor.ch);
+		const indexOfTriggerCharacter = currentLineToCursor.search(/@.+/);
 		// if there is no word, return null
-		if (indexOfSearchStart === -1) {
+		if (indexOfTriggerCharacter === -1) {
 			return null;
 		}
 
 		return {
-			start: {line: cursor.line, ch: indexOfSearchStart},
+			start: { line: cursor.line, ch: indexOfTriggerCharacter + 1 },
 			end: cursor,
-			query: currentLineToCursor.slice(indexOfSearchStart)
+			query: currentLineToCursor.slice(indexOfTriggerCharacter + 1),
 		};
 	}
 
-	getSuggestions(context: EditorSuggestContext): string[] | Promise<string[]> {
-		let localSymbols: string [] = [];	
+	getSuggestions(
+		context: EditorSuggestContext
+	): string[] | Promise<string[]> {
+		let localSymbols: string[] = [];
 
 		// check if the last suggestion list update was less than 200ms ago
-		if (performance.now() - this.lastSuggestionListUpdate > 200) {
+		if (
+			!this.lastSuggestionListUpdate ||
+			performance.now() - this.lastSuggestionListUpdate > 200
+		) {
 			// const currentFileToStart = context.editor.getRange({line: 0, ch: 0}, context.start);
 			// localSymbols = ...
 			// localSymbols = [...new Set(Array.from(matches, (match) => 'v|' + match[1]))];
@@ -69,30 +80,39 @@ export class EntitiesSuggestor extends EditorSuggest<string> {
 			this.localSuggestionCache = localSymbols;
 			this.lastSuggestionListUpdate = performance.now();
 		} else {
-			localSymbols = this.localSuggestionCache
+			localSymbols = this.localSuggestionCache;
 		}
 
-		let suggestions: string[] = [];
-		// ...
-		suggestions = localSymbols.filter((suggestion) => suggestion.toLowerCase().includes(context.query.split("|")[1].toLowerCase()));
+		const suggestions = localSymbols.filter((suggestion) =>
+			suggestion
+				.toLowerCase()
+				.includes(
+					context.query?.toLowerCase() ?? []
+				)
+		);
 
 		return suggestions;
 	}
 
 	renderSuggestion(value: string, el: HTMLElement): void {
-		
-		// el.addClasses(['mod-complex', 'numerals-suggestion']);
-		const suggestionContent = el.createDiv({cls: 'suggestion-content'});
-		const suggestionTitle = suggestionContent.createDiv({cls: 'suggestion-title'});
-		const suggestionNote = suggestionContent.createDiv({cls: 'suggestion-note'});
-		const suggestionAux = el.createDiv({cls: 'suggestion-aux'});
-		const suggestionFlair = suggestionAux.createDiv({cls: 'suggestion-flair'});
+		el.addClasses(['entities-suggestion']);
+		const suggestionContent = el.createDiv({ cls: "suggestion-content" });
+		const suggestionTitle = suggestionContent.createDiv({
+			cls: "suggestion-title",
+		});
+		const suggestionNote = suggestionContent.createDiv({
+			cls: "suggestion-note",
+		});
+		const suggestionAux = el.createDiv({ cls: "suggestion-aux" });
+		const suggestionFlair = suggestionAux.createDiv({
+			cls: "suggestion-flair",
+		});
 
 		// eslint-disable-next-line @typescript-eslint/no-unused-vars
-		const [iconType, suggestionText, noteText] = value.split('|');
+		const [iconType, suggestionText, noteText] = value.split("|");
 
-		if (iconType === 'p') {
-			setIcon(suggestionFlair, 'user');		
+		if (iconType === "p") {
+			setIcon(suggestionFlair, "user");
 		}
 		suggestionTitle.setText(suggestionText);
 		if (noteText) {
@@ -109,17 +129,17 @@ export class EntitiesSuggestor extends EditorSuggest<string> {
 	selectSuggestion(value: string, evt: MouseEvent | KeyboardEvent): void {
 		if (this.context) {
 			const editor = this.context.editor;
-			const [suggestionType, suggestion] = value.split('|');
+			const [suggestionType, suggestion] = value.split("|");
 			const start = this.context.start;
 			const end = editor.getCursor(); // get new end position in case cursor has moved
-			
+
 			editor.replaceRange(suggestion, start, end);
 			const newCursor = end;
 
 			newCursor.ch = start.ch + suggestion.length;
 
-			editor.setCursor(newCursor);			
-			this.close()
+			editor.setCursor(newCursor);
+			this.close();
 		}
 	}
 }

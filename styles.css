@@ -1,8 +1,31 @@
-/*
+/* @settings
 
-This CSS file will be included with your plugin, and
-available in the app when your plugin is enabled.
-
-If your plugin does not need CSS, delete this file.
-
+name: Numerals
+id: numerals-style
+settings:
+    - 
+        id: numerals-font
+        title: Numerals block font
+        description: Font used for Numerals block. Default is same as a code-block
+        type: variable-text
+        default: ''
+    - 
+        id: numerals-size
+        title: Numerals block font size
+        description: Accepts an CSS font-size value. Default is same as a code-block
+        type: variable-text
+        default: ''
 */
+
+body {
+    --entities-font: var(--font-monospace);
+    --entities-size: var(--code-size);
+}
+
+/***************************/
+/* ** Suggestion Style ** */
+
+.entities-suggestion {
+    font-family: var(--entities-font);
+    font-size: var(--entities-size);
+}

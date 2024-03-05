@@ -1,6 +1,7 @@
 import { Plugin } from "obsidian";
 import { EntitiesSettingTab } from "./EntitiesSettings";
 import { EntitiesSettings, DEFAULT_SETTINGS } from "./entities.types";
+import { EntitiesSuggestor } from "./EntitiesSuggestor";
 
 export default class Entities extends Plugin {
 	settings: EntitiesSettings;
@@ -10,6 +11,8 @@ export default class Entities extends Plugin {
 
 		// This adds a settings tab so the user can configure various aspects of the plugin
 		this.addSettingTab(new EntitiesSettingTab(this.app, this));
+
+		this.registerEditorSuggest(new EntitiesSuggestor(this));
 	}
 
 	onunload() {}
