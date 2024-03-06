@@ -1,4 +1,4 @@
-import { App, Editor, TFile } from "obsidian";
+import { App, Editor, EditorSuggestContext, TFile } from "obsidian";
 import Entities from "../src/main";
 import { EntitiesSuggestor } from "../src/EntitiesSuggestor";
 
@@ -98,26 +98,8 @@ describe("getSuggestions", () => {
 
 	beforeEach(() => {
 		jest.useFakeTimers();
-		jest.setSystemTime(new Date("2023-04-01"));
-
-		// Assuming mockPlugin is defined in a higher scope or imported
 		suggestor = new EntitiesSuggestor(mockPlugin);
-
-		// Mocking the editor instance
-		mockEditor = {
-			getLine: jest.fn().mockImplementation((line: number) => {
-				if (line === 0) {
-					return "@test";
-				}
-				return "";
-			}),
-		} as unknown as jest.Mocked<Editor>;
-
-		// Mocking the TFile instance with minimal properties for use in tests
-		mockFile = {
-			path: "mock.md", // Mock file path
-			// Additional properties can be added here as needed
-		} as unknown as TFile;
+		jest.spyOn(suggestor, 'getEntityList').mockReturnValue(['p|Alice', 'p|Bob', 'p|Charlie']);
 	});
 
 	afterEach(() => {
@@ -125,63 +107,56 @@ describe("getSuggestions", () => {
 	});
 
 	test("getSuggestions should return filtered suggestions based on the query", async () => {
-		const context = {
-			query: "test2",
-			editor: mockEditor,
-			start: { line: 0, ch: 0 },
-			end: { line: 0, ch: 6 },
-			file: mockFile, // Include the mock file here
-		};
-
-		// Simulate a delay to bypass the 200ms check
-		jest.advanceTimersByTime(250);
-
-		const suggestions = await suggestor.getSuggestions(context);
-		expect(suggestions).toEqual(["p|test2"]);
+		const context = { query: "Al", editor: mockEditor, file: mockFile };
+		const suggestions = await suggestor.getSuggestions(context as unknown as EditorSuggestContext);
+		expect(suggestions).toEqual(['p|Alice']);
 	});
 
 	test("getSuggestions should use the local cache if called again within 200ms", async () => {
-		const contextFirstCall = {
-			query: "test1",
-			editor: mockEditor,
-			start: { line: 0, ch: 0 },
-			end: { line: 0, ch: 6 },
-			file: mockFile, // Include the mock file here
-		};
+		const context1 = { query: "Al", editor: mockEditor, file: mockFile };
+		const context2 = { query: "Bo", editor: mockEditor, file: mockFile };
 
-		const contextSecondCall = {
-			query: "test3",
-			editor: mockEditor,
-			start: { line: 0, ch: 0 },
-			end: { line: 0, ch: 6 },
-			file: mockFile, // Include the mock file here
-		};
+		// First call to getSuggestions
+		const suggestions1 = await suggestor.getSuggestions(context1 as unknown as EditorSuggestContext);
+		expect(suggestions1).toEqual(['p|Alice']);
+		expect(suggestor.getEntityList).toHaveBeenCalledTimes(1);
 
-		// First call to populate the cache
-		const firstCallSuggestions = await suggestor.getSuggestions(contextFirstCall);
-		expect(firstCallSuggestions).toEqual(['p|test1']);
+		// Advance time by less than 200ms
+		jest.advanceTimersByTime(100);
 
-		// Immediately call again to test cache usage
-		const secondCallSuggestions = await suggestor.getSuggestions(contextSecondCall);
-		expect(secondCallSuggestions).toEqual(['p|test3']);
+		// Second call to getSuggestions
+		const suggestions2 = await suggestor.getSuggestions(context2 as unknown as EditorSuggestContext);
+		expect(suggestor.getEntityList).toHaveBeenCalledTimes(1);
+		expect(suggestions2).toEqual(['p|Bob']);
 
-		// Ensure the cache was indeed used by checking the mock's call count
-		expect(mockEditor.getLine).toHaveBeenCalledTimes(0); // Assuming getLine would have been called if not using cache
+		
+	});
+
+	test("getSuggestions should update the local cache if called again after 200ms", async () => {
+		const context1 = { query: "Al", editor: mockEditor, file: mockFile };
+		const context2 = { query: "Ali", editor: mockEditor, file: mockFile };
+		
+
+
+		// First call to getSuggestions
+		jest.spyOn(suggestor, 'getEntityList').mockReturnValue(['p|Alice', 'p|Bob', 'p|Charlie']);
+		const suggestions1 = await suggestor.getSuggestions(context1 as unknown as EditorSuggestContext);
+		expect(suggestions1).toEqual(['p|Alice']);
+		expect(suggestor.getEntityList).toHaveBeenCalledTimes(1);
+
+		// Advance time by more than 200ms
+		jest.advanceTimersByTime(300);
+
+		// Second call to getSuggestions
+		jest.spyOn(suggestor, 'getEntityList').mockReturnValue(['p|Alive', 'p|Bobbi', 'p|Charles']);
+		const suggestions2 = await suggestor.getSuggestions(context2 as unknown as EditorSuggestContext);
+		expect(suggestor.getEntityList).toHaveBeenCalledTimes(2);
+		expect(suggestions2).toEqual(['p|Alive']);
 	});
 
 	test("getSuggestions should return an empty array if no suggestions match the query", async () => {
-		const context = {
-			query: "nonexistent",
-			editor: mockEditor,
-			start: { line: 0, ch: 0 },
-			end: { line: 0, ch: 12 },
-			file: mockFile, // Include the mock file here
-		};
-
-		// Simulate a delay to bypass the 200ms check
-		jest.advanceTimersByTime(250);
-
-		const suggestions = await suggestor.getSuggestions(context);
+		const context = { query: "Z", editor: mockEditor, file: mockFile };
+		const suggestions = await suggestor.getSuggestions(context as unknown as EditorSuggestContext);
 		expect(suggestions).toEqual([]);
 	});
 });

@@ -24,6 +24,20 @@ export class EntitiesSuggestor extends EditorSuggest<string> {
 	 * @private */
 	private localSuggestionCache: string[] = [];
 
+	public getEntityList(): string[] {
+		// return list of entities
+		// const allFiles = this.plugin.app.vault.getFiles();
+		// const folderName = "People";
+		// const entities = allFiles.filter((file) => file.path.startsWith(folderName));
+
+		const entityFolder = this.plugin.app.vault.getFolderByPath("People");
+		const entities: TFile[] | undefined = entityFolder?.children.filter(
+			(file) => file instanceof TFile
+		) as TFile[] | undefined;
+
+		return entities?.map((file) => `p|${file.basename}`) ?? [];
+	}
+
 	//empty constructor
 	constructor(plugin: Entities) {
 		super(plugin.app);
@@ -45,57 +59,45 @@ export class EntitiesSuggestor extends EditorSuggest<string> {
 		editor: Editor,
 		file: TFile
 	): EditorSuggestTriggerInfo | null {
-		// Get line to cursor and look for entities key character (e.g. @) and at least one character after it
+		console.log("onTrigger");
+		const currentLine = cursor.line;
 		const currentLineToCursor = editor
-			.getLine(cursor.line)
+			.getLine(currentLine)
 			.slice(0, cursor.ch);
-		const indexOfTriggerCharacter = currentLineToCursor.search(/@.+/);
-		// if there is no word, return null
-		if (indexOfTriggerCharacter === -1) {
-			return null;
+
+		const match = currentLineToCursor.match(/(?:^|[\W])(@)(\S*)$/);
+
+		if (match && match.index !== undefined) {
+			const start = match.index + match[0].indexOf("@") + 1; // Adjust start to exclude '@' and any leading space
+			const query = match[2]; // The captured query part after '@'
+			const end = start + query.length; // Calculate end based on start and query length
+
+			return {
+				start: { line: currentLine, ch: start },
+				query,
+				end: { line: currentLine, ch: end },
+			};
 		}
 
-		return {
-			start: { line: cursor.line, ch: indexOfTriggerCharacter + 1 },
-			end: cursor,
-			query: currentLineToCursor.slice(indexOfTriggerCharacter + 1),
-		};
+		return null;
 	}
 
 	getSuggestions(
 		context: EditorSuggestContext
 	): string[] | Promise<string[]> {
-		let localSymbols: string[] = [];
-
-		// check if the last suggestion list update was less than 200ms ago
-		if (
-			!this.lastSuggestionListUpdate ||
-			performance.now() - this.lastSuggestionListUpdate > 200
-		) {
-			// const currentFileToStart = context.editor.getRange({line: 0, ch: 0}, context.start);
-			// localSymbols = ...
-			// localSymbols = [...new Set(Array.from(matches, (match) => 'v|' + match[1]))];
-			localSymbols = ['p|test1', 'p|test2', 'p|test3'];
-
-			this.localSuggestionCache = localSymbols;
+		if (this.lastSuggestionListUpdate == undefined || performance.now() - this.lastSuggestionListUpdate > 200) {
+			this.localSuggestionCache = this.getEntityList();
 			this.lastSuggestionListUpdate = performance.now();
-		} else {
-			localSymbols = this.localSuggestionCache;
 		}
-
-		const suggestions = localSymbols.filter((suggestion) =>
-			suggestion
-				.toLowerCase()
-				.includes(
-					context.query?.toLowerCase() ?? []
-				)
+		const suggestions = this.localSuggestionCache.filter((suggestion) =>
+			suggestion.toLowerCase().includes(context.query?.toLowerCase() ?? "")
 		);
 
 		return suggestions;
 	}
 
 	renderSuggestion(value: string, el: HTMLElement): void {
-		el.addClasses(['entities-suggestion']);
+		el.addClasses(["entities-suggestion"]);
 		const suggestionContent = el.createDiv({ cls: "suggestion-content" });
 		const suggestionTitle = suggestionContent.createDiv({
 			cls: "suggestion-title",
