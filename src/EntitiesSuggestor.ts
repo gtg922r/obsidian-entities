@@ -131,14 +131,15 @@ export class EntitiesSuggestor extends EditorSuggest<string> {
 	selectSuggestion(value: string, evt: MouseEvent | KeyboardEvent): void {
 		if (this.context) {
 			const editor = this.context.editor;
-			const [suggestionType, suggestion] = value.split("|");
-			const start = this.context.start;
+			const [suggestionType, suggestion] = value.split("|");			
+			const suggestionLink = `[[${suggestion}]]`;
+			const start = {...this.context.start, ch: this.context.start.ch - 1}; // Adjust start to include '@'
 			const end = editor.getCursor(); // get new end position in case cursor has moved
 
-			editor.replaceRange(suggestion, start, end);
+			editor.replaceRange(suggestionLink, start, end);
 			const newCursor = end;
 
-			newCursor.ch = start.ch + suggestion.length;
+			newCursor.ch = start.ch + suggestionLink.length;
 
 			editor.setCursor(newCursor);
 			this.close();
