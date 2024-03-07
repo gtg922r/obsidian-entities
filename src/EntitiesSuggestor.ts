@@ -97,7 +97,7 @@ export class EntitiesSuggestor extends EditorSuggest<string> {
 	}
 
 	renderSuggestion(value: string, el: HTMLElement): void {
-		el.addClasses(["entities-suggestion"]);
+		el.addClasses(["entities-suggestion", "mod-complex"]);
 		const suggestionContent = el.createDiv({ cls: "suggestion-content" });
 		const suggestionTitle = suggestionContent.createDiv({
 			cls: "suggestion-title",
@@ -131,7 +131,7 @@ export class EntitiesSuggestor extends EditorSuggest<string> {
 	selectSuggestion(value: string, evt: MouseEvent | KeyboardEvent): void {
 		if (this.context) {
 			const editor = this.context.editor;
-			const [suggestionType, suggestion] = value.split("|");			
+			const [ , suggestion] = value.split("|");			
 			const suggestionLink = `[[${suggestion}]]`;
 			const start = {...this.context.start, ch: this.context.start.ch - 1}; // Adjust start to include '@'
 			const end = editor.getCursor(); // get new end position in case cursor has moved
