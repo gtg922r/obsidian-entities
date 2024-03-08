@@ -9,7 +9,13 @@ import {
 	setIcon,
 } from "obsidian";
 
-export class EntitiesSuggestor extends EditorSuggest<string> {
+export interface EntitySuggestionItem {
+	suggestionText: string;	
+	icon?: string;
+	noteText?: string;
+}
+
+export class EntitiesSuggestor extends EditorSuggest<EntitySuggestionItem> {
 	plugin: Entities;
 
 	/**
@@ -20,22 +26,21 @@ export class EntitiesSuggestor extends EditorSuggest<string> {
 
 	/**
 	 * List of possible suggestions based on current code block
-	 * @type {string[]}
+	 * @type {EntitySuggestionItem[]}
 	 * @private */
-	private localSuggestionCache: string[] = [];
+	private localSuggestionCache: EntitySuggestionItem[] = [];
 
-	public getEntityList(): string[] {
-		// return list of entities
-		// const allFiles = this.plugin.app.vault.getFiles();
-		// const folderName = "People";
-		// const entities = allFiles.filter((file) => file.path.startsWith(folderName));
-
+	public getEntityList(): EntitySuggestionItem[] {
 		const entityFolder = this.plugin.app.vault.getFolderByPath("People");
 		const entities: TFile[] | undefined = entityFolder?.children.filter(
 			(file) => file instanceof TFile
 		) as TFile[] | undefined;
 
-		return entities?.map((file) => `p|${file.basename}`) ?? [];
+		return entities?.map((file) => ({
+            suggestionText: file.basename,
+            icon: "p", // Assuming 'p' stands for a specific icon type
+            // noteText can be added here if available
+        })) ?? [];
 	}
 
 	//empty constructor
@@ -84,57 +89,41 @@ export class EntitiesSuggestor extends EditorSuggest<string> {
 
 	getSuggestions(
 		context: EditorSuggestContext
-	): string[] | Promise<string[]> {
+	): EntitySuggestionItem[] | Promise<EntitySuggestionItem[]> {
 		if (this.lastSuggestionListUpdate == undefined || performance.now() - this.lastSuggestionListUpdate > 200) {
 			this.localSuggestionCache = this.getEntityList();
 			this.lastSuggestionListUpdate = performance.now();
 		}
-		const suggestions = this.localSuggestionCache.filter((suggestion) =>
-			suggestion.toLowerCase().includes(context.query?.toLowerCase() ?? "")
+		const suggestions = this.localSuggestionCache.filter((suggestionItem) =>
+			suggestionItem.suggestionText.toLowerCase().includes(context.query?.toLowerCase() ?? "")
 		);
 
 		return suggestions;
 	}
 
-	renderSuggestion(value: string, el: HTMLElement): void {
+	renderSuggestion(value: EntitySuggestionItem, el: HTMLElement): void {
 		el.addClasses(["entities-suggestion", "mod-complex"]);
 		const suggestionContent = el.createDiv({ cls: "suggestion-content" });
-		const suggestionTitle = suggestionContent.createDiv({
-			cls: "suggestion-title",
-		});
-		const suggestionNote = suggestionContent.createDiv({
-			cls: "suggestion-note",
-		});
+		const suggestionTitle = suggestionContent.createDiv({ cls: "suggestion-title" });
+		const suggestionNote = suggestionContent.createDiv({ cls: "suggestion-note" });
 		const suggestionAux = el.createDiv({ cls: "suggestion-aux" });
-		const suggestionFlair = suggestionAux.createDiv({
-			cls: "suggestion-flair",
-		});
+		const suggestionFlair = suggestionAux.createDiv({ cls: "suggestion-flair" });
 
-		// eslint-disable-next-line @typescript-eslint/no-unused-vars
-		const [iconType, suggestionText, noteText] = value.split("|");
-
-		if (iconType === "p") {
-			setIcon(suggestionFlair, "user");
+		if (value.icon) {
+			setIcon(suggestionFlair, value.icon);
 		}
-		suggestionTitle.setText(suggestionText);
-		if (noteText) {
-			suggestionNote.setText(noteText);
+		suggestionTitle.setText(value.suggestionText);
+		if (value.noteText) {
+			suggestionNote.setText(value.noteText);
 		}
 	}
 
-	/**
-	 * Called when a suggestion is selected. Replaces the current word with the selected suggestion
-	 * @param value The selected suggestion
-	 * @param evt The event that triggered the selection
-	 * @returns void
-	 */
-	selectSuggestion(value: string, evt: MouseEvent | KeyboardEvent): void {
+	selectSuggestion(value: EntitySuggestionItem, evt: MouseEvent | KeyboardEvent): void {
 		if (this.context) {
 			const editor = this.context.editor;
-			const [ , suggestion] = value.split("|");			
-			const suggestionLink = `[[${suggestion}]]`;
-			const start = {...this.context.start, ch: this.context.start.ch - 1}; // Adjust start to include '@'
-			const end = editor.getCursor(); // get new end position in case cursor has moved
+			const suggestionLink = `[[${value.suggestionText}]]`;
+			const start = {...this.context.start, ch: this.context.start.ch - 1};
+			const end = editor.getCursor();
 
 			editor.replaceRange(suggestionLink, start, end);
 			const newCursor = end;

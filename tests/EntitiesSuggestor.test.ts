@@ -1,6 +1,6 @@
 import { App, Editor, EditorSuggestContext, TFile } from "obsidian";
 import Entities from "../src/main";
-import { EntitiesSuggestor } from "../src/EntitiesSuggestor";
+import { EntitiesSuggestor, EntitySuggestionItem } from "../src/EntitiesSuggestor";
 
 // Mocking the necessary Obsidian interfaces and classes inline
 jest.mock("obsidian", () => {
@@ -99,7 +99,12 @@ describe("getSuggestions", () => {
 	beforeEach(() => {
 		jest.useFakeTimers();
 		suggestor = new EntitiesSuggestor(mockPlugin);
-		jest.spyOn(suggestor, 'getEntityList').mockReturnValue(['p|Alice', 'p|Bob', 'p|Charlie']);
+		// Update mock return values to return EntitySuggestionItem[]
+		jest.spyOn(suggestor, 'getEntityList').mockReturnValue([
+			{ suggestionText: 'Alice', icon: 'p', noteText: 'Note about Alice' },
+			{ suggestionText: 'Bob', icon: 'p', noteText: 'Note about Bob' },
+			{ suggestionText: 'Charlie', icon: 'p', noteText: 'Note about Charlie' }
+		]);
 	});
 
 	afterEach(() => {
@@ -109,7 +114,10 @@ describe("getSuggestions", () => {
 	test("getSuggestions should return filtered suggestions based on the query", async () => {
 		const context = { query: "Al", editor: mockEditor, file: mockFile };
 		const suggestions = await suggestor.getSuggestions(context as unknown as EditorSuggestContext);
-		expect(suggestions).toEqual(['p|Alice']);
+		// Expectations updated to match against EntitySuggestionItem objects
+		expect(suggestions).toEqual([
+			{ suggestionText: 'Alice', icon: 'p', noteText: 'Note about Alice' }
+		]);
 	});
 
 	test("getSuggestions should use the local cache if called again within 200ms", async () => {
@@ -118,7 +126,9 @@ describe("getSuggestions", () => {
 
 		// First call to getSuggestions
 		const suggestions1 = await suggestor.getSuggestions(context1 as unknown as EditorSuggestContext);
-		expect(suggestions1).toEqual(['p|Alice']);
+		expect(suggestions1).toEqual([
+			{ suggestionText: 'Alice', icon: 'p', noteText: 'Note about Alice' }
+		]);
 		expect(suggestor.getEntityList).toHaveBeenCalledTimes(1);
 
 		// Advance time by less than 200ms
@@ -127,31 +137,41 @@ describe("getSuggestions", () => {
 		// Second call to getSuggestions
 		const suggestions2 = await suggestor.getSuggestions(context2 as unknown as EditorSuggestContext);
 		expect(suggestor.getEntityList).toHaveBeenCalledTimes(1);
-		expect(suggestions2).toEqual(['p|Bob']);
-
-		
+		expect(suggestions2).toEqual([
+			{ suggestionText: 'Bob', icon: 'p', noteText: 'Note about Bob' }
+		]);
 	});
 
 	test("getSuggestions should update the local cache if called again after 200ms", async () => {
 		const context1 = { query: "Al", editor: mockEditor, file: mockFile };
 		const context2 = { query: "Ali", editor: mockEditor, file: mockFile };
-		
-
 
 		// First call to getSuggestions
-		jest.spyOn(suggestor, 'getEntityList').mockReturnValue(['p|Alice', 'p|Bob', 'p|Charlie']);
+		jest.spyOn(suggestor, 'getEntityList').mockReturnValue([
+			{ suggestionText: 'Alice', icon: 'p', noteText: 'Note about Alice' },
+			{ suggestionText: 'Bob', icon: 'p', noteText: 'Note about Bob' },
+			{ suggestionText: 'Charlie', icon: 'p', noteText: 'Note about Charlie' }
+		]);
 		const suggestions1 = await suggestor.getSuggestions(context1 as unknown as EditorSuggestContext);
-		expect(suggestions1).toEqual(['p|Alice']);
+		expect(suggestions1).toEqual([
+			{ suggestionText: 'Alice', icon: 'p', noteText: 'Note about Alice' }
+		]);
 		expect(suggestor.getEntityList).toHaveBeenCalledTimes(1);
 
 		// Advance time by more than 200ms
 		jest.advanceTimersByTime(300);
 
 		// Second call to getSuggestions
-		jest.spyOn(suggestor, 'getEntityList').mockReturnValue(['p|Alive', 'p|Bobbi', 'p|Charles']);
+		jest.spyOn(suggestor, 'getEntityList').mockReturnValue([
+			{ suggestionText: 'Alive', icon: 'p', noteText: 'Note about Alive' },
+			{ suggestionText: 'Bobbi', icon: 'p', noteText: 'Note about Bobbi' },
+			{ suggestionText: 'Charles', icon: 'p', noteText: 'Note about Charles' }
+		]);
 		const suggestions2 = await suggestor.getSuggestions(context2 as unknown as EditorSuggestContext);
 		expect(suggestor.getEntityList).toHaveBeenCalledTimes(2);
-		expect(suggestions2).toEqual(['p|Alive']);
+		expect(suggestions2).toEqual([
+			{ suggestionText: 'Alive', icon: 'p', noteText: 'Note about Alive' }
+		]);
 	});
 
 	test("getSuggestions should return an empty array if no suggestions match the query", async () => {
