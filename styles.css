@@ -29,3 +29,11 @@ body {
     font-family: var(--entities-font);
     font-size: var(--entities-size);
 }
+
+.entities-suggestion .suggestion-item {
+    padding: var(--size-2-1) var(--size-2-1);
+}
+
+.entities-suggestion .suggestion-item.mod-complex .suggestion-aux .suggestion-flair {
+		margin: 0 var(--size-4-1) 0 0;
+	}

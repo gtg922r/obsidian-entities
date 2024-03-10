@@ -10,13 +10,21 @@ import {
 } from "obsidian";
 
 export interface EntitySuggestionItem {
-	suggestionText: string;	
+	suggestionText: string;
 	icon?: string;
 	noteText?: string;
+}
+export class EntityProvider {
+	constructor(getEntityList: (query: string) => EntitySuggestionItem[]) {
+		this.getEntityList = getEntityList;
+	}
+
+	public getEntityList: (query: string) => EntitySuggestionItem[];
 }
 
 export class EntitiesSuggestor extends EditorSuggest<EntitySuggestionItem> {
 	plugin: Entities;
+	entityProviders: EntityProvider[] = [];
 
 	/**
 	 * Time of last suggestion list update
@@ -30,23 +38,12 @@ export class EntitiesSuggestor extends EditorSuggest<EntitySuggestionItem> {
 	 * @private */
 	private localSuggestionCache: EntitySuggestionItem[] = [];
 
-	public getEntityList(): EntitySuggestionItem[] {
-		const entityFolder = this.plugin.app.vault.getFolderByPath("People");
-		const entities: TFile[] | undefined = entityFolder?.children.filter(
-			(file) => file instanceof TFile
-		) as TFile[] | undefined;
-
-		return entities?.map((file) => ({
-            suggestionText: file.basename,
-            icon: "p", // Assuming 'p' stands for a specific icon type
-            // noteText can be added here if available
-        })) ?? [];
-	}
 
 	//empty constructor
-	constructor(plugin: Entities) {
+	constructor(plugin: Entities, entityProviders: EntityProvider[] = []) {
 		super(plugin.app);
 		this.plugin = plugin;
+		this.entityProviders = entityProviders;
 	}
 
 	/**
@@ -90,24 +87,39 @@ export class EntitiesSuggestor extends EditorSuggest<EntitySuggestionItem> {
 	getSuggestions(
 		context: EditorSuggestContext
 	): EntitySuggestionItem[] | Promise<EntitySuggestionItem[]> {
-		if (this.lastSuggestionListUpdate == undefined || performance.now() - this.lastSuggestionListUpdate > 200) {
-			this.localSuggestionCache = this.getEntityList();
+		if (
+			this.lastSuggestionListUpdate == undefined ||
+			performance.now() - this.lastSuggestionListUpdate > 200
+		) {
+			this.localSuggestionCache = this.entityProviders.flatMap(
+				(provider) => provider.getEntityList(context.query)
+			);
 			this.lastSuggestionListUpdate = performance.now();
 		}
 		const suggestions = this.localSuggestionCache.filter((suggestionItem) =>
-			suggestionItem.suggestionText.toLowerCase().includes(context.query?.toLowerCase() ?? "")
+			suggestionItem.suggestionText
+				.toLowerCase()
+				.includes(context.query?.toLowerCase() ?? "")
 		);
 
 		return suggestions;
 	}
 
 	renderSuggestion(value: EntitySuggestionItem, el: HTMLElement): void {
+		console.log("renderSuggestion");
 		el.addClasses(["entities-suggestion", "mod-complex"]);
-		const suggestionContent = el.createDiv({ cls: "suggestion-content" });
-		const suggestionTitle = suggestionContent.createDiv({ cls: "suggestion-title" });
-		const suggestionNote = suggestionContent.createDiv({ cls: "suggestion-note" });
 		const suggestionAux = el.createDiv({ cls: "suggestion-aux" });
-		const suggestionFlair = suggestionAux.createDiv({ cls: "suggestion-flair" });
+		const suggestionFlair = suggestionAux.createDiv({
+			cls: "suggestion-flair",
+		});		
+		const suggestionContent = el.createDiv({ cls: "suggestion-content" });
+		const suggestionTitle = suggestionContent.createDiv({
+			cls: "suggestion-title",
+		});
+		const suggestionNote = suggestionContent.createDiv({
+			cls: "suggestion-note",
+		});
+
 
 		if (value.icon) {
 			setIcon(suggestionFlair, value.icon);
@@ -118,11 +130,17 @@ export class EntitiesSuggestor extends EditorSuggest<EntitySuggestionItem> {
 		}
 	}
 
-	selectSuggestion(value: EntitySuggestionItem, evt: MouseEvent | KeyboardEvent): void {
+	selectSuggestion(
+		value: EntitySuggestionItem,
+		evt: MouseEvent | KeyboardEvent
+	): void {
 		if (this.context) {
 			const editor = this.context.editor;
 			const suggestionLink = `[[${value.suggestionText}]]`;
-			const start = {...this.context.start, ch: this.context.start.ch - 1};
+			const start = {
+				...this.context.start,
+				ch: this.context.start.ch - 1,
+			};
 			const end = editor.getCursor();
 
 			editor.replaceRange(suggestionLink, start, end);
