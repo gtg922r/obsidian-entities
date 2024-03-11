@@ -38,7 +38,6 @@ export class EntitiesSuggestor extends EditorSuggest<EntitySuggestionItem> {
 	 * @private */
 	private localSuggestionCache: EntitySuggestionItem[] = [];
 
-
 	//empty constructor
 	constructor(plugin: Entities, entityProviders: EntityProvider[] = []) {
 		super(plugin.app);
@@ -48,8 +47,8 @@ export class EntitiesSuggestor extends EditorSuggest<EntitySuggestionItem> {
 
 	/**
 	 * This function is triggered when the user starts typing in the editor. It checks...
-	 * If these conditions are met, it returns an object with the start and end positions of the word and the word itself as the query.
-	 * If not, it returns null.
+	 * If these conditions are met, it returns an object with the start and end positions
+	 * of the word and the word itself as the query. If not, it returns null.
 	 *
 	 * @param cursor - The current position of the cursor in the editor.
 	 * @param editor - The current editor instance.
@@ -61,23 +60,21 @@ export class EntitiesSuggestor extends EditorSuggest<EntitySuggestionItem> {
 		editor: Editor,
 		file: TFile
 	): EditorSuggestTriggerInfo | null {
-		console.log("onTrigger");
 		const currentLine = cursor.line;
 		const currentLineToCursor = editor
 			.getLine(currentLine)
 			.slice(0, cursor.ch);
 
-		const match = currentLineToCursor.match(/(?:^|[\W])(@)(\S*)$/);
+		const match = currentLineToCursor.match(/(^|[\W])@(.*)$/);
 
 		if (match && match.index !== undefined) {
-			const start = match.index + match[0].indexOf("@") + 1; // Adjust start to exclude '@' and any leading space
+			const start = match.index + match[1].length + 1; // Correctly adjust start to include '@' directly
 			const query = match[2]; // The captured query part after '@'
-			const end = start + query.length; // Calculate end based on start and query length
 
 			return {
 				start: { line: currentLine, ch: start },
 				query,
-				end: { line: currentLine, ch: end },
+				end: cursor,
 			};
 		}
 
@@ -106,12 +103,11 @@ export class EntitiesSuggestor extends EditorSuggest<EntitySuggestionItem> {
 	}
 
 	renderSuggestion(value: EntitySuggestionItem, el: HTMLElement): void {
-		console.log("renderSuggestion");
 		el.addClasses(["entities-suggestion", "mod-complex"]);
 		const suggestionAux = el.createDiv({ cls: "suggestion-aux" });
 		const suggestionFlair = suggestionAux.createDiv({
 			cls: "suggestion-flair",
-		});		
+		});
 		const suggestionContent = el.createDiv({ cls: "suggestion-content" });
 		const suggestionTitle = suggestionContent.createDiv({
 			cls: "suggestion-title",
@@ -119,7 +115,6 @@ export class EntitiesSuggestor extends EditorSuggest<EntitySuggestionItem> {
 		const suggestionNote = suggestionContent.createDiv({
 			cls: "suggestion-note",
 		});
-
 
 		if (value.icon) {
 			setIcon(suggestionFlair, value.icon);
