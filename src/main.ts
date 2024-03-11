@@ -1,7 +1,11 @@
 import { Plugin, TFile } from "obsidian";
 import { EntitiesSettingTab } from "./EntitiesSettings";
 import { EntitiesSettings, DEFAULT_SETTINGS } from "./entities.types";
-import { EntitiesSuggestor, EntityProvider } from "./EntitiesSuggestor";
+import {
+	EntitiesSuggestor,
+	EntityProvider,
+	EntitySuggestionItem,
+} from "./EntitiesSuggestor";
 
 export default class Entities extends Plugin {
 	settings: EntitiesSettings;
@@ -27,8 +31,30 @@ export default class Entities extends Plugin {
 			);
 		});
 
+		const dataview = this.app.plugins.getPlugin("dataview");
+		if (dataview) {
+			console.log("✅ Dataview API Found");
+		} else {
+			console.log("❌ Dataview API Not Found");
+		}
+		const queryProvider = new EntityProvider((query: string) => {
+			// This is where you would query the dataview plugin for entities
+			const dv = this.app.plugins.getPlugin("dataview")?.api;
+			const projects = dv.pages("#project");
+			const projectEntities: EntitySuggestionItem[] = projects.map(
+				(project: { file: { name: string } }) => ({
+					suggestionText: project?.file?.name,
+					icon: "briefcase",
+				})
+			).array() as EntitySuggestionItem[];
+			const projectEntitiesFiltered = projectEntities.filter((project) =>
+				project.suggestionText.toLowerCase().includes(query.toLowerCase())
+			);
+			return projectEntitiesFiltered;
+		});
+
 		this.registerEditorSuggest(
-			new EntitiesSuggestor(this, [folderProvider])
+			new EntitiesSuggestor(this, [folderProvider, queryProvider])
 		);
 	}
 
