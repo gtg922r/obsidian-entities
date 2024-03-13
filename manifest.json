@@ -1,11 +1,11 @@
 {
 	"id": "entities",
 	"name": "Entities",
-	"version": "1.0.0",
-	"minAppVersion": "0.15.0",
+	"version": "0.1.1",
+	"minAppVersion": "1.5.7",
 	"description": "Adds autocomplete of \"Entities\" like files or templates in a specific folder or a from a dataview query.",
-	"author": "Obsidian",
-	"authorUrl": "https://obsidian.md",
-	"fundingUrl": "https://obsidian.md/pricing",
+	"author": "RyanC",
+	"authorUrl": "https://github.com/gtg922r",
+	"fundingUrl": "https://github.com/gtg922r",
 	"isDesktopOnly": false
 }
