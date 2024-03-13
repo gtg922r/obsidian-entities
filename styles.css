@@ -18,8 +18,8 @@ settings:
 */
 
 body {
-    --entities-font: var(--font-monospace);
-    --entities-size: var(--code-size);
+    --entities-font: var(--font-editor);
+    --entities-size: var(--font-adaptive-normal);
 }
 
 /***************************/
