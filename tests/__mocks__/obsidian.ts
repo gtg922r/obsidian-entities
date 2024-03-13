@@ -1,11 +1,11 @@
-import EventEmitter from "events";
+// import EventEmitter from "events";
 
 /** Basic obsidian abstraction for any file or folder in a vault. */
 export abstract class TAbstractFile {
-    /**
-     * @public
-     */
-    vault: Vault;
+    // /**
+    //  * @public
+    //  */
+    // vault: Vault;
     /**
      * @public
      */
@@ -46,14 +46,14 @@ export class TFolder extends TAbstractFile {
     }
 }
 
-export class Vault extends EventEmitter {
-    getFiles() {
-        return [];
-    }
-    trigger(name: string, ...data: any[]): void {
-        this.emit(name, ...data);
-    }
-}
+// export class Vault extends EventEmitter {
+//     getFiles() {
+//         return [];
+//     }
+//     trigger(name: string, ...data: any[]): void {
+//         this.emit(name, ...data);
+//     }
+// }
 
 export class Component {
     registerEvent() {}
