@@ -7,15 +7,23 @@ import {
 	EditorSuggestTriggerInfo,
 	EditorSuggestContext,
 	setIcon,
+	Plugin,
 } from "obsidian";
 
 export interface EntitySuggestionItem {
 	suggestionText: string;
+	replacementText?: string;
 	icon?: string;
 	noteText?: string;
 }
 export class EntityProvider {
-	constructor(getEntityList: (query: string) => EntitySuggestionItem[]) {
+	plugin: Plugin;
+
+	constructor(
+		plugin: Plugin,
+		getEntityList: (query: string) => EntitySuggestionItem[]
+	) {
+		this.plugin = plugin;
 		this.getEntityList = getEntityList;
 	}
 
@@ -131,7 +139,9 @@ export class EntitiesSuggestor extends EditorSuggest<EntitySuggestionItem> {
 	): void {
 		if (this.context) {
 			const editor = this.context.editor;
-			const suggestionLink = `[[${value.suggestionText}]]`;
+			const suggestionLink = `[[${
+				value.replacementText ?? value.suggestionText
+			}]]`;
 			const start = {
 				...this.context.start,
 				ch: this.context.start.ch - 1,

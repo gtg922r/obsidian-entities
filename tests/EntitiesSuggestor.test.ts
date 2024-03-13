@@ -221,7 +221,7 @@ describe("getSuggestions", () => {
 	beforeEach(() => {
 		jest.useFakeTimers();
 		suggestor = new EntitiesSuggestor(mockPlugin, [
-			new EntityProvider((query: string) => [
+			new EntityProvider(mockPlugin, (query: string) => [
 				{
 					suggestionText: "Alice",
 					icon: "p",
