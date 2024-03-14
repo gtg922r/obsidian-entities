@@ -8,6 +8,8 @@ import {
 	EditorSuggestContext,
 	setIcon,
 	Plugin,
+	fuzzySearch, prepareQuery,
+	SearchResult
 } from "obsidian";
 
 export interface EntitySuggestionItem {
@@ -15,6 +17,7 @@ export interface EntitySuggestionItem {
 	replacementText?: string;
 	icon?: string;
 	noteText?: string;
+	match?: SearchResult;
 }
 export class EntityProvider {
 	plugin: Plugin;
@@ -101,13 +104,20 @@ export class EntitiesSuggestor extends EditorSuggest<EntitySuggestionItem> {
 			);
 			this.lastSuggestionListUpdate = performance.now();
 		}
-		const suggestions = this.localSuggestionCache.filter((suggestionItem) =>
-			suggestionItem.suggestionText
-				.toLowerCase()
-				.includes(context.query?.toLowerCase() ?? "")
-		);
+    // Prepare the search query for fuzzy search
+		const preparedQuery = prepareQuery(context.query);
 
-		return suggestions;
+		// Perform fuzzy search on the cached suggestions
+		const fuzzySearchResults = this.localSuggestionCache.flatMap(suggestionItem => {
+			const match: SearchResult | null = fuzzySearch(
+				preparedQuery,
+				suggestionItem.suggestionText
+			);
+			return match ? [{...suggestionItem, match }] : [];
+		});
+
+		fuzzySearchResults.sort((a, b) => b.match.score - a.match.score);
+		return fuzzySearchResults.map(result => result);
 	}
 
 	renderSuggestion(value: EntitySuggestionItem, el: HTMLElement): void {
@@ -127,7 +137,7 @@ export class EntitiesSuggestor extends EditorSuggest<EntitySuggestionItem> {
 		if (value.icon) {
 			setIcon(suggestionFlair, value.icon);
 		}
-		suggestionTitle.setText(value.suggestionText);
+		suggestionTitle.setText(value.suggestionText + ` (${value.match?.score ?? -10})`);
 		if (value.noteText) {
 			suggestionNote.setText(value.noteText);
 		}

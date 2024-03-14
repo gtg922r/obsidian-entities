@@ -27,8 +27,9 @@ function dateStringsToDateResults(plugin: NLPlugin, dateStrings: string[]): Enti
 }
 
 export function createNLDatesEntityProvider(plugin: Entities): EntityProvider | undefined {
+	console.log(`Entities: 📅 NLDates Entity Provider added...`)
 	return new EntityProvider(plugin, (query: string) => {
-		console.log("📅 NLDates Entity Provider Searching...");
+
 		const appWithPlugins = plugin.app as AppWithPlugins;
 		const nlpPlugin = appWithPlugins.plugins?.getPlugin('nldates-obsidian') as NLPlugin;
 		if (!nlpPlugin || nlpPlugin.parseDate === undefined) {
