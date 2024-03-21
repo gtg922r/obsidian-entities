@@ -20,7 +20,12 @@ export default class Entities extends Plugin {
 
 		// This adds a settings tab so the user can configure various aspects of the plugin
 		this.addSettingTab(new EntitiesSettingTab(this.app, this));
+		this.loadEntityProviders();
+	}
 
+	onunload() {}
+
+	async loadEntityProviders() {
 		const nldatesProvider = createNLDatesEntityProvider(this);
 
 		this.suggestor = new EntitiesSuggestor(
@@ -68,8 +73,6 @@ export default class Entities extends Plugin {
 		this.suggestor.addEntityProvider(createNoteFromTemplateEntityProvider(this, "Templater"));
 		this.suggestor.addEntityProvider(createInsertTemplateEntityProvider(this, "Templater"));
 	}
-
-	onunload() {}
 
 	async loadSettings() {
 		this.settings = Object.assign(

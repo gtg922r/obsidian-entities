@@ -1,6 +1,17 @@
-import { PluginSettingTab, Setting, App, DropdownComponent, TextComponent } from "obsidian";
+import {
+	PluginSettingTab,
+	Setting,
+	App,
+	DropdownComponent,
+	TextComponent,
+} from "obsidian";
 import Entities from "./main";
-import { DataviewProviderSettings, FolderProviderSettings, ProviderConfiguration, TemplateProviderSettings } from "./entities.types";
+import {
+	DataviewProviderSettings,
+	FolderProviderSettings,
+	ProviderConfiguration,
+	TemplateProviderSettings,
+} from "./entities.types";
 
 export class EntitiesSettingTab extends PluginSettingTab {
 	plugin: Entities;
@@ -13,7 +24,7 @@ export class EntitiesSettingTab extends PluginSettingTab {
 	display(): void {
 		const { containerEl } = this;
 		let dropDownEl: DropdownComponent;
-		let textEl:TextComponent;
+		let textEl: TextComponent;
 
 		containerEl.empty();
 
@@ -37,7 +48,9 @@ export class EntitiesSettingTab extends PluginSettingTab {
 					const type = (dropDownEl as DropdownComponent).getValue();
 					const value = textEl.getValue();
 					let settings;
-					if (type in ["folder", "noteFromTemplate", "insertTemplate"]) {
+					if (
+						type in ["folder", "noteFromTemplate", "insertTemplate"]
+					) {
 						settings = { path: value };
 					} else if (type === "dataview") {
 						settings = { query: value };
@@ -52,8 +65,8 @@ export class EntitiesSettingTab extends PluginSettingTab {
 					} as ProviderConfiguration;
 					this.plugin.settings.providers.push(newProvider);
 					this.plugin.saveSettings();
+					this.plugin.loadEntityProviders(); // Reload providers after adding
 					this.display(); // Refresh the settings UI
-										
 				})
 			);
 
@@ -70,14 +83,20 @@ export class EntitiesSettingTab extends PluginSettingTab {
 							? "Note from Template"
 							: "Insert Template"
 					} Provider`
-				) 
+				)
 				.setDesc(`Provider #${index + 1}`)
 				.addText((text) =>
 					text
 						.setValue(
 							providerConfig.type === "dataview"
-								? (providerConfig.settings as DataviewProviderSettings).query
-								: (providerConfig.settings as FolderProviderSettings | TemplateProviderSettings).path
+								? (
+										providerConfig.settings as DataviewProviderSettings
+								).query
+								: (
+										providerConfig.settings as
+											| FolderProviderSettings
+											| TemplateProviderSettings
+								).path
 						)
 						.setPlaceholder("Path or Query")
 						.onChange((value) => {
@@ -91,13 +110,15 @@ export class EntitiesSettingTab extends PluginSettingTab {
 							) {
 								providerConfig.settings.path = value;
 							}
-							// Save settings logic here
+							// TODO debounce this
+							this.plugin.loadEntityProviders(); // Reload providers after setting change
 						})
 				)
 				.addButton((button) =>
 					button.setButtonText("x").onClick(async () => {
 						this.plugin.settings.providers.splice(index, 1);
 						await this.plugin.saveSettings();
+						this.plugin.loadEntityProviders(); // Reload providers after removal
 						this.display(); // Refresh the settings UI
 					})
 				);
@@ -105,5 +126,16 @@ export class EntitiesSettingTab extends PluginSettingTab {
 			// Optionally, adjust the layout of the setting to display it in a single row
 			setting.settingEl.addClass("flex-container"); // Ensure you define this class in your CSS to align items in a row
 		});
+
+		// Add button to manually reload providers
+		new Setting(containerEl)
+			.setName("Reload Providers")
+			.setDesc("Manually reload all entity providers")
+			.addButton((button) => {
+				button.setButtonText("Reload").onClick(() => {
+					console.log("Reloading entity providers...");
+					this.plugin.loadEntityProviders();
+				});
+			});
 	}
 }
