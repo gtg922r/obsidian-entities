@@ -8,8 +8,9 @@ import {
 	EditorSuggestContext,
 	setIcon,
 	Plugin,
-	fuzzySearch, prepareQuery,
-	SearchResult
+	fuzzySearch,
+	prepareQuery,
+	SearchResult,
 } from "obsidian";
 
 export interface EntitySuggestionItem {
@@ -18,6 +19,10 @@ export interface EntitySuggestionItem {
 	icon?: string;
 	noteText?: string;
 	match?: SearchResult;
+	action?: (
+		item: EntitySuggestionItem,
+		context: EditorSuggestContext | null
+	) => Promise<string> | string | void;
 }
 export class EntityProvider {
 	plugin: Plugin;
@@ -54,6 +59,10 @@ export class EntitiesSuggestor extends EditorSuggest<EntitySuggestionItem> {
 		super(plugin.app);
 		this.plugin = plugin;
 		this.entityProviders = entityProviders;
+	}
+
+	addEntityProvider(entityProvider: EntityProvider): void {
+		this.entityProviders.push(entityProvider);
 	}
 
 	/**
@@ -104,20 +113,22 @@ export class EntitiesSuggestor extends EditorSuggest<EntitySuggestionItem> {
 			);
 			this.lastSuggestionListUpdate = performance.now();
 		}
-    // Prepare the search query for fuzzy search
+		// Prepare the search query for fuzzy search
 		const preparedQuery = prepareQuery(context.query);
 
 		// Perform fuzzy search on the cached suggestions
-		const fuzzySearchResults = this.localSuggestionCache.flatMap(suggestionItem => {
-			const match: SearchResult | null = fuzzySearch(
-				preparedQuery,
-				suggestionItem.suggestionText
-			);
-			return match ? [{...suggestionItem, match }] : [];
-		});
+		const fuzzySearchResults = this.localSuggestionCache.flatMap(
+			(suggestionItem) => {
+				const match: SearchResult | null = fuzzySearch(
+					preparedQuery,
+					suggestionItem.suggestionText
+				);
+				return match ? [{ ...suggestionItem, match }] : [];
+			}
+		);
 
 		fuzzySearchResults.sort((a, b) => b.match.score - a.match.score);
-		return fuzzySearchResults.map(result => result);
+		return fuzzySearchResults.map((result) => result);
 	}
 
 	renderSuggestion(value: EntitySuggestionItem, el: HTMLElement): void {
@@ -137,7 +148,8 @@ export class EntitiesSuggestor extends EditorSuggest<EntitySuggestionItem> {
 		if (value.icon) {
 			setIcon(suggestionFlair, value.icon);
 		}
-		suggestionTitle.setText(value.suggestionText + ` (${value.match?.score ?? -10})`);
+		// suggestionTitle.setText(value.suggestionText + ` (${value.match?.score ?? -10})`);
+		suggestionTitle.setText(value.suggestionText);
 		if (value.noteText) {
 			suggestionNote.setText(value.noteText);
 		}
@@ -147,24 +159,57 @@ export class EntitiesSuggestor extends EditorSuggest<EntitySuggestionItem> {
 		value: EntitySuggestionItem,
 		evt: MouseEvent | KeyboardEvent
 	): void {
-		if (this.context) {
-			const editor = this.context.editor;
-			const suggestionLink = `[[${
-				value.replacementText ?? value.suggestionText
-			}]]`;
-			const start = {
-				...this.context.start,
-				ch: this.context.start.ch - 1,
-			};
-			const end = editor.getCursor();
-
-			editor.replaceRange(suggestionLink, start, end);
-			const newCursor = end;
-
-			newCursor.ch = start.ch + suggestionLink.length;
-
-			editor.setCursor(newCursor);
-			this.close();
+		console.log("context entering select:", this.context);
+		if (!this.context) {
+			console.error("No context found for suggestion selection");
+			return;
 		}
+		const originalContext = this.context;
+		if (value.action) {
+			const actionResult = value.action(value, originalContext);
+			Promise.resolve(actionResult).then((result) => {
+				console.log("Action result:", result);
+				console.log("Action context:", this.context);
+				if (result != undefined) {
+					this.replaceTextAtContext(result, originalContext);
+				}
+			});
+		} else {
+			this.insertText(
+				`[[${value.replacementText ?? value.suggestionText}]]`
+			);
+		}
+	}
+
+	private insertText(text: string): void {
+		console.log("Inserting text:", text);
+		console.log("Inserting using Context:", this.context);
+		if (this.context) {
+			this.replaceTextAtContext(text, this.context);
+		}
+	}
+
+	private replaceTextAtContext(
+		text: string,
+		context: EditorSuggestContext
+	): void {
+		console.log("Inserting text:", text);
+		console.log("Inserting using Context:", context);
+
+		const editor = context.editor;
+		const start = {
+			...context.start,
+			ch: context.start.ch - 1,
+		};
+		// const end = editor.getCursor();
+		const end = context.end;
+
+		editor.replaceRange(text, start, end);
+		const newCursor = end;
+
+		newCursor.ch = start.ch + text.length;
+
+		editor.setCursor(newCursor);
+		this.close();
 	}
 }

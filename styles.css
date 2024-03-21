@@ -18,22 +18,71 @@ settings:
 */
 
 body {
-    --entities-font: var(--font-editor);
-    --entities-size: var(--font-adaptive-normal);
+	--entities-font: var(--font-editor);
+	--entities-size: var(--font-adaptive-normal);
 }
 
 /***************************/
 /* ** Suggestion Style ** */
 
 .entities-suggestion {
-    font-family: var(--entities-font);
-    font-size: var(--entities-size);
+	font-family: var(--entities-font);
+	font-size: var(--entities-size);
 }
 
 .entities-suggestion.suggestion-item {
-    padding: var(--size-2-1) var(--size-2-1) var(--size-2-1) 0;
+	padding: var(--size-2-1) var(--size-2-1) var(--size-2-1) 0;
 }
 
-.entities-suggestion.suggestion-item.mod-complex .suggestion-aux .suggestion-flair {
-		margin: 0 var(--size-4-1) 0 0;
-	}
+.entities-suggestion.suggestion-item.mod-complex
+	.suggestion-aux
+	.suggestion-flair {
+	margin: 0 var(--size-4-1) 0 0;
+}
+
+/**********************/
+/* ** Entity Modal ** */
+/**********************/
+
+/* .modal-container {
+	background-color: var(--background-primary);
+	border-radius: 8px;
+	font-size: calc(var(--entities-size) * 1.4);
+	color: var(--text-normal);
+	padding: 20px;
+	box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+
+.modal-header {
+	font-size: 1.1em;
+	font-weight: 600;
+	margin-bottom: 20px;
+}
+
+.modal-input {
+	width: 100%;
+	padding: 10px;
+	margin-bottom: 20px;
+	border: 1px solid var(--background-modifier-border);
+	border-radius: 4px;
+	box-sizing: border-box;
+}
+
+.modal-input:focus {
+	border-color: var(--interactive-accent);
+	outline: none;
+}
+
+.modal-button {
+	padding: 10px 20px;
+	background-color: var(--interactive-accent);
+	border: none;
+	border-radius: 4px;
+	color: white;
+	cursor: pointer;
+	transition: background-color 0.3s;
+}
+
+.modal-button:hover {
+	background-color: var(--interactive-accent-hover);
+} */

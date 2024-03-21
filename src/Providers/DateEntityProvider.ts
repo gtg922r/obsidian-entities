@@ -51,8 +51,8 @@ export function createNLDatesEntityProvider(plugin: Entities): EntityProvider | 
 		const result = nlpPlugin.parseDate(query);
 		if (result && result.date) {
 			dates.push({
-				suggestionText: result.formattedString,
-				noteText: result.date.toISOString(),
+				suggestionText: query,
+				noteText: result.formattedString,
 				replacementText: result.formattedString,
 				icon: "calendar",
 			});
