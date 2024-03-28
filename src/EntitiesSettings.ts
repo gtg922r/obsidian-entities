@@ -144,7 +144,7 @@ export class EntitiesSettingTab extends PluginSettingTab {
 					})
 				)
 				.addButton((button) =>
-					button.setButtonText("x").onClick(async () => {
+					button.setIcon("trash").onClick(async () => {
 						this.plugin.settings.providers.splice(index, 1);
 						await this.plugin.saveSettings();
 						this.plugin.loadEntityProviders(); // Reload providers after removal
