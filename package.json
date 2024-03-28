@@ -1,6 +1,6 @@
 {
 	"name": "obsidian-entities",
-	"version": "0.1.3",
+	"version": "0.1.4",
 	"description": "Adds autocomplete of \"Entities\" like files or templates in a specific folder or a from a dataview query.",
 	"main": "main.js",
 	"scripts": {
