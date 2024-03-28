@@ -80,7 +80,7 @@ export function createNoteFromTemplateEntityProvider(
 	console.log(
 		`Entities: 📄 Template Entity Provider (${templateFolder}) added...`
 	);
-	return new EntityProvider(plugin, () => entities);
+	return new EntityProvider({plugin, getEntityList: () => entities});
 }
 
 export function createInsertTemplateEntityProvider(
@@ -114,5 +114,5 @@ export function createInsertTemplateEntityProvider(
 	console.log(
 		`Entities: 📄 Template Entity Provider (${templateFolder}) added...`
 	);
-	return new EntityProvider(plugin, () => entities);
+	return new EntityProvider({plugin, getEntityList: () => entities});
 }

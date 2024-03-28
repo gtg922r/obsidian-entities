@@ -1,5 +1,5 @@
 import { Plugin } from "obsidian";
-import { Moment } from 'moment';
+import { Moment } from "moment";
 import { EntityProvider, EntitySuggestionItem } from "src/EntitiesSuggestor";
 import { AppWithPlugins } from "src/entities.types";
 import Entities from "src/main";
@@ -14,7 +14,10 @@ interface NLPlugin extends Plugin {
 	parseDate(date: string): NLDResult;
 }
 
-function dateStringsToDateResults(plugin: NLPlugin, dateStrings: string[]): EntitySuggestionItem[] {
+function dateStringsToDateResults(
+	plugin: NLPlugin,
+	dateStrings: string[]
+): EntitySuggestionItem[] {
 	return dateStrings.map((dateString) => {
 		const result = plugin.parseDate(dateString);
 		return {
@@ -26,38 +29,57 @@ function dateStringsToDateResults(plugin: NLPlugin, dateStrings: string[]): Enti
 	});
 }
 
-export function createNLDatesEntityProvider(plugin: Entities): EntityProvider | undefined {
-	console.log(`Entities: 📅 NLDates Entity Provider added...`)
-	return new EntityProvider(plugin, (query: string) => {
+export function createNLDatesEntityProvider(
+	plugin: Entities
+): EntityProvider | undefined {
+	console.log(`Entities: 📅 NLDates Entity Provider added...`);
+	return new EntityProvider({
+		plugin,
+		getEntityList: (query: string) => {
+			const appWithPlugins = plugin.app as AppWithPlugins;
+			const nlpPlugin = appWithPlugins.plugins?.getPlugin(
+				"nldates-obsidian"
+			) as NLPlugin;
+			if (!nlpPlugin || nlpPlugin.parseDate === undefined) {
+				return [];
+			}
 
-		const appWithPlugins = plugin.app as AppWithPlugins;
-		const nlpPlugin = appWithPlugins.plugins?.getPlugin('nldates-obsidian') as NLPlugin;
-		if (!nlpPlugin || nlpPlugin.parseDate === undefined) {
-			return [];
-		}
+			const dates = dateStringsToDateResults(nlpPlugin, [
+				"today",
+				"tomorrow",
+				"yesterday",
+			]);
 
-		const dates = dateStringsToDateResults(nlpPlugin, ['today', 'tomorrow', 'yesterday']);
+			const daysOfWeeks = [
+				"sunday",
+				"monday",
+				"tuesday",
+				"wednesday",
+				"thursday",
+				"friday",
+				"saturday",
+			];
 
-		if (query.startsWith('next')) {
-			const daysOfWeeks = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
-			dates.push(...dateStringsToDateResults(nlpPlugin, daysOfWeeks.map((day) => `next ${day}`)));
-		}
-
-		if (query.startsWith('last')) {
-			const daysOfWeeks = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
-			dates.push(...dateStringsToDateResults(nlpPlugin, daysOfWeeks.map((day) => `last ${day}`)));
-		}
-
-		const result = nlpPlugin.parseDate(query);
-		if (result && result.date) {
-			dates.push({
-				suggestionText: query,
-				noteText: result.formattedString,
-				replacementText: result.formattedString,
-				icon: "calendar",
+			const prefixes = ["next", "last", "this"];
+			prefixes.forEach((prefix) => {
+				dates.push(
+					...dateStringsToDateResults(
+						nlpPlugin,
+						daysOfWeeks.map((day) => `${prefix} ${day}`)
+					)
+				);
 			});
-		}
-		return dates;
+
+			const result = nlpPlugin.parseDate(query);
+			if (result && result.date) {
+				dates.push({
+					suggestionText: query,
+					noteText: result.formattedString,
+					replacementText: result.formattedString,
+					icon: "calendar",
+				});
+			}
+			return dates;
+		},
 	});
 }
-

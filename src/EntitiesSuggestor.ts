@@ -1,3 +1,4 @@
+import { createWithTemplateSettings } from "./entities.types";
 import { createNewNoteFromTemplate } from "./entititiesUtilities";
 import Entities from "./main";
 import {
@@ -27,14 +28,18 @@ export interface EntitySuggestionItem {
 }
 export class EntityProvider {
 	plugin: Plugin;
+	entityCreationTemplates: createWithTemplateSettings[];
 
-	constructor(
-		plugin: Plugin,
-		getEntityList: (query: string) => EntitySuggestionItem[]
-	) {
-		this.plugin = plugin;
-		this.getEntityList = getEntityList;
-	}
+	constructor({
+        plugin,
+        getEntityList
+    }: {
+        plugin: Plugin,
+        getEntityList: (query: string) => EntitySuggestionItem[]
+    }) {
+        this.plugin = plugin;
+        this.getEntityList = getEntityList;
+    }
 
 	public getEntityList: (query: string) => EntitySuggestionItem[];
 }

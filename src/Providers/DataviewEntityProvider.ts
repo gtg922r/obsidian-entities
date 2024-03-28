@@ -29,7 +29,9 @@ export async function createDataviewQueryEntityProvider(plugin: Plugin, dataview
     }
 
     console.log(`Entities: 🧠 Dataview Entity Provider (${dataviewQuery}) created...`);
-    return new EntityProvider(plugin, (query: string) => {
+    return new EntityProvider({
+        plugin,
+        getEntityList: (query: string) => {
         const projects = dv.pages(dataviewQuery);
         const projectEntities: EntitySuggestionItem[] = projects?.map(
             (project: { file: { name: string } }) => ({
@@ -37,6 +39,7 @@ export async function createDataviewQueryEntityProvider(plugin: Plugin, dataview
                 icon: "book-marked",
             })
         ).array() as EntitySuggestionItem[];
-        return projectEntities;
-    });
+            return projectEntities;
+        }
+    });	
 }
