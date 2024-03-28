@@ -27,6 +27,16 @@ export function insertTemplateUsingTemplater(plugin: Plugin, template: TFile): P
 }
 export function createNewNoteFromTemplate(plugin: Plugin, template: TFile | string, folderSetting: string, newTemplateName: string, openNewNote: boolean): void {
     const templaterPlugin = getTemplaterPlugin(plugin);
+    if (typeof template === 'string') {
+        const templateFile = plugin.app.vault.getAbstractFileByPath(template);
+        if (templateFile instanceof TFile) {
+            template = templateFile;
+        } else {
+            console.error(`Template file: "${template}" not found or is not a valid TFile.`);
+            return;
+        }
+    }
+
     if (!templaterPlugin || !templaterPlugin.templater?.create_new_note_from_template) {
         console.error("Templater plugin not found!");
         return;

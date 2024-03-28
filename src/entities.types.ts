@@ -1,38 +1,39 @@
 import { App, Plugin, TFile } from "obsidian";
 
-export type createWithTemplateSettings = {
+export type entityFromTemplateSettings = {
 	engine: "disabled" | "core" | "templater";
-	path: string;
+	templatePath: string;
+	entityName: string;
 };
 
 export type ProviderConfiguration = { icon?: string } & (
 	| {
 			type: "folder";
-			settings: FolderProviderSettings & ProviderTemplateCreationSettings;
-	  }
+			settings: FolderProviderSettings;
+      }
 	| {
 			type: "dataview";
-			settings: DataviewProviderSettings & ProviderTemplateCreationSettings;
-	  }
+			settings: DataviewProviderSettings;
+      }
 	| {
 			type: "noteFromTemplate";
 			settings: TemplateProviderSettings;
-	  }
+		}
 	| {
 			type: "insertTemplate";
 			settings: TemplateProviderSettings;
-	  }
+      }
 );
 
 export interface ProviderTemplateCreationSettings {
-	createWithTemplate?: createWithTemplateSettings;
-}
+	newEntityFromTemplates?: entityFromTemplateSettings[];
+} 
 
-export interface FolderProviderSettings {
+export interface FolderProviderSettings extends ProviderTemplateCreationSettings {
 	path: string;
 }
 
-export interface DataviewProviderSettings {
+export interface DataviewProviderSettings extends ProviderTemplateCreationSettings {
 	query: string;
 }
 
@@ -65,10 +66,11 @@ export const DEFAULT_SETTINGS: EntitiesSettings = {
 			icon: "user-circle",
 			settings: {
 				path: "People",
-				createWithTemplate: {
+				newEntityFromTemplates: [{
 					engine: "templater",
-					path: "Templater/New Person.md",
-				},
+					templatePath: "Templater/New Person.md",
+					entityName: "Person",
+				}],
 			},
 		},
 		{
@@ -94,5 +96,5 @@ export interface AppWithPlugins extends App {
 		| undefined
 		| {
 				getPlugin(pluginName: string): Plugin | undefined;
-		  };
+          };
 }

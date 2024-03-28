@@ -221,23 +221,26 @@ describe("getSuggestions", () => {
 	beforeEach(() => {
 		jest.useFakeTimers();
 		suggestor = new EntitiesSuggestor(mockPlugin, [
-			new EntityProvider(mockPlugin, (query: string) => [
-				{
-					suggestionText: "Alice",
-					icon: "p",
-					noteText: "Note about Alice",
-				},
-				{
-					suggestionText: "Bob",
-					icon: "p",
-					noteText: "Note about Bob",
-				},
-				{
-					suggestionText: "Charlie",
-					icon: "p",
-					noteText: "Note about Charlie",
-				},
-			]),
+			new EntityProvider({
+				plugin: mockPlugin,
+				getEntityList: (query: string) => [
+					{
+						suggestionText: "Alice",
+						icon: "p",
+						noteText: "Note about Alice",
+					},
+					{
+						suggestionText: "Bob",
+						icon: "p",
+						noteText: "Note about Bob",
+					},
+					{
+						suggestionText: "Charlie",
+						icon: "p",
+						noteText: "Note about Charlie",
+					},
+				],
+			}),
 		]);
 	});
 

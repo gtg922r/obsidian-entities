@@ -1,8 +1,9 @@
 import { Plugin } from "obsidian";
 import { getAPI, DataviewApi } from "obsidian-dataview";
+import { DataviewProviderSettings } from "src/entities.types";
 import { EntityProvider, EntitySuggestionItem } from "src/EntitiesSuggestor";
 
-export async function createDataviewQueryEntityProvider(plugin: Plugin, dataviewQuery: string): Promise<EntityProvider | undefined> {
+export async function createDataviewQueryEntityProvider(plugin: Plugin, settings: DataviewProviderSettings): Promise<EntityProvider | undefined> {
     const getDataviewApiWithRetry = (retryDelay: number, maxAttempts: number): Promise<DataviewApi | undefined> => {
         return new Promise((resolve) => {
             let attempts = 0;
@@ -28,11 +29,11 @@ export async function createDataviewQueryEntityProvider(plugin: Plugin, dataview
         return undefined;
     }
 
-    console.log(`Entities: 🧠 Dataview Entity Provider (${dataviewQuery}) created...`);
+    console.log(`Entities: 🧠 Dataview Entity Provider (${settings.query}) created...`);
     return new EntityProvider({
         plugin,
         getEntityList: (query: string) => {
-        const projects = dv.pages(dataviewQuery);
+        const projects = dv.pages(settings.query);
         const projectEntities: EntitySuggestionItem[] = projects?.map(
             (project: { file: { name: string } }) => ({
                 suggestionText: project?.file?.name,
@@ -40,6 +41,7 @@ export async function createDataviewQueryEntityProvider(plugin: Plugin, dataview
             })
         ).array() as EntitySuggestionItem[];
             return projectEntities;
-        }
+        },
+		entityCreationTemplates: settings.newEntityFromTemplates,
     });	
 }

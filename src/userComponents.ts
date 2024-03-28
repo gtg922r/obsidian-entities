@@ -1,4 +1,5 @@
-import { App, Modal } from "obsidian";
+import { App, Modal, Setting } from "obsidian";
+import { entityFromTemplateSettings } from "./entities.types";
 
 export interface EntitiesModalInputOptions {
 	placeholder?: string;
@@ -92,4 +93,79 @@ export class EntitiesModalInput extends Modal {
 	getInput(): Promise<string> {
 		return this.promise;
 	}
+}
+
+
+export class TemplateDetailsModal extends Modal {
+    private resolve: (value: entityFromTemplateSettings | null) => void;
+
+    constructor(app: App) {
+        super(app);
+    }
+
+    onOpen() {
+        const { contentEl } = this;
+        contentEl.empty(); // Clear previous content
+
+        contentEl.createEl("h2", { text: "New Entity From Template" });
+
+        // Engine Dropdown Setting
+        new Setting(contentEl)
+            .setName("Engine")
+            .setDesc("Choose the template engine for the new entity")
+            .addDropdown(dropdown => 
+                dropdown.addOptions({
+                    disabled: "Disabled",
+                    core: "Core",
+                    templater: "Templater",
+                })
+                .setValue("disabled")
+            );
+
+        // Template Path Input Setting
+        new Setting(contentEl)
+            .setName("Template Path")
+            .setDesc("Path for the template (include extension)")
+            .addText(text => text
+                .setPlaceholder("Template Path")
+            );
+
+        // Entity Name Input Setting
+        new Setting(contentEl)
+            .setName("Entity Type")
+            .setDesc("How to describe the entity that will be created")
+            .addText(text => text
+                .setPlaceholder("Entity Name")
+            );
+
+        // Save Button
+        new Setting(contentEl)
+            .addButton(button => button
+				.setButtonText("Save")
+                .onClick(() => {
+                    // You need to store references to the dropdown and text inputs above to access their values here
+                    // This is a simplified example. Adjust according to your actual data handling needs.
+                    const templateDetails: entityFromTemplateSettings = {
+                        engine: "disabled", // Replace with actual value
+                        templatePath: "", // Replace with actual value
+                        entityName: "", // Replace with actual value
+                    };
+                    this.close();
+                    this.resolve(templateDetails);
+                }))
+            .addButton(button => 
+                button.setButtonText("Cancel")
+                .onClick(() => {
+                    this.close();
+                    this.resolve(null);
+                })
+            );
+    }
+
+    async openAndGetValue(): Promise<entityFromTemplateSettings | null> {
+        return new Promise((resolve) => {
+            this.resolve = resolve;
+            this.open();
+        });
+    }
 }
