@@ -1,3 +1,4 @@
+import { createNewNoteFromTemplate } from "./entititiesUtilities";
 import Entities from "./main";
 import {
 	EditorSuggest,
@@ -117,7 +118,7 @@ export class EntitiesSuggestor extends EditorSuggest<EntitySuggestionItem> {
 		const preparedQuery = prepareQuery(context.query);
 
 		// Perform fuzzy search on the cached suggestions
-		const fuzzySearchResults = this.localSuggestionCache.flatMap(
+		const fuzzySearchResults:EntitySuggestionItem[] = this.localSuggestionCache.flatMap(
 			(suggestionItem) => {
 				const match: SearchResult | null = fuzzySearch(
 					preparedQuery,
@@ -126,8 +127,24 @@ export class EntitiesSuggestor extends EditorSuggest<EntitySuggestionItem> {
 				return match ? [{ ...suggestionItem, match }] : [];
 			}
 		);
+		
+		// ToDo add new entitiy function to every provider
+		// Create templater function that can be called (what about if Templater isn't instaled?)
+		const defaultSearchResult:EntitySuggestionItem = {
+			suggestionText: `New Person: ${context.query}`,
+			icon: "file-plus",
+			action: () => {
+				console.log(`New Person: ${context.query}`);
+				// this part isn't working --v
+				createNewNoteFromTemplate(this.plugin, "[[Templater/person template.md]]", "People", context.query, false);	
+				return `[[${context.query}]]`;
+			},
+			match: { score: -10, matches: [] } as SearchResult,
+		};
 
-		fuzzySearchResults.sort((a, b) => b.match.score - a.match.score);
+		fuzzySearchResults.push(defaultSearchResult);
+
+		fuzzySearchResults.sort((a, b) => (b.match?.score ?? (-10)) - (a.match?.score ?? (-10)));
 		return fuzzySearchResults.map((result) => result);
 	}
 

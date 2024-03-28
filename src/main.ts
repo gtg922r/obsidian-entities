@@ -37,6 +37,7 @@ export default class Entities extends Plugin {
 		this.settings.providers.forEach((providerConfig: ProviderConfiguration) => {
 			switch (providerConfig.type) {
 				case 'folder': {
+					
 					const folderProvider = createFolderEntityProvider(this, providerConfig.settings.path);
 					if (folderProvider) {
 						this.suggestor.addEntityProvider(folderProvider);
