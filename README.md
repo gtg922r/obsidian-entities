@@ -1,3 +1,9 @@
+# Obsidian Entities Plugin
+
+> [!IMPORTANT]
+> This plugin is in very early development and is not intended for public usage.
+> Note that at this time, all rights are reserved
+
 # Obsidian Sample Plugin
 
 This is a sample plugin for Obsidian (https://obsidian.md).
