@@ -1,3 +1,4 @@
+/* eslint-disable no-mixed-spaces-and-tabs */
 import {
 	PluginSettingTab,
 	Setting,
@@ -8,17 +9,12 @@ import {
 import Entities from "./main";
 import {
 	DataviewProviderSettings,
-	entityFromTemplateSettings,
 	FolderProviderSettings,
 	ProviderConfiguration,
+	ProviderTemplateCreationSettings,
 	TemplateProviderSettings,
 } from "./entities.types";
-import { TemplateDetailsModal } from "./userComponents";
-
-async function openTemplateDetailsModal(): Promise<entityFromTemplateSettings | null> {
-    const modal = new TemplateDetailsModal(this.app);
-    return await modal.openAndGetValue();
-}
+import { openTemplateDetailsModal } from "./userComponents";
 
 export class EntitiesSettingTab extends PluginSettingTab {
 	plugin: Entities;
@@ -27,7 +23,7 @@ export class EntitiesSettingTab extends PluginSettingTab {
 		super(app, plugin);
 		this.plugin = plugin;
 	}
-	
+
 	display(): void {
 		const { containerEl } = this;
 		let dropDownEl: DropdownComponent;
@@ -98,12 +94,12 @@ export class EntitiesSettingTab extends PluginSettingTab {
 							providerConfig.type === "dataview"
 								? (
 										providerConfig.settings as DataviewProviderSettings
-								).query
+								  ).query
 								: (
 										providerConfig.settings as
 											| FolderProviderSettings
 											| TemplateProviderSettings
-								).path
+								  ).path
 						)
 						.setPlaceholder("Path or Query")
 						.onChange((value) => {
@@ -122,26 +118,44 @@ export class EntitiesSettingTab extends PluginSettingTab {
 						})
 				)
 				.addButton((button) =>
-					button.setIcon("file-plus")
-					.setDisabled(providerConfig.type !== "dataview" && providerConfig.type !== "folder")
-					.onClick(async () => {
-						// Open a modal or another UI component to input template details
-						// For simplicity, assuming a modal is used and returns an object with template details
-						const providerIndex = this.plugin.settings.providers.findIndex((p) => p === providerConfig);
-						const templateDetails = await openTemplateDetailsModal();
-						if (templateDetails) {
-							// Assuming `settings` is the current settings object for the provider
-							(providerConfig.settings as DataviewProviderSettings | FolderProviderSettings).newEntityFromTemplates = [templateDetails];
-							// Save settings and refresh UI							
-							if (providerIndex !== -1) {
-								this.plugin.settings.providers[providerIndex] = providerConfig;
+					button
+						.setIcon("file-plus")
+						.setDisabled(
+							providerConfig.type !== "dataview" &&
+								providerConfig.type !== "folder"
+						)
+						.onClick(async () => {
+							// Open a modal or another UI component to input template details
+							// For simplicity, assuming a modal is used and returns an object with template details
+							const providerIndex = index;
+							const initialSettings =
+								(
+									providerConfig.settings as ProviderTemplateCreationSettings
+								).newEntityFromTemplates ?? [];
+							const templateDetails =
+								await openTemplateDetailsModal(
+									initialSettings[0]
+								);
+							if (templateDetails) {
+								// Assuming `settings` is the current settings object for the provider
+								(
+									providerConfig.settings as ProviderTemplateCreationSettings
+								).newEntityFromTemplates = [templateDetails];
+								// Save settings and refresh UI
+								if (providerIndex !== -1) {
+									this.plugin.settings.providers[
+										providerIndex
+									] = providerConfig;
+								}
+								this.plugin.saveSettings();
+								this.plugin.loadEntityProviders(); // Reload providers after setting change
+								console.log(
+									"Current settings:",
+									this.plugin.settings
+								);
+								this.display();
 							}
-							this.plugin.saveSettings();
-							this.plugin.loadEntityProviders(); // Reload providers after setting change
-							console.log("Current settings:", this.plugin.settings);
-							this.display();
-						}
-					})
+						})
 				)
 				.addButton((button) =>
 					button.setIcon("trash").onClick(async () => {
@@ -168,4 +182,3 @@ export class EntitiesSettingTab extends PluginSettingTab {
 			});
 	}
 }
-

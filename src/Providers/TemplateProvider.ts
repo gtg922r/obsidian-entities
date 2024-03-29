@@ -77,10 +77,11 @@ export function createNoteFromTemplateEntityProvider(
 		action: () => actionFunction(file),
 	}));
 
-	console.log(
-		`Entities: 📄 Template Entity Provider (${templateFolder}) added...`
-	);
-	return new EntityProvider({plugin, getEntityList: () => entities});
+	return new EntityProvider({
+		plugin,
+		getEntityList: () => entities,
+		description: `📄 New File From Template Entity Provider (${templateFolder})`,
+	});
 }
 
 export function createInsertTemplateEntityProvider(
@@ -111,8 +112,9 @@ export function createInsertTemplateEntityProvider(
 		action: () => actionFunction(file),
 	}));
 
-	console.log(
-		`Entities: 📄 Template Entity Provider (${templateFolder}) added...`
-	);
-	return new EntityProvider({plugin, getEntityList: () => entities});
+	return new EntityProvider({
+		plugin,
+		getEntityList: () => entities,
+		description: `📝 Insert Template Entity Provider (${templateFolder})`,
+	});
 }

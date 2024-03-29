@@ -35,6 +35,7 @@ export function createNLDatesEntityProvider(
 	console.log(`Entities: 📅 NLDates Entity Provider added...`);
 	return new EntityProvider({
 		plugin,
+		description: `📅 NLDates Entity Provider`,
 		getEntityList: (query: string) => {
 			const appWithPlugins = plugin.app as AppWithPlugins;
 			const nlpPlugin = appWithPlugins.plugins?.getPlugin(

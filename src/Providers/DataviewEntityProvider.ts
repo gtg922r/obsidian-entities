@@ -28,10 +28,10 @@ export async function createDataviewQueryEntityProvider(plugin: Plugin, settings
         console.log("❌ Dataview API Not Found");
         return undefined;
     }
-
-    console.log(`Entities: 🧠 Dataview Entity Provider (${settings.query}) created...`);
+    
     return new EntityProvider({
         plugin,
+		description: `🧠 Dataview Entity Provider (${settings.query})`,
         getEntityList: (query: string) => {
         const projects = dv.pages(settings.query);
         const projectEntities: EntitySuggestionItem[] = projects?.map(

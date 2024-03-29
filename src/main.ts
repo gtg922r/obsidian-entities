@@ -20,19 +20,20 @@ export default class Entities extends Plugin {
 
 		// This adds a settings tab so the user can configure various aspects of the plugin
 		this.addSettingTab(new EntitiesSettingTab(this.app, this));
+
+		this.suggestor = new EntitiesSuggestor(this,[]);		
+		this.registerEditorSuggest(this.suggestor);
 		this.loadEntityProviders();
 	}
 
 	onunload() {}
 
 	async loadEntityProviders() {
+		this.suggestor.clearEntityProviders();
 		const nldatesProvider = createNLDatesEntityProvider(this);
-
-		this.suggestor = new EntitiesSuggestor(
-			this,
-			nldatesProvider ? [nldatesProvider] : []
-		);
-		this.registerEditorSuggest(this.suggestor);
+		if (nldatesProvider) {
+			this.suggestor.addEntityProvider(nldatesProvider);
+		}
 
 		this.settings.providers.forEach((providerConfig: ProviderConfiguration) => {
 			switch (providerConfig.type) {

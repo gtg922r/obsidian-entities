@@ -1,4 +1,7 @@
-import { entityFromTemplateSettings, ProviderConfiguration } from "./entities.types";
+import {
+	entityFromTemplateSettings,
+	ProviderConfiguration,
+} from "./entities.types";
 import { createNewNoteFromTemplate } from "./entititiesUtilities";
 import Entities from "./main";
 import {
@@ -28,36 +31,49 @@ export interface EntitySuggestionItem {
 }
 
 export interface EntityProviderOptions {
-    plugin: Plugin;
-    getEntityList: (query: string) => EntitySuggestionItem[];
-    entityCreationTemplates?: entityFromTemplateSettings[];
+	plugin: Plugin;
+	getEntityList: (query: string) => EntitySuggestionItem[];
+	entityCreationTemplates?: entityFromTemplateSettings[];
 	providerSettings?: ProviderConfiguration;
+	description?: string;
 }
 
 export class EntityProvider {
-    plugin: Plugin;
-    getEntityList: (query: string) => EntitySuggestionItem[];
-    entityCreationTemplates?: entityFromTemplateSettings[];
+	plugin: Plugin;
+	getEntityList: (query: string) => EntitySuggestionItem[];
+	entityCreationTemplates?: entityFromTemplateSettings[];
+	description?: string;
 
-    constructor(options: EntityProviderOptions) {
-        this.plugin = options.plugin;
-        this.getEntityList = options.getEntityList;
-        this.entityCreationTemplates = options.entityCreationTemplates;
-    }
+	constructor(options: EntityProviderOptions) {
+		this.plugin = options.plugin;
+		this.getEntityList = options.getEntityList;
+		this.entityCreationTemplates = options.entityCreationTemplates;
+		this.description = options.description;
+	}
 
-    getTemplateCreationSuggestions(query: string): EntitySuggestionItem[] {
-        if (!this.entityCreationTemplates) return [];
-        return this.entityCreationTemplates.map(template => ({
-            suggestionText: `New ${template.entityName}: ${query}`,
-            icon: "file-plus",
-            action: () => {
-                console.log(`New ${template.entityName}: ${query}`);
-                createNewNoteFromTemplate(this.plugin, template.templatePath, 'TODO FIX FOLDER', query, false);
-                return `[[${query}]]`;
-            },
-            match: { score: -10, matches: [] } as SearchResult,
-        }));
-    }
+	getTemplateCreationSuggestions(query: string): EntitySuggestionItem[] {
+		if (!this.entityCreationTemplates) return [];
+		// Only Templater templates are supported for now
+		const creationTemplates = this.entityCreationTemplates.filter(
+			(template) => template.engine === "templater"
+		);
+		return creationTemplates.map((template) => ({
+			suggestionText: `New ${template.entityName}: ${query}`,
+			icon: "file-plus",
+			action: () => {
+				console.log(`New ${template.entityName}: ${query}`);
+				createNewNoteFromTemplate(
+					this.plugin,
+					template.templatePath,
+					"TODO FIX FOLDER",
+					query,
+					false
+				);
+				return `[[${query}]]`;
+			},
+			match: { score: -10, matches: [] } as SearchResult,
+		}));
+	}
 }
 
 export class EntitiesSuggestor extends EditorSuggest<EntitySuggestionItem> {
@@ -81,9 +97,24 @@ export class EntitiesSuggestor extends EditorSuggest<EntitySuggestionItem> {
 		super(plugin.app);
 		this.plugin = plugin;
 		this.entityProviders = entityProviders;
+		console.log(`Entities: 🔄 Loading entity providers...`);
+		this.entityProviders.forEach((provider) => {
+			console.log(
+				`Entities: \t${provider.description ?? "unspecified"} added...`
+			);
+		});
+	}
+
+	clearEntityProviders(): void {
+		this.entityProviders = [];
 	}
 
 	addEntityProvider(entityProvider: EntityProvider): void {
+		console.log(
+			`Entities: \t${
+				entityProvider.description ?? "unspecified"
+			} added...`
+		);
 		this.entityProviders.push(entityProvider);
 	}
 
@@ -139,37 +170,25 @@ export class EntitiesSuggestor extends EditorSuggest<EntitySuggestionItem> {
 		const preparedQuery = prepareQuery(context.query);
 
 		// Perform fuzzy search on the cached suggestions
-		const fuzzySearchResults:EntitySuggestionItem[] = this.localSuggestionCache.flatMap(
-			(suggestionItem) => {
+		const fuzzySearchResults: EntitySuggestionItem[] =
+			this.localSuggestionCache.flatMap((suggestionItem) => {
 				const match: SearchResult | null = fuzzySearch(
 					preparedQuery,
 					suggestionItem.suggestionText
 				);
 				return match ? [{ ...suggestionItem, match }] : [];
-			}
-		);
-		
-		// ToDo add new entity function to every provider
-		// Create templater function that can be called (what about if Templater isn't instaled?)
-		// const defaultSearchResult:EntitySuggestionItem = {
-		// 	suggestionText: `New Person: ${context.query}`,
-		// 	icon: "file-plus",
-		// 	action: () => {
-		// 		console.log(`New Person: ${context.query}`);
-		// 		// this part isn't working --v
-		// 		createNewNoteFromTemplate(this.plugin, "[[Templater/person template.md]]", "People", context.query, false);	
-		// 		return `[[${context.query}]]`;
-		// 	},
-		// 	match: { score: -10, matches: [] } as SearchResult,
-		// };
-		// fuzzySearchResults.push(defaultSearchResult);
+			});
 
 		this.entityProviders.forEach((provider) => {
-			const templateSuggestions = provider.getTemplateCreationSuggestions(context.query);
+			const templateSuggestions = provider.getTemplateCreationSuggestions(
+				context.query
+			);
 			fuzzySearchResults.push(...templateSuggestions);
 		});
 
-		fuzzySearchResults.sort((a, b) => (b.match?.score ?? (-10)) - (a.match?.score ?? (-10)));
+		fuzzySearchResults.sort(
+			(a, b) => (b.match?.score ?? -10) - (a.match?.score ?? -10)
+		);
 		return fuzzySearchResults.map((result) => result);
 	}
 
