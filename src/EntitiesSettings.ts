@@ -5,6 +5,7 @@ import {
 	App,
 	DropdownComponent,
 	TextComponent,
+	Notice,
 } from "obsidian";
 import Entities from "./main";
 import {
@@ -14,7 +15,28 @@ import {
 	ProviderTemplateCreationSettings,
 	TemplateProviderSettings,
 } from "./entities.types";
-import { openTemplateDetailsModal } from "./userComponents";
+import { EntitiesModalInput, openTemplateDetailsModal } from "./userComponents";
+
+let saveTimeout: NodeJS.Timeout | undefined;
+
+function updateProviderAtIndexAndSaveAndReload(
+	plugin: Entities,
+	providerConfig: ProviderConfiguration,
+	index: number
+) {
+	if (saveTimeout !== undefined) {
+		clearTimeout(saveTimeout);
+	}
+
+	saveTimeout = setTimeout(() => {
+		plugin.settings.providers[index] = providerConfig;
+		plugin.saveSettings().then(() => {
+			plugin.loadEntityProviders(); // Reload providers after setting change
+			new Notice("✅ Entities Settings Providers Updated");
+		});
+		saveTimeout = undefined;
+	}, 1000);
+}
 
 export class EntitiesSettingTab extends PluginSettingTab {
 	plugin: Entities;
@@ -88,6 +110,31 @@ export class EntitiesSettingTab extends PluginSettingTab {
 					} Provider`
 				)
 				.setDesc(`Provider #${index + 1}`)
+				.addButton((button) =>
+					button
+						.setIcon(providerConfig.settings.icon ?? "box-select")
+						.onClick(() => {
+							const modal = new EntitiesModalInput(this.app, {
+								placeholder: "Enter icon name...",
+								instructions: {
+									insertString: "Enter to confirm",
+									dismissString: "ESC to cancel",
+								},
+							});
+							modal.open();
+							modal.getInput().then((iconName) => {
+								if (iconName) {
+									providerConfig.settings.icon = iconName;
+									updateProviderAtIndexAndSaveAndReload(
+										this.plugin,
+										providerConfig,
+										index
+									);
+									this.display(); // Refresh the settings UI
+								}
+							});
+						})
+				)
 				.addText((text) =>
 					text
 						.setValue(
@@ -113,8 +160,11 @@ export class EntitiesSettingTab extends PluginSettingTab {
 							) {
 								providerConfig.settings.path = value;
 							}
-							// TODO debounce this
-							this.plugin.loadEntityProviders(); // Reload providers after setting change
+							updateProviderAtIndexAndSaveAndReload(
+								this.plugin,
+								providerConfig,
+								index
+							);
 						})
 				)
 				.addButton((button) =>
@@ -127,7 +177,6 @@ export class EntitiesSettingTab extends PluginSettingTab {
 						.onClick(async () => {
 							// Open a modal or another UI component to input template details
 							// For simplicity, assuming a modal is used and returns an object with template details
-							const providerIndex = index;
 							const initialSettings =
 								(
 									providerConfig.settings as ProviderTemplateCreationSettings
@@ -142,18 +191,12 @@ export class EntitiesSettingTab extends PluginSettingTab {
 									providerConfig.settings as ProviderTemplateCreationSettings
 								).newEntityFromTemplates = [templateDetails];
 								// Save settings and refresh UI
-								if (providerIndex !== -1) {
-									this.plugin.settings.providers[
-										providerIndex
-									] = providerConfig;
-								}
-								this.plugin.saveSettings();
-								this.plugin.loadEntityProviders(); // Reload providers after setting change
-								console.log(
-									"Current settings:",
-									this.plugin.settings
+								updateProviderAtIndexAndSaveAndReload(
+									this.plugin,
+									providerConfig,
+									index
 								);
-								this.display();
+								this.display(); // Refresh the settings UI
 							}
 						})
 				)

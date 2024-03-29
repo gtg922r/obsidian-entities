@@ -20,7 +20,7 @@ export function createFolderEntityProvider(
 			return (
 				entities?.map((file) => ({
 					suggestionText: file.basename,
-					icon: "user-circle",
+					icon: providerSettings.icon ?? "folder-open-dot",
 				})) ?? []
 			);
 		},

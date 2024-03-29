@@ -53,14 +53,14 @@ export default class Entities extends Plugin {
 					break;
 				}
 				case 'noteFromTemplate': {
-					const provider = createNoteFromTemplateEntityProvider(this, providerConfig.settings.path);
+					const provider = createNoteFromTemplateEntityProvider(this, providerConfig.settings);
 					if (provider) {
 						this.suggestor.addEntityProvider(provider);
 					}
 					break;
 				}
 				case 'insertTemplate': {
-					const provider = createInsertTemplateEntityProvider(this, providerConfig.settings.path);
+					const provider = createInsertTemplateEntityProvider(this, providerConfig.settings);
 					if (provider) {
 						this.suggestor.addEntityProvider(provider);
 					}
@@ -70,9 +70,6 @@ export default class Entities extends Plugin {
 					return undefined;
 			}
 		});
-
-		this.suggestor.addEntityProvider(createNoteFromTemplateEntityProvider(this, "Templater"));
-		this.suggestor.addEntityProvider(createInsertTemplateEntityProvider(this, "Templater"));
 	}
 
 	async loadSettings() {

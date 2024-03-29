@@ -5,6 +5,7 @@ import {
 	createNewNoteFromTemplate,
 	insertTemplateUsingTemplater,
 } from "src/entititiesUtilities";
+import { TemplateProviderSettings } from "src/entities.types";
 
 export class FuzzySearchModal extends FuzzySuggestModal<string> {
 	items: string[]; // List of items to search from
@@ -30,11 +31,12 @@ export class FuzzySearchModal extends FuzzySuggestModal<string> {
 
 export function createNoteFromTemplateEntityProvider(
 	plugin: Plugin,
-	templateFolder: string | string[]
+	settings: TemplateProviderSettings
 ): EntityProvider {
-	const templateFolders = Array.isArray(templateFolder)
-		? templateFolder
-		: [templateFolder];
+
+	const templateFolders = Array.isArray(settings.path)
+		? settings.path
+		: [settings.path];
 
 	const folders: TFolder[] = templateFolders
 		.map((folder) => plugin.app.vault.getFolderByPath(folder))
@@ -80,17 +82,17 @@ export function createNoteFromTemplateEntityProvider(
 	return new EntityProvider({
 		plugin,
 		getEntityList: () => entities,
-		description: `📄 New File From Template Entity Provider (${templateFolder})`,
+		description: `📄 New File From Template Entity Provider (${settings.path})`,
 	});
 }
 
 export function createInsertTemplateEntityProvider(
 	plugin: Plugin,
-	templateFolder: string | string[]
+	settings: TemplateProviderSettings
 ): EntityProvider {
-	const templateFolders = Array.isArray(templateFolder)
-		? templateFolder
-		: [templateFolder];
+	const templateFolders = Array.isArray(settings.path)
+		? settings.path
+		: [settings.path];
 
 	const folders: TFolder[] = templateFolders
 		.map((folder) => plugin.app.vault.getFolderByPath(folder))
@@ -115,6 +117,6 @@ export function createInsertTemplateEntityProvider(
 	return new EntityProvider({
 		plugin,
 		getEntityList: () => entities,
-		description: `📝 Insert Template Entity Provider (${templateFolder})`,
+		description: `📝 Insert Template Entity Provider (${settings.path})`,
 	});
 }

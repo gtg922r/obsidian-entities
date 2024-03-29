@@ -37,7 +37,7 @@ export async function createDataviewQueryEntityProvider(plugin: Plugin, settings
         const projectEntities: EntitySuggestionItem[] = projects?.map(
             (project: { file: { name: string } }) => ({
                 suggestionText: project?.file?.name,
-                icon: "book-marked",
+                icon: settings.icon ?? "box",
             })
         ).array() as EntitySuggestionItem[];
             return projectEntities;

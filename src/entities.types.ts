@@ -6,7 +6,7 @@ export type entityFromTemplateSettings = {
 	entityName: string;
 };
 
-export type ProviderConfiguration = { icon?: string } & (
+export type ProviderConfiguration = (
 	| {
 			type: "folder";
 			settings: FolderProviderSettings;
@@ -29,15 +29,19 @@ export interface ProviderTemplateCreationSettings {
 	newEntityFromTemplates?: entityFromTemplateSettings[];
 } 
 
-export interface FolderProviderSettings extends ProviderTemplateCreationSettings {
+export interface CommonProviderSettings {
+	icon?: string;
+}
+
+export interface FolderProviderSettings extends ProviderTemplateCreationSettings, CommonProviderSettings {
 	path: string;
 }
 
-export interface DataviewProviderSettings extends ProviderTemplateCreationSettings {
+export interface DataviewProviderSettings extends ProviderTemplateCreationSettings, CommonProviderSettings {
 	query: string;
 }
 
-export interface TemplateProviderSettings {
+export interface TemplateProviderSettings extends CommonProviderSettings {
 	path: string;
 }
 
@@ -60,35 +64,7 @@ export interface TemplaterPlugin {
 }
 
 export const DEFAULT_SETTINGS: EntitiesSettings = {
-	providers: [
-		{
-			type: "folder",
-			icon: "user-circle",
-			settings: {
-				path: "People",
-				newEntityFromTemplates: [{
-					engine: "templater",
-					templatePath: "Templater/New Person.md",
-					entityName: "Person",
-				}],
-			},
-		},
-		{
-			type: "dataview",
-			icon: "book-marked",
-			settings: { query: "#project" },
-		},
-		{
-			type: "noteFromTemplate",
-			icon: "file-plus",
-			settings: { path: "Templates" },
-		},
-		{
-			type: "insertTemplate",
-			icon: "file-plus",
-			settings: { path: "Templates" },
-		},
-	],
+	providers: [],
 };
 
 export interface AppWithPlugins extends App {

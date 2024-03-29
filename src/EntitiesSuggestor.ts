@@ -59,7 +59,7 @@ export class EntityProvider {
 		);
 		return creationTemplates.map((template) => ({
 			suggestionText: `New ${template.entityName}: ${query}`,
-			icon: "file-plus",
+			icon: "plus-circle",
 			action: () => {
 				console.log(`New ${template.entityName}: ${query}`);
 				createNewNoteFromTemplate(
