@@ -17,6 +17,13 @@ export function createFolderEntityProvider(
 				(file: unknown) => file instanceof TFile
 			) as TFile[] | undefined;
 
+			const aliasEntities = entities?.flatMap((file) => {
+				const aliases = plugin.app.metadataCache.getFileCache(file)?.frontmatter?.aliases as string | string[] | undefined;
+				if (typeof aliases === "string") return [{ ...file, basename: aliases }];
+				return aliases ? aliases.map((alias) => ({ ...file, basename: alias })) : [];
+			});
+			entities?.push(...aliasEntities as TFile[]);
+
 			return (
 				entities?.map((file) => ({
 					suggestionText: file.basename,

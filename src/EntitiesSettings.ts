@@ -73,9 +73,7 @@ export class EntitiesSettingTab extends PluginSettingTab {
 					const type = (dropDownEl as DropdownComponent).getValue();
 					const value = textEl.getValue();
 					let settings;
-					if (
-						type in ["folder", "noteFromTemplate", "insertTemplate"]
-					) {
+					if (["folder", "noteFromTemplate", "insertTemplate"].includes(type)) {
 						settings = { path: value };
 					} else if (type === "dataview") {
 						settings = { query: value };
