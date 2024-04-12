@@ -15,7 +15,8 @@ import {
 	ProviderTemplateCreationSettings,
 	TemplateProviderSettings,
 } from "./entities.types";
-import { EntitiesModalInput, openTemplateDetailsModal } from "./userComponents";
+import { openTemplateDetailsModal, IconPickerModal } from "./userComponents";
+import { FolderSuggest } from "./ui/file-suggest";
 
 let saveTimeout: NodeJS.Timeout | undefined;
 
@@ -52,6 +53,7 @@ export class EntitiesSettingTab extends PluginSettingTab {
 		let textEl: TextComponent;
 
 		containerEl.empty();
+		console.log("running display and getting icons");
 
 		// Add provider UI
 		new Setting(containerEl)
@@ -67,6 +69,7 @@ export class EntitiesSettingTab extends PluginSettingTab {
 			.addText((text) => {
 				textEl = text;
 				text.setPlaceholder("Path or Query");
+				new FolderSuggest(this.app, text.inputEl);
 			})
 			.addButton((button) =>
 				button.setButtonText("+").onClick(() => {
@@ -112,15 +115,9 @@ export class EntitiesSettingTab extends PluginSettingTab {
 					button
 						.setIcon(providerConfig.settings.icon ?? "box-select")
 						.onClick(() => {
-							const modal = new EntitiesModalInput(this.app, {
-								placeholder: "Enter icon name...",
-								instructions: {
-									insertString: "Enter to confirm",
-									dismissString: "ESC to cancel",
-								},
-							});
-							modal.open();
-							modal.getInput().then((iconName) => {
+							const iconPickerModal = new IconPickerModal(this.app);
+							iconPickerModal.open();
+							iconPickerModal.getInput().then((iconName) => {
 								if (iconName) {
 									providerConfig.settings.icon = iconName;
 									updateProviderAtIndexAndSaveAndReload(

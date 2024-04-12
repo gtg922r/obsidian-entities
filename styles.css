@@ -91,3 +91,44 @@ body {
 .modal-button:hover {
 	background-color: var(--interactive-accent-hover);
 } */
+
+/**********************/
+/* ** Icon Picker Modal ** */
+/**********************/
+.icon-grid {
+	display: grid;
+	grid-template-columns: repeat(auto-fill, minmax(50px, 1fr)); /* Adjust minmax for icon size */
+	gap: 10px; /* Space between icons */
+	padding: 10px; /* Padding around the grid */
+	overflow-y: auto; /* Scroll if content is too tall */
+	max-height: 300px; /* Adjust based on modal size */
+  }
+  
+  .icon-item {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	justify-content: center;
+	cursor: pointer;
+	padding: 5px;
+	border: 1px solid transparent; /* Border color */
+	border-radius: 4px; /* Rounded corners */
+  }
+  
+  .icon-item:hover {
+	background-color: var(--background-modifier-hover); /* Hover background color */
+	border-color: var(--background-modifier-border-hover); /* Hover border color */
+  }
+  
+  .icon-name {
+	font-size: 0.6em; /* Adjust font size as needed */
+	text-align: center;
+	color: var(--text-muted); /* Text color */
+	word-break: break-word; /* Ensure long names do not overflow */
+  }
+
+  .icon-svg {
+	width: 24px; /* Adjust the size as needed */
+	height: 24px; /* Adjust the size as needed */
+	/* fill: currentColor; Icon color, can use CSS variables for theming */
+  }

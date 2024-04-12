@@ -4,6 +4,8 @@ import {
 	Modal,
 	Setting,
 	TextComponent,
+	getIconIds,
+	getIcon,
 } from "obsidian";
 import { entityFromTemplateSettings } from "./entities.types";
 
@@ -197,4 +199,75 @@ export class TemplateDetailsModal extends Modal {
 			this.open();
 		});
 	}
+}
+
+export class IconPickerModal extends Modal {
+    private resolve: (value: string | PromiseLike<string>) => void;
+    private icons: string[];
+    private filteredIcons: string[];
+    private gridContainer: HTMLElement; // Add a property to hold the reference
+    private promise?: Promise<string>; // Make the promise property optional
+
+    constructor(app: App) {
+        super(app);
+        this.icons = getIconIds().map(iconId => iconId.replace(/^lucide-/, ''));
+        this.filteredIcons = this.icons;
+    }
+
+    onOpen() {
+        const { contentEl } = this;
+        contentEl.empty();
+
+        // Search box
+        const searchBox = contentEl.createEl("input", {
+            type: "text",
+            placeholder: "Search icons...",
+        });
+        searchBox.addEventListener("input", () => this.filterIcons(searchBox.value));
+
+        // Icons grid container
+        this.gridContainer = contentEl.createDiv({ cls: "icon-grid" }); // Store the reference
+
+        // Initial display of icons
+        this.displayIcons(this.gridContainer); // Use the reference
+
+        // Promise to return selected icon
+        this.promise = new Promise<string>((resolve) => {
+            this.resolve = resolve;
+        });
+    }
+
+    private filterIcons(query: string) {
+        if (!query) {
+            this.filteredIcons = this.icons;
+        } else {
+            this.filteredIcons = this.icons.filter((icon) =>
+                icon.toLowerCase().includes(query.toLowerCase())
+            );
+        }
+        this.displayIcons(this.gridContainer); // Use the reference
+    }
+
+    private displayIcons(container: HTMLElement) {
+        container.empty();
+        this.filteredIcons.forEach((iconName) => {
+            const iconEl = container.createEl("div", { cls: "icon-item" });
+            const iconSVG = getIcon(iconName); // Get the SVG element for the icon
+            if (iconSVG instanceof SVGSVGElement) {
+                iconSVG.addClass("icon-svg"); // Add a class for styling if needed
+                iconEl.appendChild(iconSVG); // Append the SVG to the icon element
+            }
+			iconEl.setAttribute("title", iconName); // Set the title attribute for tooltip
+            // const iconLabel = iconEl.createEl("span", { cls: "icon-name" });
+            // iconLabel.setText(iconName); // Set the text label for the icon (optional, uncomment if you want labels)
+            iconEl.addEventListener("click", () => {
+                this.resolve(iconName);
+                this.close();
+            });
+        });
+    }
+
+    getInput(): Promise<string> {
+        return this.promise ?? Promise.resolve("");
+    }
 }
