@@ -39,7 +39,7 @@ jobs:
           tag_name: ${{ github.ref }}
           release_name: ${{ github.ref }}
           draft: true
-          body: "# Entities ${{ github.ref }}\n -"
+          body: "# Entities ${{ github.ref }}\n-"
           prerelease: true
       - name: Upload zip file
         id: upload-zip
