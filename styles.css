@@ -41,8 +41,8 @@ body {
 }
 
 .setting-item-control input:disabled {
-    /* background-color: var(--internal-light-dark); */
-    color: var(--text-faint);
+	/* background-color: var(--internal-light-dark); */
+	color: var(--text-faint);
 }
 
 /**********************/
@@ -97,38 +97,43 @@ body {
 /**********************/
 .icon-grid {
 	display: grid;
-	grid-template-columns: repeat(auto-fill, minmax(50px, 1fr)); /* Adjust minmax for icon size */
-	gap: 10px; /* Space between icons */
+    grid-template-columns: repeat(auto-fill, 35px); /* Fixed width of 35px for each item */
+    gap: 10px; /* This is the initial gap. */
+    justify-content: space-between; /* This spreads out the items to use the available space, adjusting the gap as necessary. */
 	padding: 10px; /* Padding around the grid */
 	overflow-y: auto; /* Scroll if content is too tall */
-	max-height: 300px; /* Adjust based on modal size */
-  }
-  
-  .icon-item {
+	max-height: 400px; /* Adjust based on modal size */
+}
+
+.icon-item {
 	display: flex;
 	flex-direction: column;
 	align-items: center;
 	justify-content: center;
 	cursor: pointer;
-	padding: 5px;
+	padding: 7px;
 	border: 1px solid transparent; /* Border color */
 	border-radius: 4px; /* Rounded corners */
-  }
-  
-  .icon-item:hover {
-	background-color: var(--background-modifier-hover); /* Hover background color */
-	border-color: var(--background-modifier-border-hover); /* Hover border color */
-  }
-  
-  .icon-name {
+}
+
+.icon-item:hover {
+	background-color: var(
+		--background-modifier-hover
+	); /* Hover background color */
+	border-color: var(
+		--background-modifier-border-hover
+	); /* Hover border color */
+}
+
+.icon-name {
 	font-size: 0.6em; /* Adjust font size as needed */
 	text-align: center;
 	color: var(--text-muted); /* Text color */
 	word-break: break-word; /* Ensure long names do not overflow */
-  }
+}
 
-  .icon-svg {
+.icon-svg {
 	width: 24px; /* Adjust the size as needed */
 	height: 24px; /* Adjust the size as needed */
 	/* fill: currentColor; Icon color, can use CSS variables for theming */
-  }
+}

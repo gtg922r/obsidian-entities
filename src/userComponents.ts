@@ -45,8 +45,7 @@ export class EntitiesModalInput extends Modal {
 		modalEl.removeClass("modal-content");
 		modalEl.addClass("prompt");
 
-		const prompt = modalEl;
-		const inputContainer = prompt.createDiv({
+		const inputContainer = modalEl.createDiv({
 			cls: "prompt-input-container",
 		});
 
@@ -62,7 +61,7 @@ export class EntitiesModalInput extends Modal {
 		// Input CTA container (if needed for future use)
 		inputContainer.createDiv({ cls: "prompt-input-cta" });
 
-		const instructions = prompt.createDiv({ cls: "prompt-instructions" });
+		const instructions = modalEl.createDiv({ cls: "prompt-instructions" });
 
 		// Instruction for inserting template
 		const insertInstruction = instructions.createDiv({
@@ -215,21 +214,53 @@ export class IconPickerModal extends Modal {
     }
 
     onOpen() {
-        const { contentEl } = this;
-        contentEl.empty();
+        const { modalEl } = this;
+        modalEl.empty();
+		modalEl.removeClass("modal-content");
+		modalEl.addClass("prompt")
+
+		const inputContainer = modalEl.createDiv({
+			cls: "prompt-input-container",
+		});
 
         // Search box
-        const searchBox = contentEl.createEl("input", {
-            type: "text",
-            placeholder: "Search icons...",
+        const searchBox = inputContainer.createEl("input", {
+			cls: "prompt-input",
+			attr: {
+				enterkeyhint: "done",
+				type: "text",
+				placeholder: "Search icons...",
+			},
         });
         searchBox.addEventListener("input", () => this.filterIcons(searchBox.value));
 
-        // Icons grid container
-        this.gridContainer = contentEl.createDiv({ cls: "icon-grid" }); // Store the reference
-
-        // Initial display of icons
+		// Display results in a grid
+		const promptResults = modalEl.createDiv({ cls: "prompt-results" });
+        this.gridContainer = promptResults.createDiv({ cls: "icon-grid" }); // Store the reference
         this.displayIcons(this.gridContainer); // Use the reference
+
+		// Show instructions
+		const instructions = modalEl.createDiv({ cls: "prompt-instructions" });
+
+		// Instruction for inserting template
+		const insertInstruction = instructions.createDiv({
+			cls: "prompt-instruction",
+		});
+		insertInstruction.createSpan({
+			cls: "prompt-instruction-command",
+			text: "click",
+		});
+		insertInstruction.appendText("to insert");
+
+		// Instruction for dismissing the modal
+		const dismissInstruction = instructions.createDiv({
+			cls: "prompt-instruction",
+		});
+		dismissInstruction.createSpan({
+			cls: "prompt-instruction-command",
+			text: "esc",
+		});
+		dismissInstruction.appendText("to dismiss");		
 
         // Promise to return selected icon
         this.promise = new Promise<string>((resolve) => {
