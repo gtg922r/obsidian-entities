@@ -8,6 +8,7 @@ import {
 	getIcon,
 } from "obsidian";
 import { entityFromTemplateSettings } from "./entities.types";
+import { FileSuggest } from "./ui/file-suggest";
 
 export interface EntitiesModalInputOptions {
 	placeholder?: string;
@@ -157,6 +158,7 @@ export class TemplateDetailsModal extends Modal {
 				);
 				templatePathInput = text;
 				text.setDisabled(engineDropdown.getValue() === "disabled");
+				new FileSuggest(this.app, text.inputEl);
 			});			
 
 		// Entity Name Input Setting

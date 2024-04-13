@@ -76,7 +76,13 @@ export class EntitiesSettingTab extends PluginSettingTab {
 					const type = (dropDownEl as DropdownComponent).getValue();
 					const value = textEl.getValue();
 					let settings;
-					if (["folder", "noteFromTemplate", "insertTemplate"].includes(type)) {
+					if (
+						[
+							"folder",
+							"noteFromTemplate",
+							"insertTemplate",
+						].includes(type)
+					) {
 						settings = { path: value };
 					} else if (type === "dataview") {
 						settings = { query: value };
@@ -115,7 +121,9 @@ export class EntitiesSettingTab extends PluginSettingTab {
 					button
 						.setIcon(providerConfig.settings.icon ?? "box-select")
 						.onClick(() => {
-							const iconPickerModal = new IconPickerModal(this.app);
+							const iconPickerModal = new IconPickerModal(
+								this.app
+							);
 							iconPickerModal.open();
 							iconPickerModal.getInput().then((iconName) => {
 								if (iconName) {
@@ -130,38 +138,44 @@ export class EntitiesSettingTab extends PluginSettingTab {
 							});
 						})
 				)
-				.addText((text) =>
-					text
-						.setValue(
-							providerConfig.type === "dataview"
-								? (
-										providerConfig.settings as DataviewProviderSettings
-								  ).query
-								: (
-										providerConfig.settings as
-											| FolderProviderSettings
-											| TemplateProviderSettings
-								  ).path
-						)
-						.setPlaceholder("Path or Query")
-						.onChange((value) => {
-							if (providerConfig.type === "folder") {
-								providerConfig.settings.path = value;
-							} else if (providerConfig.type === "dataview") {
-								providerConfig.settings.query = value;
-							} else if (
-								providerConfig.type === "noteFromTemplate" ||
-								providerConfig.type === "insertTemplate"
-							) {
-								providerConfig.settings.path = value;
-							}
-							updateProviderAtIndexAndSaveAndReload(
-								this.plugin,
-								providerConfig,
-								index
-							);
-						})
-				)
+				.addText((text) => {
+					text.setValue(
+						providerConfig.type === "dataview"
+							? (
+									providerConfig.settings as DataviewProviderSettings
+							  ).query
+							: (
+									providerConfig.settings as
+										| FolderProviderSettings
+										| TemplateProviderSettings
+							  ).path
+					);
+					text.setPlaceholder("Path or Query");
+					text.onChange((value) => {
+						if (providerConfig.type === "folder") {
+							providerConfig.settings.path = value;
+						} else if (providerConfig.type === "dataview") {
+							providerConfig.settings.query = value;
+						} else if (
+							providerConfig.type === "noteFromTemplate" ||
+							providerConfig.type === "insertTemplate"
+						) {
+							providerConfig.settings.path = value;
+						}
+						updateProviderAtIndexAndSaveAndReload(
+							this.plugin,
+							providerConfig,
+							index
+						);
+					});
+					if (
+						providerConfig.type === "folder" ||
+						providerConfig.type === "noteFromTemplate" ||
+						providerConfig.type === "insertTemplate"
+					) {
+						new FolderSuggest(this.app, text.inputEl);
+					}
+				})
 				.addButton((button) =>
 					button
 						.setIcon("file-plus")
