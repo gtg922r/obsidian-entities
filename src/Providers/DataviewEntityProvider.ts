@@ -40,16 +40,34 @@ export async function createDataviewQueryEntityProvider(
 	return new EntityProvider({
 		plugin,
 		description: `🧠 Dataview Entity Provider (${settings.query})`,
+		entityCreationTemplates: settings.newEntityFromTemplates,
 		getEntityList: (query: string) => {
 			const projects = dv.pages(settings.query);
-			const projectEntities: EntitySuggestionItem[] = projects
-				?.map((project: { file: { name: string } }) => ({
-					suggestionText: project?.file?.name,
-					icon: settings.icon ?? "box",
-				}))
-				.array() as EntitySuggestionItem[];
-			return projectEntities;
+
+			const projectEntitiesWithAliases =
+				projects?.flatMap(
+					(project: {
+						file: { name: string; aliases: string[] };
+					}) => {
+						const baseEntity: EntitySuggestionItem = {
+							suggestionText: project.file.name,
+							icon: settings.icon ?? "box",
+						};
+
+						const projectEntities = [
+							baseEntity,
+							...project.file.aliases.map((alias: string) => ({
+								suggestionText: alias,
+								icon: settings.icon ?? "box",
+								replacementText: `${project.file.name}|${alias}`,
+							})),
+						];
+
+						return projectEntities;
+					}
+				);
+
+			return projectEntitiesWithAliases.array();
 		},
-		entityCreationTemplates: settings.newEntityFromTemplates,
 	});
 }
