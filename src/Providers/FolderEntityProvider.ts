@@ -17,28 +17,35 @@ export function createFolderEntityProvider(
 				(file: unknown) => file instanceof TFile
 			) as TFile[] | undefined;
 
-
-			const entitySuggestions = entities?.map((file) => ({
+			const entitySuggestions =
+				entities?.map((file) => ({
 					suggestionText: file.basename,
 					icon: providerSettings.icon ?? "folder-open-dot",
 				})) ?? [];
 
-			const suggestionFromAlias: (alias: string, file: TFile) => EntitySuggestionItem = (alias: string, file: TFile) => ({
+			const suggestionFromAlias: (
+				alias: string,
+				file: TFile
+			) => EntitySuggestionItem = (alias: string, file: TFile) => ({
 				suggestionText: alias,
 				icon: providerSettings.icon ?? "folder-open-dot",
 				replacementText: `${file.basename}|${alias}`,
 			});
 
 			const aliasEntitiesSuggestions = entities?.flatMap((file) => {
-				const aliases = plugin.app.metadataCache.getFileCache(file)?.frontmatter?.aliases as string | string[] | undefined;
-				if (typeof aliases === "string") return [suggestionFromAlias(aliases, file)];
-				return aliases ? aliases.map((alias) => suggestionFromAlias(alias, file)) : [];
-			});				
-			
-			return aliasEntitiesSuggestions ? [...entitySuggestions, ...aliasEntitiesSuggestions] : entitySuggestions;
+				const aliases = plugin.app.metadataCache.getFileCache(file)
+					?.frontmatter?.aliases as string | string[] | undefined;
+				if (typeof aliases === "string")
+					return [suggestionFromAlias(aliases, file)];
+				return aliases
+					? aliases.map((alias) => suggestionFromAlias(alias, file))
+					: [];
+			});
 
+			return aliasEntitiesSuggestions
+				? [...entitySuggestions, ...aliasEntitiesSuggestions]
+				: entitySuggestions;
 		},
 		entityCreationTemplates: providerSettings.newEntityFromTemplates,
 	});
 }
-
