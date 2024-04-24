@@ -5,82 +5,80 @@ import { AppWithPlugins } from "src/entities.types";
 import Entities from "src/main";
 
 interface NLDResult {
-	formattedString: string;
-	date: Date;
-	moment: Moment;
+    formattedString: string;
+    date: Date;
+    moment: Moment;
 }
 
 interface NLPlugin extends Plugin {
-	parseDate(date: string): NLDResult;
+    parseDate(date: string): NLDResult;
 }
 
-function dateStringsToDateResults(
-	plugin: NLPlugin,
-	dateStrings: string[]
-): EntitySuggestionItem[] {
-	return dateStrings.map((dateString) => {
-		const result = plugin.parseDate(dateString);
-		return {
-			suggestionText: dateString,
-			noteText: result.formattedString,
-			replacementText: result.formattedString,
-			icon: "calendar",
-		};
-	});
-}
+export class NLDatesEntityProvider extends EntityProvider {
+    private nlpPlugin: NLPlugin | undefined;
 
-export function createNLDatesEntityProvider(
-	plugin: Entities
-): EntityProvider | undefined {
-	console.log(`Entities: 📅 NLDates Entity Provider added...`);
-	return new EntityProvider({
-		plugin,
-		description: `📅 NLDates Entity Provider`,
-		getEntityList: (query: string) => {
-			const appWithPlugins = plugin.app as AppWithPlugins;
-			const nlpPlugin = appWithPlugins.plugins?.getPlugin(
-				"nldates-obsidian"
-			) as NLPlugin;
-			if (!nlpPlugin || nlpPlugin.parseDate === undefined) {
-				return [];
-			}
+    constructor(plugin: Entities) {
+        super({
+            plugin,
+            description: "📅 NLDates Entity Provider"
+        });
+        this.initialize();
+    }
 
-			const dates = dateStringsToDateResults(nlpPlugin, [
-				"today",
-				"tomorrow",
-				"yesterday",
-			]);
+    private initialize() {
+        const appWithPlugins = this.plugin.app as AppWithPlugins;
+        this.nlpPlugin = appWithPlugins.plugins?.getPlugin("nldates-obsidian") as NLPlugin;
+        if (!this.nlpPlugin || this.nlpPlugin.parseDate === undefined) {
+            console.log("NLDates plugin not found or parseDate method is missing.");
+        }
+    }
 
-			const daysOfWeeks = [
-				"sunday",
-				"monday",
-				"tuesday",
-				"wednesday",
-				"thursday",
-				"friday",
-				"saturday",
-			];
+    getEntityList(query: string): EntitySuggestionItem[] {
+        if (!this.nlpPlugin) {
+            return [];
+        }
 
-			const prefixes = ["next", "last", "this"];
-			prefixes.forEach((prefix) => {
-				dates.push(
-					...dateStringsToDateResults(
-						nlpPlugin,
-						daysOfWeeks.map((day) => `${prefix} ${day}`)
-					)
-				);
-			});
+        const dates = this.dateStringsToDateResults([
+            "today",
+            "tomorrow",
+            "yesterday",
+        ]);
 
-			const result = nlpPlugin.parseDate(query);
-			if (result && result.date) {
-				dates.push({
-					suggestionText: query,
-					noteText: result.formattedString,
-					replacementText: result.formattedString,
-					icon: "calendar",
-				});
-			}
-			return dates;
-		},
-	});
+        const daysOfWeeks = [
+            "sunday", "monday", "tuesday", "wednesday",
+            "thursday", "friday", "saturday",
+        ];
+
+        const prefixes = ["next", "last", "this"];
+        prefixes.forEach((prefix) => {
+            dates.push(
+                ...this.dateStringsToDateResults(
+                    daysOfWeeks.map((day) => `${prefix} ${day}`)
+                )
+            );
+        });
+
+        const result = this.nlpPlugin.parseDate(query);
+        if (result && result.date) {
+            dates.push({
+                suggestionText: query,
+                noteText: result.formattedString,
+                replacementText: result.formattedString,
+                icon: "calendar",
+            });
+        }
+        return dates;
+    }
+
+    private dateStringsToDateResults(dateStrings: string[]): EntitySuggestionItem[] {
+        return dateStrings.map((dateString) => {
+            const result = this.nlpPlugin?.parseDate(dateString);
+            return {
+                suggestionText: dateString,
+                noteText: result?.formattedString ?? "",
+                replacementText: result?.formattedString ?? "",
+                icon: "calendar",
+            };
+        });
+    }
 }

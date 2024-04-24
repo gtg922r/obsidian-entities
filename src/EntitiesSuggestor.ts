@@ -1,4 +1,5 @@
 import {
+	CommonProviderSettings,
 	entityFromTemplateSettings,
 	ProviderConfiguration,
 } from "./entities.types";
@@ -32,24 +33,25 @@ export interface EntitySuggestionItem {
 
 export interface EntityProviderOptions {
 	plugin: Plugin;
-	getEntityList: (query: string) => EntitySuggestionItem[];
 	entityCreationTemplates?: entityFromTemplateSettings[];
 	providerSettings?: ProviderConfiguration;
 	description?: string;
 }
 
-export class EntityProvider {
+export abstract class EntityProvider {
 	plugin: Plugin;
-	getEntityList: (query: string) => EntitySuggestionItem[];
-	entityCreationTemplates?: entityFromTemplateSettings[];
 	description?: string;
+	icon?: string;
+	config?: CommonProviderSettings; // Rename to settings, and rename above to config
+	entityCreationTemplates?: entityFromTemplateSettings[];
 
 	constructor(options: EntityProviderOptions) {
 		this.plugin = options.plugin;
-		this.getEntityList = options.getEntityList;
-		this.entityCreationTemplates = options.entityCreationTemplates;
 		this.description = options.description;
+		this.entityCreationTemplates = options.entityCreationTemplates;
 	}
+
+	abstract getEntityList(query: string): EntitySuggestionItem[];
 
 	getTemplateCreationSuggestions(query: string): EntitySuggestionItem[] {
 		if (!this.entityCreationTemplates) return [];

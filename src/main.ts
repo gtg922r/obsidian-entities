@@ -6,10 +6,10 @@ import {
 	ProviderConfiguration,
 } from "./entities.types";
 import { EntitiesSuggestor } from "./EntitiesSuggestor";
-import { createFolderEntityProvider } from "./Providers/FolderEntityProvider";
-import { createDataviewQueryEntityProvider } from "./Providers/DataviewEntityProvider";
-import { createNLDatesEntityProvider } from "./Providers/DateEntityProvider";
-import { createInsertTemplateEntityProvider, createNoteFromTemplateEntityProvider } from "./Providers/TemplateProvider";
+import { FolderEntityProvider } from "./Providers/FolderEntityProvider";
+import { DataviewEntityProvider } from "./Providers/DataviewEntityProvider";
+import { NLDatesEntityProvider } from "./Providers/DateEntityProvider";
+import { InsertTemplateEntityProvider, NoteFromTemplateEntityProvider } from "./Providers/TemplateProvider";
 
 export default class Entities extends Plugin {
 	settings: EntitiesSettings;
@@ -30,7 +30,7 @@ export default class Entities extends Plugin {
 
 	async loadEntityProviders() {
 		this.suggestor.clearEntityProviders();
-		const nldatesProvider = createNLDatesEntityProvider(this);
+		const nldatesProvider = new NLDatesEntityProvider(this);
 		if (nldatesProvider) {
 			this.suggestor.addEntityProvider(nldatesProvider);
 		}
@@ -38,29 +38,28 @@ export default class Entities extends Plugin {
 		this.settings.providers.forEach((providerConfig: ProviderConfiguration) => {
 			switch (providerConfig.type) {
 				case 'folder': {					
-					const folderProvider = createFolderEntityProvider(this, providerConfig.settings);
+					const folderProvider = new FolderEntityProvider(this, providerConfig.settings);
 					if (folderProvider) {
 						this.suggestor.addEntityProvider(folderProvider);
 					}
 					break;
 				}
 				case 'dataview': {
-					createDataviewQueryEntityProvider(this, providerConfig.settings).then((provider) => {
-						if (provider) {
-							this.suggestor.addEntityProvider(provider);
-						}
-					});
+					const dataviewProvider = new DataviewEntityProvider(this, providerConfig.settings);
+					if (dataviewProvider) {
+						this.suggestor.addEntityProvider(dataviewProvider);
+					}
 					break;
-				}
+				} 
 				case 'noteFromTemplate': {
-					const provider = createNoteFromTemplateEntityProvider(this, providerConfig.settings);
+					const provider = new NoteFromTemplateEntityProvider(this, providerConfig.settings);
 					if (provider) {
 						this.suggestor.addEntityProvider(provider);
 					}
 					break;
 				}
 				case 'insertTemplate': {
-					const provider = createInsertTemplateEntityProvider(this, providerConfig.settings);
+					const provider = new InsertTemplateEntityProvider(this, providerConfig.settings);
 					if (provider) {
 						this.suggestor.addEntityProvider(provider);
 					}
