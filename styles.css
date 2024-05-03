@@ -137,3 +137,11 @@ body {
 	height: 24px; /* Adjust the size as needed */
 	/* fill: currentColor; Icon color, can use CSS variables for theming */
 }
+
+/**********************/
+/*    ** Modals **    */
+/**********************/
+.modal.entities-wide-modal {
+	--dialog-width: 650px;
+}
+

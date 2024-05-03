@@ -1,5 +1,5 @@
 import {
-	CommonProviderSettings,
+	CommonProviderConfig,
 	entityFromTemplateSettings,
 	ProviderConfiguration,
 } from "./entities.types";
@@ -17,6 +17,7 @@ import {
 	fuzzySearch,
 	prepareQuery,
 	SearchResult,
+	App,
 } from "obsidian";
 
 export interface EntitySuggestionItem {
@@ -42,7 +43,7 @@ export abstract class EntityProvider {
 	plugin: Plugin;
 	description?: string;
 	icon?: string;
-	config?: CommonProviderSettings; // Rename to settings, and rename above to config
+	config?: CommonProviderConfig; // Rename to settings, and rename above to config
 	entityCreationTemplates?: entityFromTemplateSettings[];
 
 	constructor(options: EntityProviderOptions) {
@@ -52,6 +53,9 @@ export abstract class EntityProvider {
 	}
 
 	abstract getEntityList(query: string): EntitySuggestionItem[];
+	static getProviderSettingsContent(containerEl: HTMLElement, config: CommonProviderConfig, app: App): void {
+		containerEl.createEl("h2", { text: "Entity Provider Settings" });
+	}
 
 	getTemplateCreationSuggestions(query: string): EntitySuggestionItem[] {
 		if (!this.entityCreationTemplates) return [];

@@ -10,13 +10,13 @@ import {
 import Entities from "./main";
 import {
 	DataviewProviderSettings,
-	FolderProviderSettings,
 	ProviderConfiguration,
 	ProviderTemplateCreationSettings,
 	TemplateProviderSettings,
 } from "./entities.types";
-import { openTemplateDetailsModal, IconPickerModal } from "./userComponents";
+import { openTemplateDetailsModal, IconPickerModal, ProviderSettingsModal } from "./userComponents";
 import { FolderSuggest } from "./ui/file-suggest";
+import { FolderEntityProvider, FolderProviderConfig } from "./Providers/FolderEntityProvider";
 
 let saveTimeout: NodeJS.Timeout | undefined;
 
@@ -146,7 +146,7 @@ export class EntitiesSettingTab extends PluginSettingTab {
 							  ).query
 							: (
 									providerConfig.settings as
-										| FolderProviderSettings
+										| FolderProviderConfig
 										| TemplateProviderSettings
 							  ).path
 					);
@@ -210,6 +210,20 @@ export class EntitiesSettingTab extends PluginSettingTab {
 						})
 				)
 				.addButton((button) =>
+					button
+						.setIcon("settings")
+						.onClick(() => {
+							if (providerConfig.type === "folder") {
+								const modal = new ProviderSettingsModal(
+									this.app,
+									providerConfig.settings,
+									FolderEntityProvider.getProviderSettingsContent
+								);
+								modal.open();
+							}
+						})
+				)
+				.addButton((button) =>
 					button.setIcon("trash").onClick(async () => {
 						this.plugin.settings.providers.splice(index, 1);
 						await this.plugin.saveSettings();
@@ -217,9 +231,6 @@ export class EntitiesSettingTab extends PluginSettingTab {
 						this.display(); // Refresh the settings UI
 					})
 				);
-
-			// Optionally, adjust the layout of the setting to display it in a single row
-			setting.settingEl.addClass("flex-container"); // Ensure you define this class in your CSS to align items in a row
 		});
 
 		// Add button to manually reload providers
@@ -232,5 +243,56 @@ export class EntitiesSettingTab extends PluginSettingTab {
 					this.plugin.loadEntityProviders();
 				});
 			});
+
+		new Setting(containerEl)
+			.setName('Provider Settings')
+			.setDesc('Settings for each active Entity provider')
+			.setHeading();
+
+		new Setting(containerEl)
+			.setName('└ Folder Provider')
+			.addExtraButton(button => button.setIcon('folder').setDisabled(false))			
+			.addButton(button => button.setIcon('user-circle').setDisabled(false).onClick(() => {
+				console.log('Extra Button Clicked');
+			}))
+			.addText(text => text.setPlaceholder('Folder Path').setValue('People/'))
+			.addButton(button => button.setIcon('settings').onClick(() => {}))			
+			.addButton(button => button.setIcon('trash').onClick(() => {}));
+		new Setting(containerEl)
+			.setName('└ Dataview Provider')
+			.addExtraButton(button => button.setIcon('search-code').setDisabled(false))
+			.addButton(button => button.setIcon('book-marked').setDisabled(false).onClick(() => {
+				console.log('Extra Button Clicked');
+			}))
+			.addText(text => text.setPlaceholder('Folder Path').setValue('#project and "Entity"'))
+			.addButton(button => button.setIcon('settings').onClick(() => {}))			
+			.addButton(button => button.setIcon('trash').onClick(() => {}));
+		new Setting(containerEl)
+			.setName('Add New Provider')
+			.setDesc('Open New Provider Settings')
+			.addDropdown(dropdown => {
+				dropdown.addOption('folder', 'Folder');
+				dropdown.addOption('dataview', 'Dataview');
+				dropdown.addOption('noteFromTemplate', 'Note from Template');
+				dropdown.addOption('insertTemplate', 'Insert Template');
+				dropdown.onChange(value => {
+					console.log('Dropdown Changed', value);
+				});
+			})
+			.addButton(button => button.setIcon('plus').onClick(() => {
+				console.log('Extra Button Clicked');
+			}));
+		new Setting(containerEl)
+			.setName("Reload Providers")
+			.setDesc("Manually reload all entity providers")
+			.addButton((button) => {
+				button.setButtonText("Reload").onClick(() => {
+					console.log("Reloading entity providers...");
+					this.plugin.loadEntityProviders();
+				});
+			});			
+
+
+
 	}
 }

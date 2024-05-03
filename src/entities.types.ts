@@ -1,4 +1,5 @@
 import { App, Plugin, TFile } from "obsidian";
+import { FolderProviderConfig } from "./Providers/FolderEntityProvider";
 
 export type entityFromTemplateSettings = {
 	engine: "disabled" | "core" | "templater";
@@ -9,7 +10,7 @@ export type entityFromTemplateSettings = {
 export type ProviderConfiguration = (
 	| {
 			type: "folder";
-			settings: FolderProviderSettings;
+			settings: FolderProviderConfig;
       }
 	| {
 			type: "dataview";
@@ -29,19 +30,15 @@ export interface ProviderTemplateCreationSettings {
 	newEntityFromTemplates?: entityFromTemplateSettings[];
 } 
 
-export interface CommonProviderSettings {
+export interface CommonProviderConfig {
 	icon?: string;
 }
 
-export interface FolderProviderSettings extends ProviderTemplateCreationSettings, CommonProviderSettings {
-	path: string;
-}
-
-export interface DataviewProviderSettings extends ProviderTemplateCreationSettings, CommonProviderSettings {
+export interface DataviewProviderSettings extends ProviderTemplateCreationSettings, CommonProviderConfig {
 	query: string;
 }
 
-export interface TemplateProviderSettings extends CommonProviderSettings {
+export interface TemplateProviderSettings extends CommonProviderConfig {
 	path: string;
 }
 
