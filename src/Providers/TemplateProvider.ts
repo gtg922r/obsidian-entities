@@ -1,4 +1,5 @@
-import { EntityProvider, EntitySuggestionItem } from "src/EntitiesSuggestor";
+import { EntitySuggestionItem } from "src/EntitiesSuggestor";
+import { EntityProvider } from "./EntityProvider";
 import { Plugin, TFile, TFolder } from "obsidian";
 import { EntitiesModalInput } from "src/userComponents";
 import {

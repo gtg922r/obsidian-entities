@@ -1,7 +1,8 @@
 import { App, Plugin } from "obsidian";
 import { getAPI, DataviewApi } from "obsidian-dataview";
 import { DataviewProviderSettings } from "src/entities.types";
-import { EntityProvider, EntitySuggestionItem } from "src/EntitiesSuggestor";
+import { EntitySuggestionItem } from "src/EntitiesSuggestor";
+import { EntityProvider } from "./EntityProvider";
 
 export class DataviewEntityProvider extends EntityProvider {
 	config: DataviewProviderSettings;

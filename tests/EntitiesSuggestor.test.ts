@@ -1,6 +1,7 @@
 import { App, Editor, EditorSuggestContext, TFile } from "obsidian";
 import Entities from "../src/main";
-import { EntitiesSuggestor, EntityProvider, EntitySuggestionItem } from "../src/EntitiesSuggestor";
+import { EntitiesSuggestor, EntitySuggestionItem } from "../src/EntitiesSuggestor";
+import { EntityProvider } from "../src/Providers/EntityProvider";
 
 // Mocking the necessary Obsidian interfaces and classes inline
 jest.mock("obsidian", () => {

@@ -1,9 +1,3 @@
-import {
-	CommonProviderConfig,
-	entityFromTemplateSettings,
-	ProviderConfiguration,
-} from "./entities.types";
-import { createNewNoteFromTemplate } from "./entititiesUtilities";
 import Entities from "./main";
 import {
 	EditorSuggest,
@@ -13,12 +7,11 @@ import {
 	EditorSuggestTriggerInfo,
 	EditorSuggestContext,
 	setIcon,
-	Plugin,
 	fuzzySearch,
 	prepareQuery,
 	SearchResult,
-	App,
 } from "obsidian";
+import { EntityProvider } from "./Providers/EntityProvider";
 
 export interface EntitySuggestionItem {
 	suggestionText: string;
@@ -32,55 +25,6 @@ export interface EntitySuggestionItem {
 	) => Promise<string> | string | void;
 }
 
-export interface EntityProviderOptions {
-	plugin: Plugin;
-	entityCreationTemplates?: entityFromTemplateSettings[];
-	providerSettings?: ProviderConfiguration;
-	description?: string;
-}
-
-export abstract class EntityProvider {
-	plugin: Plugin;
-	description?: string;
-	icon?: string;
-	config?: CommonProviderConfig; // Rename to settings, and rename above to config
-	entityCreationTemplates?: entityFromTemplateSettings[];
-
-	constructor(options: EntityProviderOptions) {
-		this.plugin = options.plugin;
-		this.description = options.description;
-		this.entityCreationTemplates = options.entityCreationTemplates;
-	}
-
-	abstract getEntityList(query: string): EntitySuggestionItem[];
-	static getProviderSettingsContent(containerEl: HTMLElement, config: CommonProviderConfig, app: App): void {
-		containerEl.createEl("h2", { text: "Entity Provider Settings" });
-	}
-
-	getTemplateCreationSuggestions(query: string): EntitySuggestionItem[] {
-		if (!this.entityCreationTemplates) return [];
-		// Only Templater templates are supported for now
-		const creationTemplates = this.entityCreationTemplates.filter(
-			(template) => template.engine === "templater"
-		);
-		return creationTemplates.map((template) => ({
-			suggestionText: `New ${template.entityName}: ${query}`,
-			icon: "plus-circle",
-			action: () => {
-				console.log(`New ${template.entityName}: ${query}`);
-				createNewNoteFromTemplate(
-					this.plugin,
-					template.templatePath,
-					"TODO FIX FOLDER",
-					query,
-					false
-				);
-				return `[[${query}]]`;
-			},
-			match: { score: -10, matches: [] } as SearchResult,
-		}));
-	}
-}
 
 export class EntitiesSuggestor extends EditorSuggest<EntitySuggestionItem> {
 	plugin: Entities;
@@ -102,13 +46,15 @@ export class EntitiesSuggestor extends EditorSuggest<EntitySuggestionItem> {
 	constructor(plugin: Entities, entityProviders: EntityProvider[] = []) {
 		super(plugin.app);
 		this.plugin = plugin;
-		this.entityProviders = entityProviders;
+
 		console.log(`Entities: 🔄 Loading entity providers...`);
-		this.entityProviders.forEach((provider) => {
+		entityProviders.forEach((provider) => {
 			console.log(
 				`Entities: \t${provider.description ?? "unspecified"} added...`
 			);
+			this.addEntityProvider(provider);
 		});
+		
 	}
 
 	clearEntityProviders(): void {

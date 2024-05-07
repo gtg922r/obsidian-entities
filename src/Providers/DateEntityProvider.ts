@@ -1,6 +1,7 @@
 import { Plugin } from "obsidian";
 import { Moment } from "moment";
-import { EntityProvider, EntitySuggestionItem } from "src/EntitiesSuggestor";
+import { EntitySuggestionItem } from "src/EntitiesSuggestor";
+import { EntityProvider } from "./EntityProvider";
 import { AppWithPlugins } from "src/entities.types";
 import Entities from "src/main";
 

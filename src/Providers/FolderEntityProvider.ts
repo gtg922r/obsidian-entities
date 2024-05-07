@@ -1,6 +1,7 @@
 import { App, Plugin, sanitizeHTMLToDom, Setting, TFile } from "obsidian";
 import { CommonProviderConfig, ProviderTemplateCreationSettings } from "src/entities.types";
-import { EntityProvider, EntitySuggestionItem } from "src/EntitiesSuggestor";
+import { EntitySuggestionItem } from "src/EntitiesSuggestor";
+import { EntityProvider } from "./EntityProvider";
 import { FolderSuggest } from "src/ui/file-suggest";
 import { IconPickerModal } from "src/userComponents";
 
