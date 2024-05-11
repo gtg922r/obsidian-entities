@@ -1,11 +1,11 @@
-import { App, Plugin, sanitizeHTMLToDom, Setting, TFile } from "obsidian";
-import { CommonProviderConfig, ProviderTemplateCreationSettings } from "src/entities.types";
+import { App, sanitizeHTMLToDom, Setting, TFile } from "obsidian";
 import { EntitySuggestionItem } from "src/EntitiesSuggestor";
-import { EntityProvider } from "./EntityProvider";
+import { EntityProvider, EntityProviderUserSettings } from "./EntityProvider";
 import { FolderSuggest } from "src/ui/file-suggest";
 import { IconPickerModal } from "src/userComponents";
 
-export interface FolderProviderConfig extends ProviderTemplateCreationSettings, CommonProviderConfig {
+export interface FolderProviderUserSettings extends EntityProviderUserSettings {
+	providerType: "folder";
 	path: string;
 	shouldLoadSubFolders?: boolean | undefined;
 	shouldCreateEntitiesForAliases?: boolean | undefined;
@@ -13,29 +13,30 @@ export interface FolderProviderConfig extends ProviderTemplateCreationSettings, 
 	propertyToFilterEntitiesBy?: string | undefined;
 }
 
-const defaultFolderProviderSettings: FolderProviderConfig = {
+const defaultFolderProviderUserSettings: FolderProviderUserSettings = {
+    providerType: "folder",
+	enabled: true,
+	icon: 'folder-open-dot',
     path: '',
     shouldLoadSubFolders: false,
     shouldCreateEntitiesForAliases: true,
     propertyToCreateEntitiesFor: undefined,
     propertyToFilterEntitiesBy: undefined,
-    newEntityFromTemplates: [],
-    icon: 'folder'
+    entityCreationTemplates: [],
 };
 
-export class FolderEntityProvider extends EntityProvider {
-	constructor(plugin: Plugin, private settings: FolderProviderConfig) {
-		super({
-			plugin,
-			description: `📂 Folder Entity Provider (${settings.path})`,
-			entityCreationTemplates: settings.newEntityFromTemplates,
-		});
-		this.config = settings;
+export class FolderEntityProvider extends EntityProvider<FolderProviderUserSettings> {
+
+	defaultSettings(): Partial<FolderProviderUserSettings> {
+		return defaultFolderProviderUserSettings;
 	}
-	config: FolderProviderConfig;
+	getDescription(): string {
+		return `📂 Folder Entity Provider (${this.settings.path})`;
+	}
+
 	getEntityList(query: string): EntitySuggestionItem[] {
 		const entityFolder = this.plugin.app.vault.getFolderByPath(
-			this.config.path
+			this.settings.path
 		);
 		const entities: TFile[] | undefined = entityFolder?.children.filter(
 			(file: unknown) => file instanceof TFile
@@ -44,7 +45,7 @@ export class FolderEntityProvider extends EntityProvider {
 		const entitySuggestions =
 			entities?.map((file) => ({
 				suggestionText: file.basename,
-				icon: this.icon ?? "folder-open-dot",
+				icon: this.settings.icon ?? "folder-open-dot",
 			})) ?? [];
 
 		const suggestionFromAlias: (
@@ -52,7 +53,7 @@ export class FolderEntityProvider extends EntityProvider {
 			file: TFile
 		) => EntitySuggestionItem = (alias: string, file: TFile) => ({
 			suggestionText: alias,
-			icon: this.icon ?? "folder-open-dot",
+			icon: this.settings.icon ?? "folder-open-dot",
 			replacementText: `${file.basename}|${alias}`,
 		});
 
@@ -71,13 +72,9 @@ export class FolderEntityProvider extends EntityProvider {
 			: entitySuggestions;
 	}
 
-	static getDefaultProviderConfig(): FolderProviderConfig {
-		return defaultFolderProviderSettings;
-	}
-
 	static getProviderSettingsContent(
 		containerEl: HTMLElement,
-		config: FolderProviderConfig,
+		settings: FolderProviderUserSettings,
 		app: App
 	): void {
 		containerEl.createEl("h2", { text: "Provider Settings" });
@@ -98,9 +95,9 @@ export class FolderEntityProvider extends EntityProvider {
 			.addSearch((search) => {
 				search
 					.setPlaceholder("Folder Path")
-					.setValue(config.path)
+					.setValue(settings.path)
 					.onChange((value) => {
-						config.path = value;
+						settings.path = value;
 					});
 				new FolderSuggest(app, search.inputEl);
 			});
@@ -109,11 +106,11 @@ export class FolderEntityProvider extends EntityProvider {
 			.setDesc("The icon to use for the provider")
 			.addText((text) => {
 				text.setPlaceholder("Icon Name")
-					.setValue(config.icon || "")
+					.setValue(settings.icon || "")
 					.setDisabled(true);
 			})
 			.addButton((button) =>
-				button.setIcon(config.icon ?? "box-select").onClick(() => {
+				button.setIcon(settings.icon ?? "box-select").onClick(() => {
 					const iconPickerModal = new IconPickerModal(app);
 					iconPickerModal.open();
 				})
@@ -125,7 +122,7 @@ export class FolderEntityProvider extends EntityProvider {
 			)
 			.addText((text) => {
 				text.setValue(
-					config.newEntityFromTemplates
+					settings.entityCreationTemplates
 						?.map((template) => template.templatePath)
 						.join("\n") ?? ""
 				).setDisabled(true);
