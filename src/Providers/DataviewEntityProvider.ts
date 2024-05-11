@@ -1,20 +1,33 @@
 import { App, Plugin } from "obsidian";
 import { getAPI, DataviewApi } from "obsidian-dataview";
-import { DataviewProviderSettings } from "src/entities.types";
 import { EntitySuggestionItem } from "src/EntitiesSuggestor";
-import { EntityProvider } from "./EntityProvider";
+import { EntityProvider, EntityProviderUserSettings } from "./EntityProvider";
 
-export class DataviewEntityProvider extends EntityProvider {
-	config: DataviewProviderSettings;
-	dv: DataviewApi | undefined;
+export interface DataviewProviderUserSettings extends EntityProviderUserSettings {
+	providerType: "dataview";
+	query: string;
+}
 
-	constructor(plugin: Plugin, private settings: DataviewProviderSettings) {
-		super({
-			plugin,
-			description: `🧠 Dataview Entity Provider (${settings.query})`,
-			entityCreationTemplates: settings.newEntityFromTemplates,
-		});
-		this.config = settings;
+const defaultDataviewProviderUserSettings: DataviewProviderUserSettings = {
+	providerType: "dataview",
+	enabled: true,
+	icon: "box",
+	query: "",
+	entityCreationTemplates: [],
+};
+
+export class DataviewEntityProvider extends EntityProvider<DataviewProviderUserSettings> {	
+	protected dv: DataviewApi | undefined;
+
+	getDescription(): string {
+		return `🧠 Dataview Entity Provider (${this.settings.query})`;
+	}
+	getDefaultSettings(): Partial<DataviewProviderUserSettings> {
+		return defaultDataviewProviderUserSettings;
+	}
+
+	constructor(plugin: Plugin, settings: DataviewProviderUserSettings) {
+		super(plugin, settings);
 		this.initialize();
 	}
 
@@ -30,7 +43,7 @@ export class DataviewEntityProvider extends EntityProvider {
 	}
 
 	getEntityList(query: string): EntitySuggestionItem[] {
-		const projects = this.dv?.pages(this.config.query);
+		const projects = this.dv?.pages(this.settings.query);
 
 		const projectEntitiesWithAliases = projects?.flatMap(
 			(project: { file: { name: string; aliases: string[] } }) => {
