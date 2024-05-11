@@ -1,26 +1,48 @@
 import { EntitySuggestionItem } from "src/EntitiesSuggestor";
-import { EntityProvider } from "./EntityProvider";
+import { EntityProvider, EntityProviderUserSettings } from "./EntityProvider";
 import { Plugin, TFile, TFolder } from "obsidian";
 import { EntitiesModalInput } from "src/userComponents";
 import {
 	createNewNoteFromTemplate,
 	insertTemplateUsingTemplater,
 } from "src/entititiesUtilities";
-import { TemplateProviderSettings } from "src/entities.types";
 
-export class NoteFromTemplateEntityProvider extends EntityProvider {
+export interface TemplateProviderUserSettings extends EntityProviderUserSettings {
+	providerType: "template";
+	path: string | string[];
+	actionType: "insert" | "create";
+}
+
+const defaultTemplateProviderUserSettings: TemplateProviderUserSettings = {
+	providerType: "template",
+	enabled: true,
+	icon: "file-plus",
+	path: "",
+	entityCreationTemplates: [],
+	actionType: "create",
+};
+
+export class TemplateEntityProvider extends EntityProvider<TemplateProviderUserSettings> {
     private files: TFile[];
 
-    constructor(plugin: Plugin, settings: TemplateProviderSettings) {
-        super({
-            plugin,
-            description: `📄 New File From Template Entity Provider (${settings.path})`,
-        });
+	getDescription(): string {
+		return `📄 Template Entity Provider - ${this.settings.actionType} (${this.settings.path})`;
+	}
+	getDefaultSettings(): Partial<TemplateProviderUserSettings> {
+		return defaultTemplateProviderUserSettings;
+	}
+
+    constructor(plugin: Plugin, settings: TemplateProviderUserSettings) {
+		super(plugin, settings);
         this.files = this.getTemplateFiles(settings.path);
     }
 
     private getTemplateFiles(path: string | string[]): TFile[] {
-        const templateFolders = Array.isArray(path) ? path : [path];
+		// TODO - add support for multiple paths
+		// TODO - add support for subfolders
+		// TODO - add a recurring check for new files in the template folder (or callback)
+        
+		const templateFolders = Array.isArray(path) ? path : [path];
         const folders: TFolder[] = templateFolders
             .map((folder) => this.plugin.app.vault.getFolderByPath(folder))
             .filter((folder) => folder !== null) as TFolder[];
@@ -35,15 +57,20 @@ export class NoteFromTemplateEntityProvider extends EntityProvider {
     getEntityList(): EntitySuggestionItem[] {
         return this.files.map((file) => ({
             suggestionText: file.basename,
-            icon: "file-plus",
+            icon: this.settings.actionType === "create" ? "file-plus" : "stamp",
             action: () => this.actionFunction(file),
         }));
     }
 
     private actionFunction(file: TFile): Promise<string> {
-        console.log(`Selected file: ${file.basename}`);
-        const FOLDER_SETTING = "";
-        const OPEN_NEW_NOTE = false;
+        if (this.settings.actionType === "create") {
+            return this.createFileFromTemplate(file);
+        } else {
+            return this.insertTemplate(file);
+        }
+    }
+
+    private createFileFromTemplate(file: TFile): Promise<string> {
         const modal = new EntitiesModalInput(this.plugin.app, {
             placeholder: "Enter new note name...",
             instructions: {
@@ -56,49 +83,16 @@ export class NoteFromTemplateEntityProvider extends EntityProvider {
             createNewNoteFromTemplate(
                 this.plugin,
                 file,
-                FOLDER_SETTING,
+                "", // Assuming FOLDER_SETTING is managed elsewhere or not needed
                 NEW_TEMPLATE_NAME,
-                OPEN_NEW_NOTE
+                false // Assuming OPEN_NEW_NOTE is managed elsewhere or not needed
             );
             return `[[${NEW_TEMPLATE_NAME}]]`;
         });
     }
-}
 
-export class InsertTemplateEntityProvider extends EntityProvider {
-    private files: TFile[];
-
-    constructor(plugin: Plugin, settings: TemplateProviderSettings) {
-        super({
-            plugin,
-            description: `📝 Insert Template Entity Provider (${settings.path})`,
-        });
-        this.files = this.getTemplateFiles(settings.path);
-    }
-
-    private getTemplateFiles(path: string | string[]): TFile[] {
-        const templateFolders = Array.isArray(path) ? path : [path];
-        const folders: TFolder[] = templateFolders
-            .map((folder) => this.plugin.app.vault.getFolderByPath(folder))
-            .filter((folder) => folder !== null) as TFolder[];
-        return folders.flatMap(
-            (folder) =>
-                folder.children.filter(
-                    (file: unknown) => file instanceof TFile
-                ) as TFile[]
-        );
-    }
-
-    getEntityList(): EntitySuggestionItem[] {
-        return this.files.map((file) => ({
-            suggestionText: file.basename,
-            icon: "stamp",
-            action: () => this.actionFunction(file),
-        }));
-    }
-
-    private actionFunction(file: TFile): Promise<string> {
-        console.log(`Selected file: ${file.basename}`);
+    private insertTemplate(file: TFile): Promise<string> {
         return insertTemplateUsingTemplater(this.plugin, file).then(() => "");
     }
 }
+
