@@ -1,9 +1,8 @@
 import { Plugin } from "obsidian";
 import { Moment } from "moment";
 import { EntitySuggestionItem } from "src/EntitiesSuggestor";
-import { EntityProvider } from "./EntityProvider";
+import { EntityProvider, EntityProviderUserSettings } from "./EntityProvider";
 import { AppWithPlugins } from "src/entities.types";
-import Entities from "src/main";
 
 interface NLDResult {
     formattedString: string;
@@ -15,14 +14,32 @@ interface NLPlugin extends Plugin {
     parseDate(date: string): NLDResult;
 }
 
-export class NLDatesEntityProvider extends EntityProvider {
+interface DatesProviderUserSettings extends EntityProviderUserSettings {
+	providerType: "nldates";
+	shouldCreateIfNotExists: boolean;
+}
+
+const defaultDatesProviderUserSettings: DatesProviderUserSettings = {
+	providerType: "nldates",
+	enabled: true,
+	icon: "calendar",
+	shouldCreateIfNotExists: true, // Not yet implemented
+	entityCreationTemplates: [],
+};
+
+
+export class DateEntityProvider extends EntityProvider<DatesProviderUserSettings> {
     private nlpPlugin: NLPlugin | undefined;
 
-    constructor(plugin: Entities) {
-        super({
-            plugin,
-            description: "📅 NLDates Entity Provider"
-        });
+	getDescription(): string {
+		return "📅 NLDates Entity Provider";
+	}
+	getDefaultSettings(): Partial<DatesProviderUserSettings> {
+		return defaultDatesProviderUserSettings;
+	}
+
+    constructor(plugin: Plugin, settings: DatesProviderUserSettings) {
+        super(plugin, settings);
         this.initialize();
     }
 
@@ -65,7 +82,7 @@ export class NLDatesEntityProvider extends EntityProvider {
                 suggestionText: query,
                 noteText: result.formattedString,
                 replacementText: result.formattedString,
-                icon: "calendar",
+                icon: this.settings.icon,
             });
         }
         return dates;

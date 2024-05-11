@@ -18,10 +18,10 @@ const defaultFolderProviderUserSettings: FolderProviderUserSettings = {
 	enabled: true,
 	icon: 'folder-open-dot',
     path: '',
-    shouldLoadSubFolders: false,
+    shouldLoadSubFolders: false,			// Not yet implemented
     shouldCreateEntitiesForAliases: true,
-    propertyToCreateEntitiesFor: undefined,
-    propertyToFilterEntitiesBy: undefined,
+    propertyToCreateEntitiesFor: undefined, // Not yet implemented
+    propertyToFilterEntitiesBy: undefined, 	// Not yet implemented
     entityCreationTemplates: [],
 };
 
