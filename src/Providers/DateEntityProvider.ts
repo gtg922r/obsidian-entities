@@ -34,11 +34,11 @@ export class DateEntityProvider extends EntityProvider<DatesProviderUserSettings
 	getDescription(): string {
 		return "📅 NLDates Entity Provider";
 	}
-	getDefaultSettings(): Partial<DatesProviderUserSettings> {
+	getDefaultSettings(): DatesProviderUserSettings {
 		return defaultDatesProviderUserSettings;
 	}
 
-    constructor(plugin: Plugin, settings: DatesProviderUserSettings) {
+    constructor(plugin: Plugin, settings: Partial<DatesProviderUserSettings>) {
         super(plugin, settings);
         this.initialize();
     }

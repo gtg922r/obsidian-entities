@@ -28,13 +28,13 @@ export class TemplateEntityProvider extends EntityProvider<TemplateProviderUserS
 	getDescription(): string {
 		return `📄 Template Entity Provider - ${this.settings.actionType} (${this.settings.path})`;
 	}
-	getDefaultSettings(): Partial<TemplateProviderUserSettings> {
+	getDefaultSettings(): TemplateProviderUserSettings {
 		return defaultTemplateProviderUserSettings;
 	}
 
-    constructor(plugin: Plugin, settings: TemplateProviderUserSettings) {
+    constructor(plugin: Plugin, settings: Partial<TemplateProviderUserSettings>) {
 		super(plugin, settings);
-        this.files = this.getTemplateFiles(settings.path);
+        this.files = this.getTemplateFiles(this.settings.path);
     }
 
     private getTemplateFiles(path: string | string[]): TFile[] {

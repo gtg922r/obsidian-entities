@@ -27,13 +27,17 @@ export abstract class EntityProvider<T extends EntityProviderUserSettings> {
 	protected settings: T;
 	plugin: Plugin;
 	
-	abstract getDefaultSettings(): Partial<T>;
+	abstract getDefaultSettings(): T;
 	abstract getEntityList(query: string): EntitySuggestionItem[];
 
-	constructor(plugin: Plugin, settings: T) {
+	constructor(plugin: Plugin, settings: Partial<T>) {
 		this.plugin = plugin;
 		this.settings = { ...this.getDefaultSettings(), ...settings };
 	}
+
+	// getSettings(): T {
+	// 	return this.settings;
+	// }
 
 	/**
 	 * Get the description of the provider

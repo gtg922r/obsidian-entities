@@ -22,11 +22,11 @@ export class DataviewEntityProvider extends EntityProvider<DataviewProviderUserS
 	getDescription(): string {
 		return `🧠 Dataview Entity Provider (${this.settings.query})`;
 	}
-	getDefaultSettings(): Partial<DataviewProviderUserSettings> {
+	getDefaultSettings(): DataviewProviderUserSettings {
 		return defaultDataviewProviderUserSettings;
 	}
 
-	constructor(plugin: Plugin, settings: DataviewProviderUserSettings) {
+	constructor(plugin: Plugin, settings: Partial<DataviewProviderUserSettings>) {
 		super(plugin, settings);
 		this.initialize();
 	}

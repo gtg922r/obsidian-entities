@@ -27,7 +27,7 @@ const defaultFolderProviderUserSettings: FolderProviderUserSettings = {
 
 export class FolderEntityProvider extends EntityProvider<FolderProviderUserSettings> {
 
-	getDefaultSettings(): Partial<FolderProviderUserSettings> {
+	getDefaultSettings(): FolderProviderUserSettings {
 		return defaultFolderProviderUserSettings;
 	}
 	getDescription(): string {
