@@ -4,29 +4,24 @@ import { createNewNoteFromTemplate } from "../entititiesUtilities";
 import { Plugin, SearchResult } from "obsidian";
 
 // Base interfaces and classes for Providers
-export interface EntityProviderUserSettings {
-	providerType: string;
+export interface EntityProviderID {
+	providerTypeID: string;
+}
+
+export interface EntityProviderUserSettings extends EntityProviderID {
 	enabled: boolean;
 	icon: string;
 	entityCreationTemplates?: entityFromTemplateSettings[];
 }
 
-// export type CommonProviderSettings = {
-// 	icon?: string;
-// 	enabled: boolean;
-// }
-
-// export interface EntityProviderOptions {
-// 	plugin: Plugin;
-// 	entityCreationTemplates?: entityFromTemplateSettings[];
-// 	providerSettings?: ProviderConfiguration;
-// 	description?: string;
-// }
-
+/**
+ * Base class for all entity providers
+ * NOTE: Extending classes must provider a unique providerTypeID in order to be registered
+ */
 export abstract class EntityProvider<T extends EntityProviderUserSettings> {
 	protected settings: T;
 	plugin: Plugin;
-	
+
 	abstract getDefaultSettings(): T;
 	abstract getEntityList(query: string): EntitySuggestionItem[];
 
@@ -37,12 +32,12 @@ export abstract class EntityProvider<T extends EntityProviderUserSettings> {
 
 	// getSettings(): T {
 	// 	return this.settings;
-	// }
+	// }	
 
 	/**
-	 * Get the description of the provider
+	 * Get the description of the provider instance
 	 * @param settings - The settings of the provider
-	 * @returns The description of the provider. Should be a short string
+	 * @returns Description of the provider instance as a short string. Should differentiate between multiple instances of the same provider
 	 */
 	static getDescription<T>(settings: T): string {
 		return "Entity Provider";
@@ -78,9 +73,9 @@ export abstract class EntityProvider<T extends EntityProviderUserSettings> {
 	/**
 	 * Generates suggestions for creating new notes based on templates for a given query.
 	 * Currently, only supports templates processed by the "templater" engine.
-	 * For example, if the query is "Bob Hope", return a suggestion that will create a new note	
+	 * For example, if the query is "Bob Hope", return a suggestion that will create a new note
 	 * with the name "Bob Hope" and the content of the template.
-	 * 
+	 *
 	 * @param query - The search query to generate suggestions for.
 	 * @returns An array of suggestions for entity creation.
 	 */

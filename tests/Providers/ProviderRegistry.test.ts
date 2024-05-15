@@ -23,8 +23,9 @@ const mockPlugin = {
 } as unknown as Plugin;
 
 // Mock EntityProvider for testing
+const mockProviderTypeID = "Mock Entity Provider";
 interface MockEntityProviderUserSettings extends EntityProviderUserSettings {
-	providerType: "mock";
+	providerTypeID: typeof mockProviderTypeID;
 	mockSetting: string | undefined;
 }
 
@@ -32,10 +33,12 @@ class MockEntityProvider extends EntityProvider<MockEntityProviderUserSettings> 
 	constructor(plugin: Plugin, settings: MockEntityProviderUserSettings) {
 		super(mockPlugin, settings);
 	}
+	
+	static readonly providerTypeID = mockProviderTypeID;
 
 	getDefaultSettings(): MockEntityProviderUserSettings {
 		return {
-			providerType: "mock",
+			providerTypeID: mockProviderTypeID,
 			enabled: true,
 			icon: "mock-icon",
 			mockSetting: "mock-setting",
@@ -61,16 +64,16 @@ describe("ProviderRegistry tests", () => {
 	});
 
 	test("registerProviderType should register a provider class", () => {
-		registry.registerProviderType("mock", MockEntityProvider);
+		registry.registerProviderType(MockEntityProvider);
 		// eslint-disable-next-line @typescript-eslint/no-explicit-any
-		const providerClass = (registry as any).providerClasses.get("mock");
+		const providerClass = (registry as any).providerClasses.get(mockProviderTypeID);
 		expect(providerClass).toBe(MockEntityProvider);
 	});
 
 	test("instantiateProvider should create an instance of a registered provider", () => {
-		registry.registerProviderType("mock", MockEntityProvider);
+		registry.registerProviderType(MockEntityProvider);
 		const settings: MockEntityProviderUserSettings = {
-			providerType: "mock",
+			providerTypeID: mockProviderTypeID,
 			enabled: true,
 			icon: "mock-icon",
 			mockSetting: "mock-setting",
@@ -86,7 +89,7 @@ describe("ProviderRegistry tests", () => {
 
 	test("instantiateProvider should return null for an unregistered provider", () => {
 		const settings: EntityProviderUserSettings = {
-			providerType: "unregistered",
+			providerTypeID: "unregistered",
 			enabled: true,
 			icon: "mock-icon",
 		};
@@ -95,9 +98,9 @@ describe("ProviderRegistry tests", () => {
 	});
 
 	test("loadProvidersFromSettings should instantiate providers from settings", () => {
-		registry.registerProviderType("mock", MockEntityProvider);
+		registry.registerProviderType(MockEntityProvider);
 		const settingsList: EntityProviderUserSettings[] = [
-			{ providerType: "mock", enabled: true, icon: "mock-icon" },
+			{ providerTypeID: mockProviderTypeID, enabled: true, icon: "mock-icon" },
 		];
 		registry.loadProvidersFromSettings(settingsList);
 		const providers = registry.getProviders();
@@ -106,9 +109,9 @@ describe("ProviderRegistry tests", () => {
 	});
 
 	test("getProviders should return the list of instantiated providers", () => {
-		registry.registerProviderType("mock", MockEntityProvider);
+		registry.registerProviderType(MockEntityProvider);
 		const settingsList: EntityProviderUserSettings[] = [
-			{ providerType: "mock", enabled: true, icon: "mock-icon" },
+			{ providerTypeID: mockProviderTypeID, enabled: true, icon: "mock-icon" },
 		];
 		registry.loadProvidersFromSettings(settingsList);
 		const providers = registry.getProviders();

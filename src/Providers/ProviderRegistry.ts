@@ -1,20 +1,18 @@
 import { Plugin } from "obsidian";
-import { EntityProvider, EntityProviderUserSettings } from "./EntityProvider";
+import { EntityProvider, EntityProviderID, EntityProviderUserSettings } from "./EntityProvider";
+import { DerivedClassWithConstructorArgs } from "src/entities.types";
 
-// Define type alias for constructor signature
-type ProviderConstructor<T extends EntityProviderUserSettings> = new (
-	plugin: Plugin,
-	settings: T
-) => EntityProvider<T>;
+export type RegisterableEntityProvider = DerivedClassWithConstructorArgs<
+	EntityProviderID & typeof EntityProvider,
+	[Plugin, EntityProviderUserSettings]
+>;
+
 
 // Class to handle provider registration and instantiation using Singleton pattern
 class ProviderRegistry {
 	private static instance: ProviderRegistry;
 	private plugin: Plugin;
-	private providerClasses: Map<
-		string,
-		typeof EntityProvider & ProviderConstructor<EntityProviderUserSettings>
-	> = new Map();
+	private providerClasses: Map<string, RegisterableEntityProvider> = new Map();
 	private providers: EntityProvider<EntityProviderUserSettings>[] = [];
 
 	private constructor() {}
@@ -31,27 +29,34 @@ class ProviderRegistry {
 		}
 		return ProviderRegistry.instance;
 	}
-	// TODO: WHAT TO DO ABOUT THE PLUGIN ARGUMENT FOR ENTITYPROVIER?
-	registerProviderType<T extends EntityProviderUserSettings>(
-		providerType: string,
-		providerClass: typeof EntityProvider<T> & ProviderConstructor<T>
+
+	registerProviderType(
+		providerClass: RegisterableEntityProvider
 	): void {
 		this.providerClasses.set(
-			providerType,
-			providerClass as typeof EntityProvider & ProviderConstructor<T>
+			providerClass.providerTypeID,
+			providerClass
+			// TODO: ProviderClass<EntityProviderUserSettings> also seemed to be working
 		);
-		// TODO: ensure reload registry from settings in case someone is registering new providers after the initial load, and the settings object was assuming the existence of those
-		// probably should add a callback for loading providers unless any other plugins want to add providers early
+		console.log(`Entities: \tProvider type "${providerClass.providerTypeID}" registered.`);
 	}
 
 	instantiateProvider<T extends EntityProviderUserSettings>(
 		settings: T
 	): EntityProvider<T> | null {
-		const providerClass = this.providerClasses.get(
-			settings.providerType
-		) as ProviderConstructor<T> | undefined;
+		const providerClass = this.providerClasses.get(settings.providerTypeID);
 		if (providerClass) {
-			return new providerClass(this.plugin, settings);
+			const providerInstance = new providerClass(
+				this.plugin,
+				settings
+			) as EntityProvider<T>;
+			console.log(
+				`Entities: \tProvider "${providerClass.getDescription(
+					settings
+				)}" instantiated.`
+			);
+			this.providers.push(providerInstance);
+			return providerInstance;
 		}
 		return null;
 	}
@@ -60,7 +65,9 @@ class ProviderRegistry {
 		settingsList: EntityProviderUserSettings[]
 	): void {
 		if (!this.plugin) {
-			throw new Error("ProviderRegistry needs to be initialized before loading providers.");
+			throw new Error(
+				"ProviderRegistry needs to be initialized before loading providers."
+			);
 		}
 		this.providers = settingsList
 			.map((settings) => this.instantiateProvider(settings))
