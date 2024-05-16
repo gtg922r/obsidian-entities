@@ -35,6 +35,13 @@ class MockEntityProvider extends EntityProvider<MockEntityProviderUserSettings> 
 	}
 	
 	static readonly providerTypeID = mockProviderTypeID;
+	static getDescription(settings: MockEntityProviderUserSettings): string {
+		return `Mock Entity Provider (${settings.mockSetting})`;
+	}
+	static buildSummarySetting(settings: MockEntityProviderUserSettings, onShouldSave: (newSettings: MockEntityProviderUserSettings) => void): void {
+		console.log("MockEntityProvider.buildSummarySetting called");
+	}
+
 
 	getDefaultSettings(): MockEntityProviderUserSettings {
 		return {
@@ -53,6 +60,8 @@ describe("ProviderRegistry tests", () => {
 	let registry: ProviderRegistry;
 
 	beforeEach(() => {
+		// eslint-disable-next-line @typescript-eslint/no-explicit-any
+		(ProviderRegistry as any).instance = null;
 		ProviderRegistry.initializeRegistry(mockPlugin);
 		registry = ProviderRegistry.getInstance();
 	});
@@ -78,23 +87,23 @@ describe("ProviderRegistry tests", () => {
 			icon: "mock-icon",
 			mockSetting: "mock-setting",
 		};
-		const provider =
-			registry.instantiateProvider<MockEntityProviderUserSettings>(
-				settings
-			);
-		expect(provider).toBeInstanceOf(MockEntityProvider);
+		registry.instantiateProvider<MockEntityProviderUserSettings>(settings);
+		const providers = registry.getProviders();
+		expect(providers.length).toBe(1);
+		expect(providers[0]).toBeInstanceOf(MockEntityProvider);
 		// eslint-disable-next-line @typescript-eslint/no-explicit-any
-		expect((provider as any).settings).toEqual(settings);
+		expect((providers[0] as any).settings).toEqual(settings);
 	});
 
-	test("instantiateProvider should return null for an unregistered provider", () => {
+	test("instantiateProvider should not add an unregistered provider", () => {
 		const settings: EntityProviderUserSettings = {
 			providerTypeID: "unregistered",
 			enabled: true,
 			icon: "mock-icon",
 		};
-		const provider = registry.instantiateProvider(settings);
-		expect(provider).toBeNull();
+		registry.instantiateProvider(settings);
+		const providers = registry.getProviders();
+		expect(providers.length).toBe(0);
 	});
 
 	test("loadProvidersFromSettings should instantiate providers from settings", () => {

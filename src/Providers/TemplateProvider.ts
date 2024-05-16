@@ -7,14 +7,16 @@ import {
 	insertTemplateUsingTemplater,
 } from "src/entititiesUtilities";
 
+const templateProviderTypeID = "template";
+
 export interface TemplateProviderUserSettings extends EntityProviderUserSettings {
-	providerType: "template";
+	providerTypeID: string;
 	path: string | string[];
 	actionType: "insert" | "create";
 }
 
 const defaultTemplateProviderUserSettings: TemplateProviderUserSettings = {
-	providerType: "template",
+	providerTypeID: templateProviderTypeID,
 	enabled: true,
 	icon: "file-plus",
 	path: "",
@@ -23,10 +25,15 @@ const defaultTemplateProviderUserSettings: TemplateProviderUserSettings = {
 };
 
 export class TemplateEntityProvider extends EntityProvider<TemplateProviderUserSettings> {
+	static readonly providerTypeID: string = templateProviderTypeID;
     private files: TFile[];
 
+	static getDescription(settings: TemplateProviderUserSettings): string {
+		return `📄 Template Entity Provider - ${settings.actionType} (${settings.path})`;
+	}
+
 	getDescription(): string {
-		return `📄 Template Entity Provider - ${this.settings.actionType} (${this.settings.path})`;
+		return TemplateEntityProvider.getDescription(this.settings);
 	}
 	getDefaultSettings(): TemplateProviderUserSettings {
 		return defaultTemplateProviderUserSettings;
@@ -61,6 +68,10 @@ export class TemplateEntityProvider extends EntityProvider<TemplateProviderUserS
             action: () => this.actionFunction(file),
         }));
     }
+
+	static buildSummarySetting(settings: TemplateProviderUserSettings, onShouldSave: (newSettings: TemplateProviderUserSettings) => void): void {
+		console.log("TemplateEntityProvider.buildSummarySetting called");
+	}
 
     private actionFunction(file: TFile): Promise<string> {
         if (this.settings.actionType === "create") {

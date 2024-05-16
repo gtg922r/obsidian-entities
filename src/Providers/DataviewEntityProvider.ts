@@ -3,13 +3,15 @@ import { getAPI, DataviewApi } from "obsidian-dataview";
 import { EntitySuggestionItem } from "src/EntitiesSuggestor";
 import { EntityProvider, EntityProviderUserSettings } from "./EntityProvider";
 
+const dataviewProviderTypeID = "dataview";
+
 export interface DataviewProviderUserSettings extends EntityProviderUserSettings {
-	providerType: "dataview";
+	providerTypeID: string;
 	query: string;
 }
 
 const defaultDataviewProviderUserSettings: DataviewProviderUserSettings = {
-	providerType: "dataview",
+	providerTypeID: dataviewProviderTypeID,
 	enabled: true,
 	icon: "box",
 	query: "",
@@ -17,10 +19,15 @@ const defaultDataviewProviderUserSettings: DataviewProviderUserSettings = {
 };
 
 export class DataviewEntityProvider extends EntityProvider<DataviewProviderUserSettings> {	
+	static readonly providerTypeID: string = dataviewProviderTypeID;
 	protected dv: DataviewApi | undefined;
 
+	static getDescription(settings: DataviewProviderUserSettings): string {
+		return `🧠 Dataview Entity Provider (${settings.query})`;
+	}
+	
 	getDescription(): string {
-		return `🧠 Dataview Entity Provider (${this.settings.query})`;
+		return DataviewEntityProvider.getDescription(this.settings);
 	}
 	getDefaultSettings(): DataviewProviderUserSettings {
 		return defaultDataviewProviderUserSettings;
@@ -66,6 +73,13 @@ export class DataviewEntityProvider extends EntityProvider<DataviewProviderUserS
 		);
 
 		return projectEntitiesWithAliases.array();
+	}
+
+	static buildSummarySetting(
+		settings: DataviewProviderUserSettings,
+		onShouldSave: (newSettings: DataviewProviderUserSettings) => void
+	): void {
+		throw new Error("Not Implemented");
 	}
 
 	static getDataviewApiWithRetry = (

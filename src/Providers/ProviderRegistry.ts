@@ -2,10 +2,27 @@ import { Plugin } from "obsidian";
 import { EntityProvider, EntityProviderID, EntityProviderUserSettings } from "./EntityProvider";
 import { DerivedClassWithConstructorArgs } from "src/entities.types";
 
+
+interface ProviderRegistryClassMethods<T extends EntityProviderUserSettings> {
+	getDescription(settings: T): string;
+	buildSummarySetting(
+		settings: T,
+		onShouldSave: (newSettings: T) => void
+	): void;
+	buildSimpleSettings?(
+		settings: T,
+		onShouldSave: (newSettings: T) => void
+	): void;
+	buildAdvancedSettings?(
+		settings: T,
+		onShouldSave: (newSettings: T) => void
+	): void;
+}
+
 export type RegisterableEntityProvider = DerivedClassWithConstructorArgs<
 	EntityProviderID & typeof EntityProvider,
 	[Plugin, EntityProviderUserSettings]
->;
+> & ProviderRegistryClassMethods<EntityProviderUserSettings>;
 
 
 // Class to handle provider registration and instantiation using Singleton pattern
@@ -20,6 +37,9 @@ class ProviderRegistry {
 	static initializeRegistry(plugin: Plugin): ProviderRegistry {
 		const registry = ProviderRegistry.getInstance();
 		registry.plugin = plugin;
+		registry.providerClasses.clear();
+		registry.providers = [];
+		console.log(`Entities:\t✨ Provider Registry initialized.`);
 		return registry;
 	}
 
@@ -32,33 +52,36 @@ class ProviderRegistry {
 
 	registerProviderType(
 		providerClass: RegisterableEntityProvider
-	): void {
+	): ProviderRegistry {
 		this.providerClasses.set(
 			providerClass.providerTypeID,
 			providerClass
 			// TODO: ProviderClass<EntityProviderUserSettings> also seemed to be working
 		);
-		console.log(`Entities: \tProvider type "${providerClass.providerTypeID}" registered.`);
+		console.log(`Entities:\t └── "${providerClass.providerTypeID}" Provider Type Registered.`);
+		return this;
 	}
 
 	instantiateProvider<T extends EntityProviderUserSettings>(
 		settings: T
-	): EntityProvider<T> | null {
+	): ProviderRegistry {
 		const providerClass = this.providerClasses.get(settings.providerTypeID);
 		if (providerClass) {
 			const providerInstance = new providerClass(
 				this.plugin,
 				settings
-			) as EntityProvider<T>;
+			)
 			console.log(
-				`Entities: \tProvider "${providerClass.getDescription(
+				`Entities:\t └── ${providerClass.getDescription(
 					settings
-				)}" instantiated.`
+				)} added...`
 			);
 			this.providers.push(providerInstance);
-			return providerInstance;
+			return this;
+		} else {
+			console.error(`Entities:\tProvider type "${settings.providerTypeID}" not found.`);
+			return this;
 		}
-		return null;
 	}
 
 	loadProvidersFromSettings(
@@ -69,14 +92,11 @@ class ProviderRegistry {
 				"ProviderRegistry needs to be initialized before loading providers."
 			);
 		}
-		this.providers = settingsList
-			.map((settings) => this.instantiateProvider(settings))
-			.filter(
-				(
-					provider
-				): provider is EntityProvider<EntityProviderUserSettings> =>
-					provider !== null
-			);
+		console.log(`Entities:\t🔄 Loading entity providers...`);
+
+		settingsList.forEach((settings) => {
+			this.instantiateProvider(settings);
+		});
 	}
 
 	getProviders(): EntityProvider<EntityProviderUserSettings>[] {

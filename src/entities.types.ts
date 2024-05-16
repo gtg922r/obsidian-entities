@@ -1,5 +1,7 @@
 import { App, Plugin, TFile } from "obsidian";
-import { FolderProviderConfig } from "./Providers/FolderEntityProvider";
+import { EntityProviderUserSettings } from "./Providers/EntityProvider";
+
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type DerivedFrom<T, Arguments extends unknown[] = any[]> = {
 	new (...args: Arguments): T;
@@ -28,45 +30,15 @@ export type entityFromTemplateSettings = {
 	entityName: string;
 };
 
-export type ProviderConfiguration = (
-	| {
-			type: "folder";
-			settings: FolderProviderConfig;
-      }
-	| {
-			type: "dataview";
-			settings: DataviewProviderSettings;
-      }
-	| {
-			type: "noteFromTemplate";
-			settings: TemplateProviderSettings;
-		}
-	| {
-			type: "insertTemplate";
-			settings: TemplateProviderSettings;
-      }
-);
-
+ 
 export interface ProviderTemplateCreationSettings {
 	newEntityFromTemplates?: entityFromTemplateSettings[];
 } 
 
-export interface CommonProviderConfig {
-	icon?: string;
-}
-
-export interface DataviewProviderSettings extends ProviderTemplateCreationSettings, CommonProviderConfig {
-	query: string;
-}
-
-export interface TemplateProviderSettings extends CommonProviderConfig {
-	path: string;
-}
 
 export interface EntitiesSettings {
-	providers: ProviderConfiguration[];
+	providerSettings: EntityProviderUserSettings[];
 }
-
 export interface TemplaterPlugin {
 	templater?: {
 		create_new_note_from_template?: (
@@ -82,7 +54,7 @@ export interface TemplaterPlugin {
 }
 
 export const DEFAULT_SETTINGS: EntitiesSettings = {
-	providers: [],
+	providerSettings: [],
 };
 
 export interface AppWithPlugins extends App {

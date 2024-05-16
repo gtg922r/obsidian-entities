@@ -4,6 +4,8 @@ import { EntitySuggestionItem } from "src/EntitiesSuggestor";
 import { EntityProvider, EntityProviderUserSettings } from "./EntityProvider";
 import { AppWithPlugins } from "src/entities.types";
 
+const dateProviderTypeID = "nlDates";
+
 interface NLDResult {
     formattedString: string;
     date: Date;
@@ -14,13 +16,13 @@ interface NLPlugin extends Plugin {
     parseDate(date: string): NLDResult;
 }
 
-interface DatesProviderUserSettings extends EntityProviderUserSettings {
-	providerType: "nldates";
+export interface DatesProviderUserSettings extends EntityProviderUserSettings {
+	providerTypeID: string;
 	shouldCreateIfNotExists: boolean;
 }
 
 const defaultDatesProviderUserSettings: DatesProviderUserSettings = {
-	providerType: "nldates",
+	providerTypeID: dateProviderTypeID,
 	enabled: true,
 	icon: "calendar",
 	shouldCreateIfNotExists: true, // Not yet implemented
@@ -29,10 +31,15 @@ const defaultDatesProviderUserSettings: DatesProviderUserSettings = {
 
 
 export class DateEntityProvider extends EntityProvider<DatesProviderUserSettings> {
+	static readonly providerTypeID: string = dateProviderTypeID;
     private nlpPlugin: NLPlugin | undefined;
 
+	static getDescription(settings: DatesProviderUserSettings): string {
+		return `📅 NLDates Entity Provider`;
+	}
+
 	getDescription(): string {
-		return "📅 NLDates Entity Provider";
+		return DateEntityProvider.getDescription(this.settings);
 	}
 	getDefaultSettings(): DatesProviderUserSettings {
 		return defaultDatesProviderUserSettings;
@@ -99,4 +106,8 @@ export class DateEntityProvider extends EntityProvider<DatesProviderUserSettings
             };
         });
     }
+
+	static buildSummarySetting(settings: DatesProviderUserSettings, onShouldSave: (newSettings: DatesProviderUserSettings) => void): void {
+		console.log("DateEntityProvider.buildSummarySetting called");
+	}
 }

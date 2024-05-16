@@ -34,41 +34,41 @@ export abstract class EntityProvider<T extends EntityProviderUserSettings> {
 	// 	return this.settings;
 	// }	
 
-	/**
-	 * Get the description of the provider instance
-	 * @param settings - The settings of the provider
-	 * @returns Description of the provider instance as a short string. Should differentiate between multiple instances of the same provider
-	 */
-	static getDescription<T>(settings: T): string {
-		return "Entity Provider";
-	}
+	// /**
+	//  * Get the description of the provider instance
+	//  * @param settings - The settings of the provider
+	//  * @returns Description of the provider instance as a short string. Should differentiate between multiple instances of the same provider
+	//  */
+	// static getDescription<T extends EntityProviderUserSettings>(settings: T): string {
+	// 	return "❌ Entity Provider Base Class";
+	// }
 
-	/**
-	 * Build the summary settings for the provider. Typically is a single text input and a button or two
-	 * - Icon and enabled options will already be added
-	 * @param settings - The settings of the provider
-	 * @param onShouldSave - Function to call when the settings should be saved
-	 */
-	static buildSummarySetting<T>(
-		settings: T,
-		onShouldSave: (newSettings: T) => void
-	): void {
-		throw new Error("Not Implemented");
-	}
+	// /**
+	//  * Build the summary settings for the provider. Typically is a single text input and a button or two
+	//  * - Icon and enabled options will already be added
+	//  * @param settings - The settings of the provider
+	//  * @param onShouldSave - Function to call when the settings should be saved
+	//  */
+	// static buildSummarySetting<U extends EntityProviderUserSettings>(
+	// 	settings: U,
+	// 	onShouldSave: (newSettings: U) => void
+	// ): void {
+	// 	throw new Error("Not Implemented");
+	// }
 
-	static buildSimpleSettings<T>(
-		settings: T,
-		onShouldSave: (newSettings: T) => void
-	): void {
-		throw new Error("Not Implemented");
-	}
+	// static buildSimpleSettings<T>(
+	// 	settings: T,
+	// 	onShouldSave: (newSettings: T) => void
+	// ): void {
+	// 	throw new Error("Not Implemented");
+	// }
 
-	static buildAdvancedSettings<T>(
-		settings: T,
-		onShouldSave: (newSettings: T) => void
-	): void {
-		throw new Error("Not Implemented");
-	}
+	// static buildAdvancedSettings<T>(
+	// 	settings: T,
+	// 	onShouldSave: (newSettings: T) => void
+	// ): void {
+	// 	throw new Error("Not Implemented");
+	// }
 
 	/**
 	 * Generates suggestions for creating new notes based on templates for a given query.

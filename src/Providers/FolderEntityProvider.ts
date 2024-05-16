@@ -4,8 +4,11 @@ import { EntityProvider, EntityProviderUserSettings } from "./EntityProvider";
 import { FolderSuggest } from "src/ui/file-suggest";
 import { IconPickerModal } from "src/userComponents";
 
+
+const folderProviderTypeID = "folder";
+
 export interface FolderProviderUserSettings extends EntityProviderUserSettings {
-	providerType: "folder";
+	providerTypeID: string;
 	path: string;
 	shouldLoadSubFolders?: boolean | undefined;
 	shouldCreateEntitiesForAliases?: boolean | undefined;
@@ -14,7 +17,7 @@ export interface FolderProviderUserSettings extends EntityProviderUserSettings {
 }
 
 const defaultFolderProviderUserSettings: FolderProviderUserSettings = {
-    providerType: "folder",
+    providerTypeID: folderProviderTypeID,
 	enabled: true,
 	icon: 'folder-open-dot',
     path: '',
@@ -26,12 +29,18 @@ const defaultFolderProviderUserSettings: FolderProviderUserSettings = {
 };
 
 export class FolderEntityProvider extends EntityProvider<FolderProviderUserSettings> {
+	static readonly providerTypeID:string = folderProviderTypeID;
 
 	getDefaultSettings(): FolderProviderUserSettings {
 		return defaultFolderProviderUserSettings;
 	}
+
+	static getDescription(settings: FolderProviderUserSettings): string {
+		return `📂 Folder Entity Provider (${settings.path})`;
+	}
+
 	getDescription(): string {
-		return `📂 Folder Entity Provider (${this.settings.path})`;
+		return FolderEntityProvider.getDescription(this.settings);
 	}
 
 	getEntityList(query: string): EntitySuggestionItem[] {
@@ -70,6 +79,14 @@ export class FolderEntityProvider extends EntityProvider<FolderProviderUserSetti
 		return aliasEntitiesSuggestions
 			? [...entitySuggestions, ...aliasEntitiesSuggestions]
 			: entitySuggestions;
+	}
+
+	static buildSummarySetting(
+		settings: FolderProviderUserSettings,
+		onShouldSave: (newSettings: FolderProviderUserSettings) => void
+	): void {
+		console.log(settings.path);
+		throw new Error("Not Implemented");
 	}
 
 	static getProviderSettingsContent(

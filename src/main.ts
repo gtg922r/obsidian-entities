@@ -1,19 +1,24 @@
 import { Plugin } from "obsidian";
 import { EntitiesSettingTab } from "./EntitiesSettings";
-import {
-	EntitiesSettings,
-	DEFAULT_SETTINGS,
-	ProviderConfiguration,
-} from "./entities.types";
+import { EntitiesSettings, DEFAULT_SETTINGS } from "./entities.types";
 import { EntitiesSuggestor } from "./EntitiesSuggestor";
-import { FolderEntityProvider } from "./Providers/FolderEntityProvider";
-import { DataviewEntityProvider } from "./Providers/DataviewEntityProvider";
-import { NLDatesEntityProvider } from "./Providers/DateEntityProvider";
-import { InsertTemplateEntityProvider, NoteFromTemplateEntityProvider } from "./Providers/TemplateProvider";
+import ProviderRegistry from "./Providers/ProviderRegistry";
+import {
+	FolderEntityProvider,
+	FolderProviderUserSettings,
+} from "./Providers/FolderEntityProvider";
+import {
+	DataviewEntityProvider,
+	DataviewProviderUserSettings,
+} from "./Providers/DataviewEntityProvider";
+import { TemplateEntityProvider } from "./Providers/TemplateProvider";
+import { DateEntityProvider, DatesProviderUserSettings } from "./Providers/DateEntityProvider";
+import { EntityProviderUserSettings } from "./Providers/EntityProvider";
 
 export default class Entities extends Plugin {
 	settings: EntitiesSettings;
 	suggestor: EntitiesSuggestor;
+	providerRegistry: ProviderRegistry;
 
 	async onload() {
 		await this.loadSettings();
@@ -21,7 +26,8 @@ export default class Entities extends Plugin {
 		// This adds a settings tab so the user can configure various aspects of the plugin
 		this.addSettingTab(new EntitiesSettingTab(this.app, this));
 
-		this.suggestor = new EntitiesSuggestor(this,[]);		
+		this.providerRegistry = ProviderRegistry.initializeRegistry(this);
+		this.suggestor = new EntitiesSuggestor(this, this.providerRegistry);
 		this.registerEditorSuggest(this.suggestor);
 		this.loadEntityProviders();
 	}
@@ -29,46 +35,54 @@ export default class Entities extends Plugin {
 	onunload() {}
 
 	async loadEntityProviders() {
-		this.suggestor.clearEntityProviders();
-		const nldatesProvider = new NLDatesEntityProvider(this);
-		if (nldatesProvider) {
-			this.suggestor.addEntityProvider(nldatesProvider);
-		}
+		const defaultFolderSettings: FolderProviderUserSettings = {
+			providerTypeID: FolderEntityProvider.providerTypeID,
+			enabled: true,
+			icon: "user-circle",
+			path: "People",
+			entityCreationTemplates: [
+				{
+					engine: "templater",
+					templatePath: "Templater/person template.md",
+					entityName: "Person",
+				},
+			],
+			shouldLoadSubFolders: false,
+			shouldCreateEntitiesForAliases: false,
+			propertyToCreateEntitiesFor: undefined,
+			propertyToFilterEntitiesBy: undefined,
+		};
 
-		this.settings.providers.forEach((providerConfig: ProviderConfiguration) => {
-			switch (providerConfig.type) {
-				case 'folder': {					
-					const folderProvider = new FolderEntityProvider(this, providerConfig.settings);
-					if (folderProvider) {
-						this.suggestor.addEntityProvider(folderProvider);
-					}
-					break;
-				}
-				case 'dataview': {
-					const dataviewProvider = new DataviewEntityProvider(this, providerConfig.settings);
-					if (dataviewProvider) {
-						this.suggestor.addEntityProvider(dataviewProvider);
-					}
-					break;
-				} 
-				case 'noteFromTemplate': {
-					const provider = new NoteFromTemplateEntityProvider(this, providerConfig.settings);
-					if (provider) {
-						this.suggestor.addEntityProvider(provider);
-					}
-					break;
-				}
-				case 'insertTemplate': {
-					const provider = new InsertTemplateEntityProvider(this, providerConfig.settings);
-					if (provider) {
-						this.suggestor.addEntityProvider(provider);
-					}
-					break;
-				}
-				default:
-					return undefined;
-			}
-		});
+		const defaultDataviewSettings: DataviewProviderUserSettings = {
+			providerTypeID: DataviewEntityProvider.providerTypeID,
+			enabled: true,
+			icon: "book-marked",
+			query: "#project",
+		};
+
+		const defaultDatesSettings: DatesProviderUserSettings = {
+			providerTypeID: DateEntityProvider.providerTypeID,
+			enabled: true,
+			icon: "calendar",
+			shouldCreateIfNotExists: true,
+			entityCreationTemplates: [],
+		};
+
+		this.providerRegistry
+			.registerProviderType(FolderEntityProvider)
+			.registerProviderType(DataviewEntityProvider)
+			.registerProviderType(TemplateEntityProvider)
+			.registerProviderType(DateEntityProvider);
+
+		const defaultProviderSettings = [
+			defaultFolderSettings,
+			defaultDataviewSettings,
+			defaultDatesSettings,
+		];
+
+		this.providerRegistry.loadProvidersFromSettings(
+			defaultProviderSettings
+		);
 	}
 
 	async loadSettings() {

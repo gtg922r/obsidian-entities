@@ -11,7 +11,7 @@ import {
 	prepareQuery,
 	SearchResult,
 } from "obsidian";
-import { EntityProvider } from "./Providers/EntityProvider";
+import ProviderRegistry from "./Providers/ProviderRegistry";
 
 export interface EntitySuggestionItem {
 	suggestionText: string;
@@ -28,7 +28,8 @@ export interface EntitySuggestionItem {
 
 export class EntitiesSuggestor extends EditorSuggest<EntitySuggestionItem> {
 	plugin: Entities;
-	entityProviders: EntityProvider[] = [];
+
+	private providerRegistry: ProviderRegistry;
 
 	/**
 	 * Time of last suggestion list update
@@ -43,31 +44,11 @@ export class EntitiesSuggestor extends EditorSuggest<EntitySuggestionItem> {
 	private localSuggestionCache: EntitySuggestionItem[] = [];
 
 	//empty constructor
-	constructor(plugin: Entities, entityProviders: EntityProvider[] = []) {
+	constructor(plugin: Entities, registry: ProviderRegistry) {
 		super(plugin.app);
 		this.plugin = plugin;
-
-		console.log(`Entities: 🔄 Loading entity providers...`);
-		entityProviders.forEach((provider) => {
-			console.log(
-				`Entities: \t${provider.description ?? "unspecified"} added...`
-			);
-			this.addEntityProvider(provider);
-		});
+		this.providerRegistry = registry;
 		
-	}
-
-	clearEntityProviders(): void {
-		this.entityProviders = [];
-	}
-
-	addEntityProvider(entityProvider: EntityProvider): void {
-		console.log(
-			`Entities: \t${
-				entityProvider.description ?? "unspecified"
-			} added...`
-		);
-		this.entityProviders.push(entityProvider);
 	}
 
 	/**
@@ -113,7 +94,7 @@ export class EntitiesSuggestor extends EditorSuggest<EntitySuggestionItem> {
 			this.lastSuggestionListUpdate == undefined ||
 			performance.now() - this.lastSuggestionListUpdate > 200
 		) {
-			this.localSuggestionCache = this.entityProviders.flatMap(
+			this.localSuggestionCache = this.providerRegistry.getProviders().flatMap(
 				(provider) => provider.getEntityList(context.query)
 			);
 			this.lastSuggestionListUpdate = performance.now();
@@ -131,7 +112,7 @@ export class EntitiesSuggestor extends EditorSuggest<EntitySuggestionItem> {
 				return match ? [{ ...suggestionItem, match }] : [];
 			});
 
-		this.entityProviders.forEach((provider) => {
+		this.providerRegistry.getProviders().forEach((provider) => {
 			const templateSuggestions = provider.getTemplateCreationSuggestions(
 				context.query
 			);
