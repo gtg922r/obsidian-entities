@@ -90,7 +90,7 @@ export class FolderEntityProvider extends EntityProvider<FolderProviderUserSetti
 		settingContainer.addText(text => {
 			text.setPlaceholder('Folder Path').setValue(settings.path);
 			new FolderSuggest(this.plugin.app, text.inputEl);
-		)
+		});
 	}
 
 	static getProviderSettingsContent(
