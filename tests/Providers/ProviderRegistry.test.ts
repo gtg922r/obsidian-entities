@@ -111,7 +111,7 @@ describe("ProviderRegistry tests", () => {
 		const settingsList: EntityProviderUserSettings[] = [
 			{ providerTypeID: mockProviderTypeID, enabled: true, icon: "mock-icon" },
 		];
-		registry.loadProvidersFromSettings(settingsList);
+		registry.instantiateProvidersFromSettings(settingsList);
 		const providers = registry.getProviders();
 		expect(providers.length).toBe(1);
 		expect(providers[0]).toBeInstanceOf(MockEntityProvider);
@@ -122,7 +122,7 @@ describe("ProviderRegistry tests", () => {
 		const settingsList: EntityProviderUserSettings[] = [
 			{ providerTypeID: mockProviderTypeID, enabled: true, icon: "mock-icon" },
 		];
-		registry.loadProvidersFromSettings(settingsList);
+		registry.instantiateProvidersFromSettings(settingsList);
 		const providers = registry.getProviders();
 		expect(providers.length).toBe(1);
 		expect(providers[0]).toBeInstanceOf(MockEntityProvider);

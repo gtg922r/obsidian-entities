@@ -1,4 +1,4 @@
-import { Plugin } from "obsidian";
+import { Plugin, Setting } from "obsidian";
 import { EntityProvider, EntityProviderID, EntityProviderUserSettings } from "./EntityProvider";
 import { DerivedClassWithConstructorArgs } from "src/entities.types";
 
@@ -6,6 +6,7 @@ import { DerivedClassWithConstructorArgs } from "src/entities.types";
 interface ProviderRegistryClassMethods<T extends EntityProviderUserSettings> {
 	getDescription(settings: T): string;
 	buildSummarySetting(
+		settingContainer: Setting,
 		settings: T,
 		onShouldSave: (newSettings: T) => void
 	): void;
@@ -84,7 +85,11 @@ class ProviderRegistry {
 		}
 	}
 
-	loadProvidersFromSettings(
+	resetProviders(): void {
+		this.providers = [];
+	}
+
+	instantiateProvidersFromSettings(
 		settingsList: EntityProviderUserSettings[]
 	): void {
 		if (!this.plugin) {
@@ -101,6 +106,10 @@ class ProviderRegistry {
 
 	getProviders(): EntityProvider<EntityProviderUserSettings>[] {
 		return this.providers;
+	}
+
+	getProviderClasses(): Map<string, RegisterableEntityProvider> {
+		return this.providerClasses;
 	}
 }
 

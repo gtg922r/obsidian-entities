@@ -29,59 +29,62 @@ export default class Entities extends Plugin {
 		this.providerRegistry = ProviderRegistry.initializeRegistry(this);
 		this.suggestor = new EntitiesSuggestor(this, this.providerRegistry);
 		this.registerEditorSuggest(this.suggestor);
+		this.registerEntityProviders();
 		this.loadEntityProviders();
 	}
 
 	onunload() {}
 
-	async loadEntityProviders() {
-		const defaultFolderSettings: FolderProviderUserSettings = {
-			providerTypeID: FolderEntityProvider.providerTypeID,
-			enabled: true,
-			icon: "user-circle",
-			path: "People",
-			entityCreationTemplates: [
-				{
-					engine: "templater",
-					templatePath: "Templater/person template.md",
-					entityName: "Person",
-				},
-			],
-			shouldLoadSubFolders: false,
-			shouldCreateEntitiesForAliases: false,
-			propertyToCreateEntitiesFor: undefined,
-			propertyToFilterEntitiesBy: undefined,
-		};
-
-		const defaultDataviewSettings: DataviewProviderUserSettings = {
-			providerTypeID: DataviewEntityProvider.providerTypeID,
-			enabled: true,
-			icon: "book-marked",
-			query: "#project",
-		};
-
-		const defaultDatesSettings: DatesProviderUserSettings = {
-			providerTypeID: DateEntityProvider.providerTypeID,
-			enabled: true,
-			icon: "calendar",
-			shouldCreateIfNotExists: true,
-			entityCreationTemplates: [],
-		};
-
+	registerEntityProviders() {
 		this.providerRegistry
 			.registerProviderType(FolderEntityProvider)
 			.registerProviderType(DataviewEntityProvider)
-			.registerProviderType(TemplateEntityProvider)
+			// this.providerRegistry.registerProviderType(TemplateEntityProvider)
 			.registerProviderType(DateEntityProvider);
+	}
 
-		const defaultProviderSettings = [
-			defaultFolderSettings,
-			defaultDataviewSettings,
-			defaultDatesSettings,
-		];
+	async loadEntityProviders() {
+		// const defaultFolderSettings: FolderProviderUserSettings = {
+		// 	providerTypeID: FolderEntityProvider.providerTypeID,
+		// 	enabled: true,
+		// 	icon: "user-circle",
+		// 	path: "People",
+		// 	entityCreationTemplates: [
+		// 		{
+		// 			engine: "templater",
+		// 			templatePath: "Templater/person template.md",
+		// 			entityName: "Person",
+		// 		},
+		// 	],
+		// 	shouldLoadSubFolders: false,
+		// 	shouldCreateEntitiesForAliases: false,
+		// 	propertyToCreateEntitiesFor: undefined,
+		// 	propertyToFilterEntitiesBy: undefined,
+		// };
 
-		this.providerRegistry.loadProvidersFromSettings(
-			defaultProviderSettings
+		// const defaultDataviewSettings: DataviewProviderUserSettings = {
+		// 	providerTypeID: DataviewEntityProvider.providerTypeID,
+		// 	enabled: true,
+		// 	icon: "book-marked",
+		// 	query: "#project",
+		// };
+
+		// const defaultDatesSettings: DatesProviderUserSettings = {
+		// 	providerTypeID: DateEntityProvider.providerTypeID,
+		// 	enabled: true,
+		// 	icon: "calendar",
+		// 	shouldCreateIfNotExists: true,
+		// 	entityCreationTemplates: [],
+		// };
+
+		// this.settings.providerSettings = [
+		// 	defaultFolderSettings,
+		// 	defaultDataviewSettings,
+		// 	defaultDatesSettings,
+		// ];
+		this.providerRegistry.resetProviders();
+		this.providerRegistry.instantiateProvidersFromSettings(
+			this.settings.providerSettings
 		);
 	}
 

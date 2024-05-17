@@ -1,4 +1,4 @@
-import { App, Plugin } from "obsidian";
+import { App, Plugin, Setting } from "obsidian";
 import { getAPI, DataviewApi } from "obsidian-dataview";
 import { EntitySuggestionItem } from "src/EntitiesSuggestor";
 import { EntityProvider, EntityProviderUserSettings } from "./EntityProvider";
@@ -76,10 +76,11 @@ export class DataviewEntityProvider extends EntityProvider<DataviewProviderUserS
 	}
 
 	static buildSummarySetting(
+		settingContainer: Setting,
 		settings: DataviewProviderUserSettings,
 		onShouldSave: (newSettings: DataviewProviderUserSettings) => void
 	): void {
-		throw new Error("Not Implemented");
+		settingContainer.addText(text => text.setPlaceholder('Dataview Query').setValue(settings.query))
 	}
 
 	static getDataviewApiWithRetry = (

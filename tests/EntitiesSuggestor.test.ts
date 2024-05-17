@@ -1,7 +1,8 @@
 import { App, Editor, EditorSuggestContext, TFile } from "obsidian";
 import Entities from "../src/main";
 import { EntitiesSuggestor, EntitySuggestionItem } from "../src/EntitiesSuggestor";
-import { EntityProvider } from "../src/Providers/EntityProvider";
+import { EntityProvider, EntityProviderUserSettings } from "../src/Providers/EntityProvider";
+import ProviderRegistry from "src/Providers/ProviderRegistry";
 
 // Mocking the necessary Obsidian interfaces and classes inline
 jest.mock("obsidian", () => {
@@ -30,9 +31,12 @@ describe("onTrigger tests", () => {
 	let suggestor: EntitiesSuggestor;
 	let mockEditor: jest.Mocked<Editor>;
 	let mockFile: jest.Mocked<TFile>;
+	let registry: jest.Mocked<ProviderRegistry>;
+
 
 	beforeEach(() => {
-		suggestor = new EntitiesSuggestor(mockPlugin);
+		// eslint-disable-next-line @typescript-eslint/no-explicit-any
+		suggestor = new EntitiesSuggestor(mockPlugin, registry);
 
 		// Mocking the editor instance
 		mockEditor = {
@@ -223,10 +227,16 @@ describe("getSuggestions tests", () => {
     let suggestor: EntitiesSuggestor;
     let mockEditor: jest.Mocked<Editor>;
     let mockFile: jest.Mocked<TFile>;
-    let mockEntityProvider: jest.Mocked<EntityProvider>;
+    let mockEntityProvider: jest.Mocked<EntityProvider<EntityProviderUserSettings>>;
+    let mockRegistry: jest.Mocked<ProviderRegistry>;
 
     beforeEach(() => {
-        suggestor = new EntitiesSuggestor(mockPlugin);
+        // Mocking the ProviderRegistry
+        mockRegistry = {
+            getProviders: jest.fn(),
+        } as unknown as jest.Mocked<ProviderRegistry>;
+
+        suggestor = new EntitiesSuggestor(mockPlugin, mockRegistry);
 
         // Mocking the editor instance
         mockEditor = {
@@ -240,9 +250,9 @@ describe("getSuggestions tests", () => {
         mockEntityProvider = {
             getEntityList: jest.fn(),
             getTemplateCreationSuggestions: jest.fn(),
-        } as unknown as jest.Mocked<EntityProvider>;
+        } as unknown as jest.Mocked<EntityProvider<EntityProviderUserSettings>>;
 
-        suggestor.addEntityProvider(mockEntityProvider);
+        mockRegistry.getProviders.mockReturnValue([mockEntityProvider]);
     });
 
     test("getSuggestions should return a list of suggestions based on the query", () => {

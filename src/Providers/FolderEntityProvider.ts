@@ -82,11 +82,15 @@ export class FolderEntityProvider extends EntityProvider<FolderProviderUserSetti
 	}
 
 	static buildSummarySetting(
+		settingContainer: Setting,
 		settings: FolderProviderUserSettings,
 		onShouldSave: (newSettings: FolderProviderUserSettings) => void
+		// NEED TO ADD PLUGIN INPUT
 	): void {
-		console.log(settings.path);
-		throw new Error("Not Implemented");
+		settingContainer.addText(text => {
+			text.setPlaceholder('Folder Path').setValue(settings.path);
+			new FolderSuggest(this.plugin.app, text.inputEl);
+		)
 	}
 
 	static getProviderSettingsContent(

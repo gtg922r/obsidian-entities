@@ -1,4 +1,4 @@
-import { Plugin } from "obsidian";
+import { Plugin, Setting } from "obsidian";
 import { Moment } from "moment";
 import { EntitySuggestionItem } from "src/EntitiesSuggestor";
 import { EntityProvider, EntityProviderUserSettings } from "./EntityProvider";
@@ -107,7 +107,11 @@ export class DateEntityProvider extends EntityProvider<DatesProviderUserSettings
         });
     }
 
-	static buildSummarySetting(settings: DatesProviderUserSettings, onShouldSave: (newSettings: DatesProviderUserSettings) => void): void {
-		console.log("DateEntityProvider.buildSummarySetting called");
+	static buildSummarySetting(
+		settingContainer: Setting,
+		settings: DatesProviderUserSettings,
+		onShouldSave: (newSettings: DatesProviderUserSettings) => void
+	): void {
+		return void 0;
 	}
 }
