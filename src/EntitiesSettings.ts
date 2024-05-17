@@ -8,7 +8,11 @@ import {
 	Notice,
 } from "obsidian";
 import Entities from "./main";
-import { openTemplateDetailsModal, IconPickerModal, ProviderSettingsModal } from "./userComponents";
+import {
+	openTemplateDetailsModal,
+	IconPickerModal,
+	ProviderSettingsModal,
+} from "./userComponents";
 import { FolderSuggest } from "./ui/file-suggest";
 import { EntityProviderUserSettings } from "./Providers/EntityProvider";
 
@@ -239,81 +243,110 @@ export class EntitiesSettingTab extends PluginSettingTab {
 		// 	});
 
 		new Setting(containerEl)
-			.setName('Entity Providers')
-			.setDesc('Settings for each active Entity provider')
+			.setName("Entity Providers")
+			.setDesc("Settings for each active Entity provider")
 			.setHeading();
 
 		new Setting(containerEl)
-			.setName('Add New Provider')
-			.setDesc('Open New Provider Settings')
-			.addDropdown(dropdown => {
-				dropdown.addOption('folder', 'Folder');
-				dropdown.addOption('dataview', 'Dataview');
-				dropdown.addOption('noteFromTemplate', 'Note from Template');
-				dropdown.addOption('insertTemplate', 'Insert Template');
-				dropdown.onChange(value => {
-					console.log('Dropdown Changed', value);
+			.setName("Add New Provider")
+			.setDesc("Open New Provider Settings")
+			.addDropdown((dropdown) => {
+				dropdown.addOption("folder", "Folder");
+				dropdown.addOption("dataview", "Dataview");
+				dropdown.addOption("noteFromTemplate", "Note from Template");
+				dropdown.addOption("insertTemplate", "Insert Template");
+				dropdown.onChange((value) => {
+					console.log("Dropdown Changed", value);
 				});
 			})
-			.addButton(button => button.setIcon('plus').onClick(() => {
-				console.log('Extra Button Clicked');
-			}));			
+			.addButton((button) =>
+				button.setIcon("plus").onClick(() => {
+					console.log("Extra Button Clicked");
+				})
+			);
 
-		this.plugin.settings.providerSettings.forEach((providerSettings, index) => {
-			const providerType = this.plugin.providerRegistry.getProviderClasses().get(providerSettings.providerTypeID);
-			if (!providerType) {
-				console.error(`Provider type "${providerSettings.providerTypeID}" not found.`);
-				return;
-			}
-			const settingContainer = new Setting(containerEl)
-			
-			settingContainer
-				.setName(`Provider #${index + 1}`)
-				.setDesc(`${providerType.getDescription(providerSettings)}`)
-				// .addExtraButton(button => button.setIcon('folder').setDisabled(false))			
-				.addButton(button => button.setIcon(providerSettings.icon ?? 'box-select').setDisabled(false).onClick(() => {
-						const iconPickerModal = new IconPickerModal(
-							this.app
-						);
-						iconPickerModal.open();
-						iconPickerModal.getInput().then((iconName) => {
-							if (iconName) {
-								providerSettings.icon = iconName;
-								updateProviderAtIndexAndSaveAndReload(
-									this.plugin,
-									providerSettings,
-									index
+		this.plugin.settings.providerSettings.forEach(
+			(providerSettings, index) => {
+				const providerType = this.plugin.providerRegistry
+					.getProviderClasses()
+					.get(providerSettings.providerTypeID);
+				if (!providerType) {
+					console.error(
+						`Provider type "${providerSettings.providerTypeID}" not found.`
+					);
+					return;
+				}
+				const settingContainer = new Setting(containerEl);
+
+				settingContainer
+					.setName(`Provider #${index + 1}`)
+					.setDesc(`${providerType.getDescription(providerSettings)}`)
+					// .addExtraButton(button => button.setIcon('folder').setDisabled(false))
+					.addButton((button) =>
+						button
+							.setIcon(providerSettings.icon ?? "box-select")
+							.setDisabled(false)
+							.onClick(() => {
+								const iconPickerModal = new IconPickerModal(
+									this.app
 								);
-								this.display(); // Refresh the settings UI
-							}
-						});
-					}));
-			providerType.buildSummarySetting(settingContainer, providerSettings, (newSettings) => {
-				providerSettings = newSettings;
-				updateProviderAtIndexAndSaveAndReload(this.plugin, providerSettings, index);
-				this.display();
-			});
-			settingContainer
-				.addButton(button => button.setIcon('settings').onClick(() => {}))			
-				.addButton(button => button.setIcon('trash').onClick(() => {}));
-		});		
-		
+								iconPickerModal.open();
+								iconPickerModal.getInput().then((iconName) => {
+									if (iconName) {
+										providerSettings.icon = iconName;
+										updateProviderAtIndexAndSaveAndReload(
+											this.plugin,
+											providerSettings,
+											index
+										);
+										this.display(); // Refresh the settings UI
+									}
+								});
+							})
+					);
+				providerType.buildSummarySetting(
+					settingContainer,
+					providerSettings,
+					(newSettings) => {
+						providerSettings = newSettings;
+						updateProviderAtIndexAndSaveAndReload(
+							this.plugin,
+							providerSettings,
+							index
+						);
+						this.display();
+					},
+					this.plugin
+				);
+				settingContainer
+					.addButton((button) =>
+						button.setIcon("settings").onClick(() => {})
+					)
+					.addButton((button) =>
+						button.setIcon("trash").onClick(() => {})
+					);
+			}
+		);
+
 		new Setting(containerEl)
-			.setName('Entities Plugin Settings')
-			.setDesc('Settings for the Entities Plugin')
-			.setHeading();		
+			.setName("Entities Plugin Settings")
+			.setDesc("Settings for the Entities Plugin")
+			.setHeading();
 
 		new Setting(containerEl)
 			.setName("Reload Providers")
 			.setDesc("(Debugging) Manually reload all entity providers")
-			.addExtraButton(button => button.setIcon('bug').setDisabled(false).setTooltip('Debugging Only'))
+			.addExtraButton((button) =>
+				button
+					.setIcon("bug")
+					.setDisabled(false)
+					.setTooltip("Debugging Only")
+			)
 			.addButton((button) => {
 				button.setButtonText("Reload").onClick(() => {
 					console.log("Reloading entity providers...");
 					this.plugin.loadEntityProviders();
 				});
 			});
-
-
 	}
 }

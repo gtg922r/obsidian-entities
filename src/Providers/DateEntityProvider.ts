@@ -110,7 +110,8 @@ export class DateEntityProvider extends EntityProvider<DatesProviderUserSettings
 	static buildSummarySetting(
 		settingContainer: Setting,
 		settings: DatesProviderUserSettings,
-		onShouldSave: (newSettings: DatesProviderUserSettings) => void
+		onShouldSave: (newSettings: DatesProviderUserSettings) => void,
+		plugin: Plugin
 	): void {
 		return void 0;
 	}

@@ -1,4 +1,4 @@
-import { App, sanitizeHTMLToDom, Setting, TFile } from "obsidian";
+import { App, Plugin, sanitizeHTMLToDom, Setting, TFile } from "obsidian";
 import { EntitySuggestionItem } from "src/EntitiesSuggestor";
 import { EntityProvider, EntityProviderUserSettings } from "./EntityProvider";
 import { FolderSuggest } from "src/ui/file-suggest";
@@ -84,12 +84,16 @@ export class FolderEntityProvider extends EntityProvider<FolderProviderUserSetti
 	static buildSummarySetting(
 		settingContainer: Setting,
 		settings: FolderProviderUserSettings,
-		onShouldSave: (newSettings: FolderProviderUserSettings) => void
-		// NEED TO ADD PLUGIN INPUT
+		onShouldSave: (newSettings: FolderProviderUserSettings) => void,
+		plugin: Plugin
 	): void {
 		settingContainer.addText(text => {
 			text.setPlaceholder('Folder Path').setValue(settings.path);
-			new FolderSuggest(this.plugin.app, text.inputEl);
+			text.onChange((value) => {
+				settings.path = value;
+				onShouldSave(settings);
+			});
+			new FolderSuggest(plugin.app, text.inputEl);
 		});
 	}
 

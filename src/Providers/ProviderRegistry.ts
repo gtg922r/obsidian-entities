@@ -8,7 +8,8 @@ interface ProviderRegistryClassMethods<T extends EntityProviderUserSettings> {
 	buildSummarySetting(
 		settingContainer: Setting,
 		settings: T,
-		onShouldSave: (newSettings: T) => void
+		onShouldSave: (newSettings: T) => void,
+		plugin: Plugin
 	): void;
 	buildSimpleSettings?(
 		settings: T,

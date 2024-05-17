@@ -2,6 +2,7 @@ import { App, Plugin, Setting } from "obsidian";
 import { getAPI, DataviewApi } from "obsidian-dataview";
 import { EntitySuggestionItem } from "src/EntitiesSuggestor";
 import { EntityProvider, EntityProviderUserSettings } from "./EntityProvider";
+import { FolderSuggest } from "src/ui/file-suggest";
 
 const dataviewProviderTypeID = "dataview";
 
@@ -78,9 +79,13 @@ export class DataviewEntityProvider extends EntityProvider<DataviewProviderUserS
 	static buildSummarySetting(
 		settingContainer: Setting,
 		settings: DataviewProviderUserSettings,
-		onShouldSave: (newSettings: DataviewProviderUserSettings) => void
+		onShouldSave: (newSettings: DataviewProviderUserSettings) => void,
+		plugin: Plugin
 	): void {
-		settingContainer.addText(text => text.setPlaceholder('Dataview Query').setValue(settings.query))
+		settingContainer.addText(text => {
+			text.setPlaceholder('Dataview Query').setValue(settings.query);
+			new FolderSuggest(plugin.app, text.inputEl);
+		});
 	}
 
 	static getDataviewApiWithRetry = (
