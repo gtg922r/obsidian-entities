@@ -13,28 +13,29 @@ import {
 	IconPickerModal,
 	ProviderSettingsModal,
 } from "./userComponents";
-import { FolderSuggest } from "./ui/file-suggest";
 import { EntityProviderUserSettings } from "./Providers/EntityProvider";
 
 let saveTimeout: NodeJS.Timeout | undefined;
 
 function updateProviderAtIndexAndSaveAndReload(
-	plugin: Entities,
+	settingsTab: EntitiesSettingTab,
 	providerConfig: EntityProviderUserSettings,
-	index: number
+	index: number,
+	shouldWaitToSave = true
 ) {
 	if (saveTimeout !== undefined) {
 		clearTimeout(saveTimeout);
 	}
 
 	saveTimeout = setTimeout(() => {
-		plugin.settings.providerSettings[index] = providerConfig;
-		plugin.saveSettings().then(() => {
-			plugin.loadEntityProviders(); // Reload providers after setting change
+		settingsTab.plugin.settings.providerSettings[index] = providerConfig;
+		settingsTab.plugin.saveSettings().then(() => {
+			settingsTab.plugin.loadEntityProviders(); // Reload providers after setting change
 			new Notice("✅ Entities Settings Providers Updated");
 		});
 		saveTimeout = undefined;
-	}, 1000);
+		settingsTab.display();
+	}, shouldWaitToSave ? 1000 : 0);
 }
 
 export class EntitiesSettingTab extends PluginSettingTab {
@@ -282,43 +283,42 @@ export class EntitiesSettingTab extends PluginSettingTab {
 					.setName(`Provider #${index + 1}`)
 					.setDesc(`${providerType.getDescription(providerSettings)}`)
 					// .addExtraButton(button => button.setIcon('folder').setDisabled(false))
-					.addButton((button) =>
-						button
-							.setIcon(providerSettings.icon ?? "box-select")
-							.setDisabled(false)
-							.onClick(() => {
-								const iconPickerModal = new IconPickerModal(
-									this.app
-								);
-								iconPickerModal.open();
-								iconPickerModal.getInput().then((iconName) => {
-									if (iconName) {
-										providerSettings.icon = iconName;
-										updateProviderAtIndexAndSaveAndReload(
-											this.plugin,
-											providerSettings,
-											index
-										);
-										this.display(); // Refresh the settings UI
-									}
-								});
-							})
-					);
+
 				providerType.buildSummarySetting(
 					settingContainer,
 					providerSettings,
 					(newSettings) => {
 						providerSettings = newSettings;
 						updateProviderAtIndexAndSaveAndReload(
-							this.plugin,
+							this,
 							providerSettings,
 							index
 						);
-						this.display();
 					},
 					this.plugin
 				);
 				settingContainer
+					.addButton((button) =>
+					button
+						.setIcon(providerSettings.icon ?? "box-select")
+						.setDisabled(false)
+						.onClick(() => {
+							const iconPickerModal = new IconPickerModal(
+								this.app
+							);
+							iconPickerModal.open();
+							iconPickerModal.getInput().then((iconName) => {
+								if (iconName) {
+									providerSettings.icon = iconName;
+									updateProviderAtIndexAndSaveAndReload(
+										this,
+										providerSettings,
+										index,
+										false
+									);
+								}
+							});
+						}))	
 					.addButton((button) =>
 						button.setIcon("settings").onClick(() => {})
 					)
