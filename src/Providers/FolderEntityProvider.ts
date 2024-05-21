@@ -1,4 +1,4 @@
-import { App, Plugin, sanitizeHTMLToDom, Setting, TFile } from "obsidian";
+import { App, ExtraButtonComponent, Plugin, sanitizeHTMLToDom, SearchComponent, Setting, TFile, TFolder } from "obsidian";
 import { EntitySuggestionItem } from "src/EntitiesSuggestor";
 import { EntityProvider, EntityProviderUserSettings } from "./EntityProvider";
 import { FolderSuggest } from "src/ui/file-suggest";
@@ -87,13 +87,31 @@ export class FolderEntityProvider extends EntityProvider<FolderProviderUserSetti
 		onShouldSave: (newSettings: FolderProviderUserSettings) => void,
 		plugin: Plugin
 	): void {
+		const folderExists = (folderPath: string) => plugin.app.vault.getFolderByPath(folderPath) !== null;
+		console.log('folderExists', folderExists);
+		let folderExistsIcon: ExtraButtonComponent
+		settingContainer.addExtraButton((button) => {
+			folderExistsIcon = button;
+			button.setIcon(folderExists(settings.path) ? "folder-check" : "folder-x");
+			button.setTooltip(folderExists(settings.path) ? "Folder Exists" : "Folder Not Found");
+			button.setDisabled(true);
+		});
+
 		settingContainer.addText(text => {
 			text.setPlaceholder('Folder Path').setValue(settings.path);
 			text.onChange((value) => {
-				settings.path = value;
-				onShouldSave(settings);
-			});
-			new FolderSuggest(plugin.app, text.inputEl);
+				if (folderExists(value)) {
+					folderExistsIcon.setIcon("folder-check");
+					folderExistsIcon.setTooltip("Folder Exists");
+					settings.path = value;
+					onShouldSave(settings);
+				} else {
+					folderExistsIcon.setIcon("folder-x");
+					folderExistsIcon.setTooltip("Folder Not Found");
+				}
+			});			
+
+			new FolderSuggest(plugin.app, text.inputEl, 'entities-settings');			
 		});
 	}
 

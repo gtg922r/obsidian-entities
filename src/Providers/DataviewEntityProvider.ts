@@ -84,7 +84,6 @@ export class DataviewEntityProvider extends EntityProvider<DataviewProviderUserS
 	): void {
 		settingContainer.addText(text => {
 			text.setPlaceholder('Dataview Query').setValue(settings.query);
-			new FolderSuggest(plugin.app, text.inputEl);
 		});
 	}
 
