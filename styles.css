@@ -46,6 +46,16 @@ body {
 }
 
 /**********************/
+/* ** Entites Settings ** */
+/**********************/
+
+.entities-settings.suggestion-popover, .entities-settings.suggestion-container  {
+	top:4px !important;
+	left:-2px !important;
+    /* z-index: var(--layer-notice); */
+}
+
+/**********************/
 /* ** Entity Modal ** */
 /**********************/
 

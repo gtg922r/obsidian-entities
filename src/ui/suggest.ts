@@ -22,6 +22,9 @@
 // LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
+// 
+// Additional modifications by Ryan C
+// 2024-05-21: Added `additionalClasses` parameter to constructor
 
 import { createPopper, type Instance as PopperInstance } from "@popperjs/core";
 import { App, type ISuggestOwner, Scope } from "obsidian";
@@ -131,12 +134,17 @@ export abstract class TextInputSuggest<T> implements ISuggestOwner<T> {
   private suggestEl: HTMLElement;
   private suggest: Suggest<T>;
 
-  constructor(app: App, inputEl: HTMLInputElement) {
+  constructor(app: App, inputEl: HTMLInputElement, additionalClasses: string[] | string = []) {
     this.app = app;
     this.inputEl = inputEl;
     this.scope = new Scope();
 
-    this.suggestEl = createDiv("suggestion-container");
+    // this.suggestEl = createDiv("suggestion-container"); // Put back after 1.6.1
+	this.suggestEl = createDiv("suggestion-popover");
+	this.suggestEl.addClass(
+		"popover",
+		...(Array.isArray(additionalClasses) ? additionalClasses : [additionalClasses])
+	);
     const suggestion = this.suggestEl.createDiv("suggestion");
     this.suggest = new Suggest(this, suggestion, this.scope);
 
@@ -145,7 +153,8 @@ export abstract class TextInputSuggest<T> implements ISuggestOwner<T> {
     this.inputEl.addEventListener("input", this.onInputChanged.bind(this));
     this.inputEl.addEventListener("focus", this.onInputChanged.bind(this));
     this.inputEl.addEventListener("blur", this.close.bind(this));
-    this.suggestEl.on("mousedown", ".suggestion-container", (event: MouseEvent) => {
+    // this.suggestEl.on("mousedown", ".suggestion-container", (event: MouseEvent) => {
+    this.suggestEl.on("mousedown", ".suggestion-popover", (event: MouseEvent) => {
       event.preventDefault();
     });
   }
