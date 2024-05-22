@@ -8,40 +8,39 @@ import {
 	getIcon,
 } from "obsidian";
 import {
-	CommonProviderConfig,
 	entityFromTemplateSettings,
 } from "./entities.types";
 import { FileSuggest } from "./ui/file-suggest";
 
-export class ProviderSettingsModal extends Modal {
-	private populateSettings: (
-		contentEl: HTMLElement,
-		config: CommonProviderConfig,
-		app: App
-	) => void;
-	private config: CommonProviderConfig;
+// export class ProviderSettingsModal extends Modal {
+// 	private populateSettings: (
+// 		contentEl: HTMLElement,
+// 		config: CommonProviderConfig,
+// 		app: App
+// 	) => void;
+// 	private config: CommonProviderConfig;
 
-	constructor(
-		app: App,
-		config: CommonProviderConfig,
-		populateSettings: (
-			contentEl: HTMLElement,
-			config: CommonProviderConfig,
-			app: App
-		) => void
-	) {
-		super(app);
-		this.config = config;
-		this.populateSettings = populateSettings;
-	}
+// 	constructor(
+// 		app: App,
+// 		config: CommonProviderConfig,
+// 		populateSettings: (
+// 			contentEl: HTMLElement,
+// 			config: CommonProviderConfig,
+// 			app: App
+// 		) => void
+// 	) {
+// 		super(app);
+// 		this.config = config;
+// 		this.populateSettings = populateSettings;
+// 	}
 
-	onOpen() {
-		const { contentEl } = this;
-		contentEl.empty();
-		contentEl.addClass("entities-wide-modal");
-		this.populateSettings(contentEl, this.config, this.app);
-	}
-}
+// 	onOpen() {
+// 		const { contentEl } = this;
+// 		contentEl.empty();
+// 		contentEl.addClass("entities-wide-modal");
+// 		this.populateSettings(contentEl, this.config, this.app);
+// 	}
+// }
 
 export interface EntitiesModalInputOptions {
 	placeholder?: string;

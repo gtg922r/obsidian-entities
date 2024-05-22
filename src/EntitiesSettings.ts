@@ -11,7 +11,6 @@ import Entities from "./main";
 import {
 	openTemplateDetailsModal,
 	IconPickerModal,
-	ProviderSettingsModal,
 } from "./userComponents";
 import { EntityProviderUserSettings } from "./Providers/EntityProvider";
 

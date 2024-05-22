@@ -1,4 +1,4 @@
-import { App, ExtraButtonComponent, Plugin, sanitizeHTMLToDom, SearchComponent, Setting, TFile, TFolder } from "obsidian";
+import { App, ExtraButtonComponent, Plugin, sanitizeHTMLToDom, Setting, TFile } from "obsidian";
 import { EntitySuggestionItem } from "src/EntitiesSuggestor";
 import { EntityProvider, EntityProviderUserSettings } from "./EntityProvider";
 import { FolderSuggest } from "src/ui/file-suggest";
@@ -88,12 +88,21 @@ export class FolderEntityProvider extends EntityProvider<FolderProviderUserSetti
 		plugin: Plugin
 	): void {
 		const folderExists = (folderPath: string) => plugin.app.vault.getFolderByPath(folderPath) !== null;
-		console.log('folderExists', folderExists);
 		let folderExistsIcon: ExtraButtonComponent
+		const updateFolderExistsIcon = (path: string) => {
+			if (folderExists(path) && folderExistsIcon) {
+				folderExistsIcon.setIcon("folder-check");
+				folderExistsIcon.setTooltip("Folder Found");
+				folderExistsIcon.extraSettingsEl.style.color = '';
+			} else if (folderExistsIcon) {
+				folderExistsIcon.setIcon("folder-x");
+				folderExistsIcon.setTooltip("Folder Not Found");
+				folderExistsIcon.extraSettingsEl.style.color = 'var(--text-error)';
+			}
+		}
 		settingContainer.addExtraButton((button) => {
 			folderExistsIcon = button;
-			button.setIcon(folderExists(settings.path) ? "folder-check" : "folder-x");
-			button.setTooltip(folderExists(settings.path) ? "Folder Exists" : "Folder Not Found");
+			updateFolderExistsIcon(settings.path);
 			button.setDisabled(true);
 		});
 
@@ -101,13 +110,11 @@ export class FolderEntityProvider extends EntityProvider<FolderProviderUserSetti
 			text.setPlaceholder('Folder Path').setValue(settings.path);
 			text.onChange((value) => {
 				if (folderExists(value)) {
-					folderExistsIcon.setIcon("folder-check");
-					folderExistsIcon.setTooltip("Folder Exists");
+					updateFolderExistsIcon(value);
 					settings.path = value;
 					onShouldSave(settings);
 				} else {
-					folderExistsIcon.setIcon("folder-x");
-					folderExistsIcon.setTooltip("Folder Not Found");
+					updateFolderExistsIcon(value);
 				}
 			});			
 
