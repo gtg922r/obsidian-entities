@@ -38,7 +38,8 @@ export class DateEntityProvider extends EntityProvider<DatesProviderUserSettings
 	private nlpPlugin: NLPlugin | undefined;
 
 	static getDescription(settings: DatesProviderUserSettings): string {
-		return `📅 NLDates Entity Provider`;
+		return `📅 Dates Entity Provider`;
+		// return `Dates Entity Provider`;
 	}
 
 	getDescription(): string {

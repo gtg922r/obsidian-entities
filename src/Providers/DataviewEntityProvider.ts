@@ -12,6 +12,8 @@ import { getAPI, DataviewApi } from "obsidian-dataview";
 import { EntitySuggestionItem } from "src/EntitiesSuggestor";
 import { EntityProvider, EntityProviderUserSettings } from "./EntityProvider";
 import { TextInputSuggest } from "src/ui/suggest";
+import { IconPickerModal, openTemplateDetailsModal } from "src/userComponents";
+import { entityFromTemplateSettings } from "src/entities.types";
 
 const dataviewProviderTypeID = "dataview";
 
@@ -19,6 +21,7 @@ export interface DataviewProviderUserSettings
 	extends EntityProviderUserSettings {
 	providerTypeID: string;
 	query: string;
+	shouldCreateEntitiesForAliases?: boolean | undefined;
 }
 
 const defaultDataviewProviderUserSettings: DataviewProviderUserSettings = {
@@ -27,6 +30,7 @@ const defaultDataviewProviderUserSettings: DataviewProviderUserSettings = {
 	icon: "box",
 	query: "",
 	entityCreationTemplates: [],
+	shouldCreateEntitiesForAliases: false,
 };
 
 export class DataviewEntityProvider extends EntityProvider<DataviewProviderUserSettings> {
@@ -35,6 +39,7 @@ export class DataviewEntityProvider extends EntityProvider<DataviewProviderUserS
 
 	static getDescription(settings: DataviewProviderUserSettings): string {
 		return `🧠 Dataview Entity Provider (${settings.query})`;
+		// return `Dataview Entity Provider (${settings.query})`;
 	}
 
 	getDescription(): string {
@@ -95,61 +100,170 @@ export class DataviewEntityProvider extends EntityProvider<DataviewProviderUserS
 		onShouldSave: (newSettings: DataviewProviderUserSettings) => void,
 		plugin: Plugin
 	): void {
-		const queryIsOK = (query: string): 'ok' | 'error' | 'empty' | 'dv not found' => {
+		const queryIsOK = (
+			query: string
+		): "ok" | "error" | "empty" | "dv not found" => {
 			const dv: DataviewApi | undefined = getAPI(plugin.app);
 			if (!dv) {
-				return 'dv not found';
+				return "dv not found";
 			}
 			let pages;
 			try {
 				pages = dv.pages(query);
 			} catch (error) {
-				return 'error';
+				return "error";
 			}
-			return pages.length > 0 ? 'ok' : 'empty';
-		}
+			return pages.length > 0 ? "ok" : "empty";
+		};
 
 		let queryOKIcon: ExtraButtonComponent;
 		settingContainer.addExtraButton((button) => {
 			queryOKIcon = button;
-			button.setDisabled(true);			
+			button.setDisabled(true);
 		});
 
 		const updateQueryIcon = (query: string) => {
-			if (queryIsOK(query) === 'ok') {
+			if (queryIsOK(query) === "ok") {
 				queryOKIcon.setIcon("search-check");
 				queryOKIcon.setTooltip("Dataview Source OK");
-				queryOKIcon.extraSettingsEl.style.color = '';
-			} else if (queryIsOK(query) === 'empty') {
+				queryOKIcon.extraSettingsEl.style.color = "";
+			} else if (queryIsOK(query) === "empty") {
 				queryOKIcon.setIcon("search-x");
 				queryOKIcon.setTooltip("Dataview Source Valid but Empty");
-				queryOKIcon.extraSettingsEl.style.color = 'var(--text-warning)';
-			} else if (queryIsOK(query) === 'error') {
+				queryOKIcon.extraSettingsEl.style.color = "var(--text-warning)";
+			} else if (queryIsOK(query) === "error") {
 				queryOKIcon.setIcon("alert-triangle");
 				queryOKIcon.setTooltip("Dataview Source Error");
-				queryOKIcon.extraSettingsEl.style.color = 'var(--text-error)';
-			} else if (queryIsOK(query) === 'dv not found') {
+				queryOKIcon.extraSettingsEl.style.color = "var(--text-error)";
+			} else if (queryIsOK(query) === "dv not found") {
 				queryOKIcon.setIcon("package-x");
 				queryOKIcon.setTooltip("Dataview Plugin Not Found!");
-				queryOKIcon.extraSettingsEl.style.color = 'var(--text-error)';
+				queryOKIcon.extraSettingsEl.style.color = "var(--text-error)";
 			}
-		}
-		
+		};
+
 		updateQueryIcon(settings.query);
 
-		settingContainer.addText(text => {
-			text.setPlaceholder('Dataview Source').setValue(settings.query);
+		settingContainer.addText((text) => {
+			text.setPlaceholder("Dataview Source").setValue(settings.query);
 			text.onChange((value) => {
 				updateQueryIcon(value);
-				if (['ok', 'empty'].includes(queryIsOK(value))) {
+				if (["ok", "empty"].includes(queryIsOK(value))) {
 					settings.query = value;
 					onShouldSave(settings);
 				}
-			});			
+			});
 
-			new DataviewSourceSuggest(plugin.app, text.inputEl);			
+			new DataviewSourceSuggest(plugin.app, text.inputEl, {
+				shouldCloseIfNoSuggestions: true,
+			});
 		});
+	}
 
+	static buildSimpleSettings?(
+		settingContainer: HTMLElement,
+		settings: DataviewProviderUserSettings,
+		onShouldSave: (newSettings: DataviewProviderUserSettings) => void,
+		plugin: Plugin
+	): void {
+		new Setting(settingContainer)
+			.setName("Dataview Provider Settings")
+			.setDesc(
+				"Settings for Provider which retrieves notes based on a Dataview source query"
+			)
+			.setHeading();
+
+		new Setting(settingContainer)
+			.setName("Icon")
+			.setDesc("Icon for the entities returned by this provider")
+			.addButton((button) =>
+				button
+					.setIcon(settings.icon ?? "box-select")
+					.setDisabled(false)
+					.onClick(() => {
+						const iconPickerModal = new IconPickerModal(plugin.app);
+						iconPickerModal.open();
+						iconPickerModal.getInput().then((iconName) => {
+							settings.icon = iconName;
+							onShouldSave(settings);
+							button.setIcon(iconName);
+						});
+					})
+			);
+
+		const dvQuerySetting = new Setting(settingContainer)
+			.setName("Dataview Source")
+			.setDesc("The dataview source query to use as a provider");
+		this.buildSummarySetting(
+			dvQuerySetting,
+			settings,
+			onShouldSave,
+			plugin
+		);
+
+		new Setting(settingContainer)
+			.setName("Create Entities for Aliases")
+			.setDesc(
+				"Whether to also create Entities for each alias specified for a Note in the folder"
+			)
+			.addToggle((toggle) => {
+				toggle.setValue(
+					settings.shouldCreateEntitiesForAliases ?? false
+				);
+				toggle.onChange((value) => {
+					settings.shouldCreateEntitiesForAliases = value;
+					onShouldSave(settings);
+				});
+			});
+
+		const entityTemplateStatusFromSetting = (
+			entityCreationTemplates: entityFromTemplateSettings[]
+		) => {
+			if (entityCreationTemplates.length === 0) {
+				return "Set Template";
+			} else if (
+				entityCreationTemplates.length === 1 &&
+				entityCreationTemplates[0].engine !== "disabled"
+			) {
+				return "1 template";
+			} else if (
+				entityCreationTemplates.length === 1 &&
+				entityCreationTemplates[0].engine === "disabled"
+			) {
+				return "Set Template";
+			} else {
+				return `${entityCreationTemplates.length} templates`;
+			}
+		};
+		const newEntityFromTemplatesSetting = new Setting(settingContainer)
+			.setName("New Entity From Templates")
+			.setDesc(
+				"Create entity which uses the template for a new file with the query as the file name."
+			);
+		newEntityFromTemplatesSetting.addButton((button) =>
+			button
+				.setButtonText(
+					entityTemplateStatusFromSetting(
+						settings.entityCreationTemplates ?? []
+					)
+				)
+				.onClick(async () => {
+					// Open a modal or another UI component to input template details
+					// For simplicity, assuming a modal is used and returns an object with template details
+					const initialSettings =
+						settings.entityCreationTemplates ?? [];
+					const templateDetails = await openTemplateDetailsModal(
+						initialSettings[0]
+					);
+					if (templateDetails) {
+						settings.entityCreationTemplates = [templateDetails];
+						button.setButtonText(
+							entityTemplateStatusFromSetting([templateDetails])
+						);
+						onShouldSave(settings);
+					}
+				})
+		);
 	}
 
 	static getDataviewApiWithRetry = (
@@ -180,32 +294,40 @@ export class DataviewEntityProvider extends EntityProvider<DataviewProviderUserS
 
 export class DataviewSourceSuggest extends TextInputSuggest<string> {
 	getSuggestions(inputStr: string): string[] {
-		const abstractFiles = this.app.vault.getAllLoadedFiles();
-		const folders: TFolder[] = [];
+		const abstractFiles = this.app.vault.getAllLoadedFiles();		
 		const lowerCaseInputStr = inputStr.toLowerCase();
 
-		const allTags: Set<string> = new Set();
+		const suggestions: Set<string> = new Set();
+
+		// Extract the relevant part of the query
+		const tagMatch = lowerCaseInputStr.match(/#\S*$/);
+		const folderMatch = lowerCaseInputStr.match(/"\S*$/);
+		const searchStr = tagMatch
+			? tagMatch[0]
+			: folderMatch
+			? folderMatch[0].slice(1)
+			: lowerCaseInputStr;
 
 		abstractFiles.forEach((fileOrFolder: TAbstractFile) => {
 			if (
 				fileOrFolder instanceof TFolder &&
-				fileOrFolder.path.toLowerCase().contains(lowerCaseInputStr)
+				fileOrFolder.path.toLowerCase().contains(searchStr)
 			) {
-				folders.push(fileOrFolder);
+				suggestions.add(fileOrFolder.path);
 			} else if (fileOrFolder instanceof TFile) {
 				const metadata =
 					this.app.metadataCache.getFileCache(fileOrFolder);
 				if (metadata) {
 					getAllTags(metadata)?.forEach((tag) => {
-						if (tag.toLowerCase().contains(lowerCaseInputStr)) {
-							allTags.add(tag);
+						if (tag.toLowerCase().contains(searchStr)) {
+							suggestions.add(tag);
 						}
 					});
 				}
 			}
 		});
 
-		return Array.from(allTags);
+		return Array.from(suggestions);
 	}
 
 	renderSuggestion(query: string, el: HTMLElement): void {
@@ -213,7 +335,23 @@ export class DataviewSourceSuggest extends TextInputSuggest<string> {
 	}
 
 	selectSuggestion(query: string): void {
-		this.inputEl.value = query;
+		const inputStr = this.inputEl.value;
+		const tagMatch = inputStr.match(/#\S*$/);
+		const folderMatch = inputStr.match(/"\S*$/);
+		const searchStr = tagMatch
+			? tagMatch[0]
+			: folderMatch
+			? folderMatch[0].slice(1)
+			: inputStr;
+
+		const replaceStr = tagMatch
+			? query
+			: folderMatch
+			? query + '"'
+			: inputStr;
+
+		// Replace only the current search term
+		this.inputEl.value = inputStr.replace(searchStr, replaceStr);
 		this.inputEl.trigger("input");
 		this.close();
 	}

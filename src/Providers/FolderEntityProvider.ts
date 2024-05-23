@@ -127,7 +127,7 @@ export class FolderEntityProvider extends EntityProvider<FolderProviderUserSetti
 				}
 			});
 
-			new FolderSuggest(plugin.app, text.inputEl, "entities-settings");
+			new FolderSuggest(plugin.app, text.inputEl, {additionalClasses:"entities-settings"});
 		});
 	}
 
