@@ -3,16 +3,13 @@ import {
 	PluginSettingTab,
 	Setting,
 	App,
-	DropdownComponent,
-	TextComponent,
+	Modal,
 	Notice,
 } from "obsidian";
 import Entities from "./main";
-import {
-	openTemplateDetailsModal,
-	IconPickerModal,
-} from "./userComponents";
+import { IconPickerModal } from "./userComponents";
 import { EntityProviderUserSettings } from "./Providers/EntityProvider";
+import { RegisterableEntityProvider } from "./Providers/ProviderRegistry";
 
 let saveTimeout: NodeJS.Timeout | undefined;
 
@@ -20,21 +17,28 @@ function updateProviderAtIndexAndSaveAndReload(
 	settingsTab: EntitiesSettingTab,
 	providerConfig: EntityProviderUserSettings,
 	index: number,
-	shouldWaitToSave = true
+	shouldWaitToSave = true,
+	shouldRefreshUI = true
 ) {
 	if (saveTimeout !== undefined) {
 		clearTimeout(saveTimeout);
 	}
 
-	saveTimeout = setTimeout(() => {
-		settingsTab.plugin.settings.providerSettings[index] = providerConfig;
-		settingsTab.plugin.saveSettings().then(() => {
-			settingsTab.plugin.loadEntityProviders(); // Reload providers after setting change
-			new Notice("✅ Entities Settings Providers Updated");
-		});
-		saveTimeout = undefined;
-		settingsTab.display();
-	}, shouldWaitToSave ? 1000 : 0);
+	saveTimeout = setTimeout(
+		() => {
+			settingsTab.plugin.settings.providerSettings[index] =
+				providerConfig;
+			settingsTab.plugin.saveSettings().then(() => {
+				settingsTab.plugin.loadEntityProviders(); // Reload providers after setting change
+				new Notice("✅ Entities Settings Providers Updated");
+			});
+			saveTimeout = undefined;
+			if (shouldRefreshUI) {
+				settingsTab.display();
+			}
+		},
+		shouldWaitToSave ? 1000 : 0
+	);
 }
 
 export class EntitiesSettingTab extends PluginSettingTab {
@@ -47,200 +51,7 @@ export class EntitiesSettingTab extends PluginSettingTab {
 
 	display(): void {
 		const { containerEl } = this;
-		// let dropDownEl: DropdownComponent;
-		// let textEl: TextComponent;
-
 		containerEl.empty();
-		console.log("running display and getting icons");
-
-		// // Add provider UI
-		// new Setting(containerEl)
-		// 	.setName("Add Provider")
-		// 	.setDesc("Type and add a new entity provider")
-		// 	.addDropdown((dropdown) => {
-		// 		dropdown.addOption("folder", "Folder");
-		// 		dropdown.addOption("dataview", "Dataview");
-		// 		dropdown.addOption("noteFromTemplate", "Note from Template");
-		// 		dropdown.addOption("insertTemplate", "Insert Template");
-		// 		dropDownEl = dropdown;
-		// 	})
-		// 	.addText((text) => {
-		// 		textEl = text;
-		// 		text.setPlaceholder("Path or Query");
-		// 		new FolderSuggest(this.app, text.inputEl);
-		// 	})
-		// 	.addButton((button) =>
-		// 		button.setButtonText("+").onClick(() => {
-		// 			const type = (dropDownEl as DropdownComponent).getValue();
-		// 			const value = textEl.getValue();
-		// 			let settings;
-		// 			if (
-		// 				[
-		// 					"folder",
-		// 					"noteFromTemplate",
-		// 					"insertTemplate",
-		// 				].includes(type)
-		// 			) {
-		// 				settings = { path: value };
-		// 			} else if (type === "dataview") {
-		// 				settings = { query: value };
-		// 			}
-		// 			if (!settings) {
-		// 				console.error("Invalid settings");
-		// 				return;
-		// 			}
-		// 			const newProvider = {
-		// 				type,
-		// 				settings: settings,
-		// 			} as ProviderConfiguration;
-		// 			this.plugin.settings.providers.push(newProvider);
-		// 			this.plugin.saveSettings();
-		// 			this.plugin.loadEntityProviders(); // Reload providers after adding
-		// 			this.display(); // Refresh the settings UI
-		// 		})
-		// 	);
-
-		// // Providers configuration UI
-		// this.plugin.settings.providers.forEach((providerConfig, index) => {
-		// 	const setting = new Setting(containerEl)
-		// 		.setName(
-		// 			`${
-		// 				providerConfig.type === "folder"
-		// 					? "Folder"
-		// 					: providerConfig.type === "dataview"
-		// 					? "Dataview (Query)"
-		// 					: providerConfig.type === "noteFromTemplate"
-		// 					? "Note from Template"
-		// 					: "Insert Template"
-		// 			} Provider`
-		// 		)
-		// 		.setDesc(`Provider #${index + 1}`)
-		// 		.addButton((button) =>
-		// 			button
-		// 				.setIcon(providerConfig.settings.icon ?? "box-select")
-		// 				.onClick(() => {
-		// 					const iconPickerModal = new IconPickerModal(
-		// 						this.app
-		// 					);
-		// 					iconPickerModal.open();
-		// 					iconPickerModal.getInput().then((iconName) => {
-		// 						if (iconName) {
-		// 							providerConfig.settings.icon = iconName;
-		// 							updateProviderAtIndexAndSaveAndReload(
-		// 								this.plugin,
-		// 								providerConfig,
-		// 								index
-		// 							);
-		// 							this.display(); // Refresh the settings UI
-		// 						}
-		// 					});
-		// 				})
-		// 		)
-		// 		.addText((text) => {
-		// 			text.setValue(
-		// 				providerConfig.type === "dataview"
-		// 					? (
-		// 							providerConfig.settings as DataviewProviderSettings
-		// 					  ).query
-		// 					: (
-		// 							providerConfig.settings as
-		// 								| FolderProviderConfig
-		// 								| TemplateProviderSettings
-		// 					  ).path
-		// 			);
-		// 			text.setPlaceholder("Path or Query");
-		// 			text.onChange((value) => {
-		// 				if (providerConfig.type === "folder") {
-		// 					providerConfig.settings.path = value;
-		// 				} else if (providerConfig.type === "dataview") {
-		// 					providerConfig.settings.query = value;
-		// 				} else if (
-		// 					providerConfig.type === "noteFromTemplate" ||
-		// 					providerConfig.type === "insertTemplate"
-		// 				) {
-		// 					providerConfig.settings.path = value;
-		// 				}
-		// 				updateProviderAtIndexAndSaveAndReload(
-		// 					this.plugin,
-		// 					providerConfig,
-		// 					index
-		// 				);
-		// 			});
-		// 			if (
-		// 				providerConfig.type === "folder" ||
-		// 				providerConfig.type === "noteFromTemplate" ||
-		// 				providerConfig.type === "insertTemplate"
-		// 			) {
-		// 				new FolderSuggest(this.app, text.inputEl);
-		// 			}
-		// 		})
-		// 		.addButton((button) =>
-		// 			button
-		// 				.setIcon("file-plus")
-		// 				.setDisabled(
-		// 					providerConfig.type !== "dataview" &&
-		// 						providerConfig.type !== "folder"
-		// 				)
-		// 				.onClick(async () => {
-		// 					// Open a modal or another UI component to input template details
-		// 					// For simplicity, assuming a modal is used and returns an object with template details
-		// 					const initialSettings =
-		// 						(
-		// 							providerConfig.settings as ProviderTemplateCreationSettings
-		// 						).newEntityFromTemplates ?? [];
-		// 					const templateDetails =
-		// 						await openTemplateDetailsModal(
-		// 							initialSettings[0]
-		// 						);
-		// 					if (templateDetails) {
-		// 						// Assuming `settings` is the current settings object for the provider
-		// 						(
-		// 							providerConfig.settings as ProviderTemplateCreationSettings
-		// 						).newEntityFromTemplates = [templateDetails];
-		// 						// Save settings and refresh UI
-		// 						updateProviderAtIndexAndSaveAndReload(
-		// 							this.plugin,
-		// 							providerConfig,
-		// 							index
-		// 						);
-		// 						this.display(); // Refresh the settings UI
-		// 					}
-		// 				})
-		// 		)
-		// 		.addButton((button) =>
-		// 			button
-		// 				.setIcon("settings")
-		// 				.onClick(() => {
-		// 					if (providerConfig.type === "folder") {
-		// 						const modal = new ProviderSettingsModal(
-		// 							this.app,
-		// 							providerConfig.settings,
-		// 							FolderEntityProvider.getProviderSettingsContent
-		// 						);
-		// 						modal.open();
-		// 					}
-		// 				})
-		// 		)
-		// 		.addButton((button) =>
-		// 			button.setIcon("trash").onClick(async () => {
-		// 				this.plugin.settings.providers.splice(index, 1);
-		// 				await this.plugin.saveSettings();
-		// 				this.plugin.loadEntityProviders(); // Reload providers after removal
-		// 				this.display(); // Refresh the settings UI
-		// 			})
-		// 		);
-		// });
-
-		// Add button to manually reload providers
-		// new Setting(containerEl)
-		// 	.setName("Reload Providers")
-		// 	.setDesc("Manually reload all entity providers")
-		// 	.addButton((button) => {
-		// 		button.setButtonText("Reload").onClick(() => {
-		// 			console.log("Reloading entity providers...");
-		// 			this.plugin.loadEntityProviders();
-		// 		});
-		// 	});
 
 		new Setting(containerEl)
 			.setName("Entity Providers")
@@ -277,11 +88,31 @@ export class EntitiesSettingTab extends PluginSettingTab {
 					return;
 				}
 				const settingContainer = new Setting(containerEl);
+				// const providerIcon = settingContainer.settingEl.createEl('div', { cls: 'setting-item-provider-icon' });
+				// settingContainer.settingEl.prepend(providerIcon);
+				// if (providerSettings.providerTypeID === "dataview") {
+				// 	setIcon(providerIcon, "search-code");
+				// } else if (providerSettings.providerTypeID === "folder") {
+				// 	setIcon(providerIcon, "folder");
+				// } else if (providerSettings.providerTypeID === "noteFromTemplate") {
+				// 	setIcon(providerIcon, "note-template");
+				// } else if (providerSettings.providerTypeID === "insertTemplate") {
+				// 	setIcon(providerIcon, "note-template");
+				// } else if (providerSettings.providerTypeID === "nlDates") {
+				// 	setIcon(providerIcon, "calendar");
+				// } else {
+				// 	setIcon(providerIcon, "package");
+				// }
 
 				settingContainer
 					.setName(`Provider #${index + 1}`)
-					.setDesc(`${providerType.getDescription(providerSettings)}`)
-					// .addExtraButton(button => button.setIcon('folder').setDisabled(false))
+					.setDesc(
+						`${providerType.getDescription(providerSettings)}`
+					);
+
+				// .setName(
+				// 	`${providerType.getDescription(providerSettings)}`
+				// );
 
 				providerType.buildSummarySetting(
 					settingContainer,
@@ -291,35 +122,69 @@ export class EntitiesSettingTab extends PluginSettingTab {
 						updateProviderAtIndexAndSaveAndReload(
 							this,
 							providerSettings,
-							index
+							index,
+							true,
+							false
 						);
 					},
 					this.plugin
 				);
 				settingContainer
 					.addButton((button) =>
-					button
-						.setIcon(providerSettings.icon ?? "box-select")
-						.setDisabled(false)
-						.onClick(() => {
-							const iconPickerModal = new IconPickerModal(
-								this.app
-							);
-							iconPickerModal.open();
-							iconPickerModal.getInput().then((iconName) => {
-								if (iconName) {
-									providerSettings.icon = iconName;
+						button
+							.setIcon(providerSettings.icon ?? "box-select")
+							.setDisabled(false)
+							.onClick(() => {
+								const iconPickerModal = new IconPickerModal(
+									this.app
+								);
+								iconPickerModal.open();
+								iconPickerModal.getInput().then((iconName) => {
+									if (iconName) {
+										providerSettings.icon = iconName;
+										updateProviderAtIndexAndSaveAndReload(
+											this,
+											providerSettings,
+											index,
+											false
+										);
+									}
+								});
+							})
+					)
+					.addButton((button) =>
+						button.setIcon("settings").onClick(() => {
+							console.log("Settings Button Clicked");
+							const providerType = this.plugin.providerRegistry
+								.getProviderClasses()
+								.get(providerSettings.providerTypeID);
+							if (!providerType) {
+								new Notice(
+									`Provider type "${providerSettings.providerTypeID}" not found.`
+								);
+								return;
+							}
+							const modal = new ProviderSettingsModal(
+								this.app,
+								providerType,
+								providerSettings,
+								this.plugin,
+								(newSettings) => {
+									providerSettings = newSettings;
 									updateProviderAtIndexAndSaveAndReload(
 										this,
 										providerSettings,
 										index,
-										false
+										true,
+										true
 									);
+								},
+								() => {
+									this.display();
 								}
-							});
-						}))	
-					.addButton((button) =>
-						button.setIcon("settings").onClick(() => {})
+							);
+							modal.open();
+						})
 					)
 					.addButton((button) =>
 						button.setIcon("trash").onClick(() => {})
@@ -347,5 +212,82 @@ export class EntitiesSettingTab extends PluginSettingTab {
 					this.plugin.loadEntityProviders();
 				});
 			});
+	}
+}
+
+export class ProviderSettingsModal extends Modal {
+	private provider: RegisterableEntityProvider;
+	private providerSettings: EntityProviderUserSettings;
+	private plugin: Entities;
+	private saveCallback: (newSettings: EntityProviderUserSettings) => void;
+	private closeCallback?: () => void;
+	private advancedSettingsOpen = false;
+
+	constructor(
+		app: App,
+		provider: RegisterableEntityProvider,
+		providerSettings: EntityProviderUserSettings,
+		plugin: Entities,
+		saveCallback: (newSettings: EntityProviderUserSettings) => void,
+		closeCallback?: () => void
+	) {
+		super(app);
+		this.provider = provider;
+		this.providerSettings = providerSettings;
+		this.plugin = plugin;
+		this.saveCallback = saveCallback;
+	}
+
+	onOpen() {
+		this.display();
+	}
+
+	onClose() {
+		this.closeCallback?.();
+	}
+
+	display() {
+		const { contentEl } = this;
+		contentEl.empty();
+		contentEl.parentElement?.toggleClass("entities-wide-modal", true);
+
+		this.provider.buildSimpleSettings?.(
+			contentEl,
+			this.providerSettings,
+			(newSettings) => {
+				console.log("Saving new settings", newSettings);
+				this.saveCallback(newSettings);
+			},
+			this.plugin
+		);
+
+		new Setting(contentEl)
+			.setHeading()
+			.setName("Advanced Settings")
+			.setDesc(
+				"Settings that are more advanced and may require more care"
+			)
+			.addButton((button) => {
+				if (this.advancedSettingsOpen) {
+					button.setButtonText("Hide");
+				} else {
+					button.setButtonText("Show");
+				}
+				button.onClick(() => {
+					this.advancedSettingsOpen = !this.advancedSettingsOpen;
+					this.display();
+				});
+			});
+
+		if (this.advancedSettingsOpen) {
+			this.provider.buildAdvancedSettings?.(
+				contentEl,
+				this.providerSettings,
+				(newSettings) => {
+					console.log("Saving new settings", newSettings);
+				},
+				this.plugin
+			);
+		}
 	}
 }
