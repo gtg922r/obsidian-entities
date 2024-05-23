@@ -153,5 +153,16 @@ body {
 /**********************/
 .modal.entities-wide-modal {
 	--dialog-width: 650px;
+	padding-left: var(--size-4-8);
+	padding-right: var(--size-4-8);
+	padding-top: var(--size-4-8);
+	padding-bottom: var(--size-4-16);
+}
+
+.setting-item-label {
+    color: var(--text-muted);
+    font-size: var(--font-ui-smaller);
+    padding-top: var(--size-4-1);
+    line-height: var(--line-height-tight);
 }
 
