@@ -1,4 +1,28 @@
 import { App, Plugin, TFile } from "obsidian";
+import { EntityProviderUserSettings } from "./Providers/EntityProvider";
+
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type DerivedFrom<T, Arguments extends unknown[] = any[]> = {
+	new (...args: Arguments): T;
+};
+type PropertyKeys<T> = {
+	// eslint-disable-next-line @typescript-eslint/no-explicit-any
+	[K in keyof T]: T[K] extends (...args: any[]) => any ? never : K;
+  }[keyof T];
+type MethodKeys<T> = {
+	// eslint-disable-next-line @typescript-eslint/no-explicit-any
+	[K in keyof T]: T[K] extends (...args: any[]) => any ? K : never;
+}[keyof T];
+type Members<T> = Pick<T, PropertyKeys<T> | MethodKeys<T>>;
+
+// DerivedClass type combining Methods and DerivedFrom
+export type DerivedClassWithConstructorArgs<
+	// eslint-disable-next-line @typescript-eslint/no-explicit-any
+	T extends abstract new (...args: any) => any,
+	// eslint-disable-next-line @typescript-eslint/no-explicit-any
+	Arguments extends unknown[] = any[]
+> = Members<T> & DerivedFrom<InstanceType<T>, Arguments>;
 
 export type entityFromTemplateSettings = {
 	engine: "disabled" | "core" | "templater";
@@ -6,49 +30,14 @@ export type entityFromTemplateSettings = {
 	entityName: string;
 };
 
-export type ProviderConfiguration = (
-	| {
-			type: "folder";
-			settings: FolderProviderSettings;
-      }
-	| {
-			type: "dataview";
-			settings: DataviewProviderSettings;
-      }
-	| {
-			type: "noteFromTemplate";
-			settings: TemplateProviderSettings;
-		}
-	| {
-			type: "insertTemplate";
-			settings: TemplateProviderSettings;
-      }
-);
-
+ 
 export interface ProviderTemplateCreationSettings {
 	newEntityFromTemplates?: entityFromTemplateSettings[];
 } 
 
-export interface CommonProviderSettings {
-	icon?: string;
-}
-
-export interface FolderProviderSettings extends ProviderTemplateCreationSettings, CommonProviderSettings {
-	path: string;
-}
-
-export interface DataviewProviderSettings extends ProviderTemplateCreationSettings, CommonProviderSettings {
-	query: string;
-}
-
-export interface TemplateProviderSettings extends CommonProviderSettings {
-	path: string;
-}
-
 export interface EntitiesSettings {
-	providers: ProviderConfiguration[];
+	providerSettings: EntityProviderUserSettings[];
 }
-
 export interface TemplaterPlugin {
 	templater?: {
 		create_new_note_from_template?: (
@@ -64,7 +53,7 @@ export interface TemplaterPlugin {
 }
 
 export const DEFAULT_SETTINGS: EntitiesSettings = {
-	providers: [],
+	providerSettings: [],
 };
 
 export interface AppWithPlugins extends App {

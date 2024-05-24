@@ -10,6 +10,23 @@ import {
 import { entityFromTemplateSettings } from "./entities.types";
 import { FileSuggest } from "./ui/file-suggest";
 
+
+import { Notice, setIcon } from "obsidian";
+
+export class EntitiesNotice extends Notice {
+	constructor(message: string, icon: string, duration?: number) {
+		super("", duration);
+		this.noticeEl.addClass("entities-notice");
+		const noticeIconEl = this.noticeEl.createSpan({
+			cls: "entities-notice-icon",
+		});
+		setIcon(noticeIconEl, icon);
+		this.noticeEl
+			.createSpan({ cls: "entities-notice-text" })
+			.setText(message);
+	}
+}
+
 export interface EntitiesModalInputOptions {
 	placeholder?: string;
 	instructions?: {
@@ -137,7 +154,7 @@ export class TemplateDetailsModal extends Modal {
 				dropdown
 					.addOptions({
 						disabled: "Disabled",
-						// core: "Core", // Needs to be implemented 
+						// core: "Core", // Needs to be implemented
 						templater: "Templater",
 					})
 					.setValue(this.initialSettings?.engine || "disabled")
@@ -159,7 +176,7 @@ export class TemplateDetailsModal extends Modal {
 				templatePathInput = text;
 				text.setDisabled(engineDropdown.getValue() === "disabled");
 				new FileSuggest(this.app, text.inputEl);
-			});			
+			});
 
 		// Entity Name Input Setting
 		new Setting(contentEl)
@@ -178,7 +195,10 @@ export class TemplateDetailsModal extends Modal {
 			.addButton((button) =>
 				button.setButtonText("Save").onClick(() => {
 					const templateDetails: entityFromTemplateSettings = {
-						engine: engineDropdown.getValue() as "disabled" | "core" | "templater",
+						engine: engineDropdown.getValue() as
+							| "disabled"
+							| "core"
+							| "templater",
 						templatePath: templatePathInput.getValue(),
 						entityName: entityNameInput.getValue(),
 					};
@@ -203,43 +223,47 @@ export class TemplateDetailsModal extends Modal {
 }
 
 export class IconPickerModal extends Modal {
-    private resolve: (value: string | PromiseLike<string>) => void;
-    private icons: string[];
-    private filteredIcons: string[];
-    private gridContainer: HTMLElement; // Add a property to hold the reference
-    private promise?: Promise<string>; // Make the promise property optional
+	private resolve: (value: string | PromiseLike<string>) => void;
+	private icons: string[];
+	private filteredIcons: string[];
+	private gridContainer: HTMLElement; // Add a property to hold the reference
+	private promise?: Promise<string>; // Make the promise property optional
 
-    constructor(app: App) {
-        super(app);
-        this.icons = getIconIds().map(iconId => iconId.replace(/^lucide-/, ''));
-        this.filteredIcons = this.icons;
-    }
+	constructor(app: App) {
+		super(app);
+		this.icons = getIconIds().map((iconId) =>
+			iconId.replace(/^lucide-/, "")
+		);
+		this.filteredIcons = this.icons;
+	}
 
-    onOpen() {
-        const { modalEl } = this;
-        modalEl.empty();
+	onOpen() {
+		const { modalEl } = this;
+		modalEl.empty();
 		modalEl.removeClass("modal-content");
-		modalEl.addClass("prompt")
+		modalEl.addClass("prompt");
 
 		const inputContainer = modalEl.createDiv({
 			cls: "prompt-input-container",
 		});
 
-        // Search box
-        const searchBox = inputContainer.createEl("input", {
+		// Search box
+		const searchBox = inputContainer.createEl("input", {
 			cls: "prompt-input",
 			attr: {
 				enterkeyhint: "done",
 				type: "text",
 				placeholder: "Search icons...",
 			},
-        });
-        searchBox.addEventListener("input", () => this.filterIcons(searchBox.value));
+		});
+		searchBox.addEventListener("input", () =>
+			this.filterIcons(searchBox.value)
+		);
 
 		// Display results in a grid
 		const promptResults = modalEl.createDiv({ cls: "prompt-results" });
-        this.gridContainer = promptResults.createDiv({ cls: "icon-grid" }); // Store the reference
-        this.displayIcons(this.gridContainer); // Use the reference
+		this.gridContainer = promptResults.createDiv({ cls: "icon-grid" }); // Store the reference
+		this.displayIcons(this.gridContainer); // Use the reference
 
 		// Show instructions
 		const instructions = modalEl.createDiv({ cls: "prompt-instructions" });
@@ -262,45 +286,45 @@ export class IconPickerModal extends Modal {
 			cls: "prompt-instruction-command",
 			text: "esc",
 		});
-		dismissInstruction.appendText("to dismiss");		
+		dismissInstruction.appendText("to dismiss");
 
-        // Promise to return selected icon
-        this.promise = new Promise<string>((resolve) => {
-            this.resolve = resolve;
-        });
-    }
+		// Promise to return selected icon
+		this.promise = new Promise<string>((resolve) => {
+			this.resolve = resolve;
+		});
+	}
 
-    private filterIcons(query: string) {
-        if (!query) {
-            this.filteredIcons = this.icons;
-        } else {
-            this.filteredIcons = this.icons.filter((icon) =>
-                icon.toLowerCase().includes(query.toLowerCase())
-            );
-        }
-        this.displayIcons(this.gridContainer); // Use the reference
-    }
+	private filterIcons(query: string) {
+		if (!query) {
+			this.filteredIcons = this.icons;
+		} else {
+			this.filteredIcons = this.icons.filter((icon) =>
+				icon.toLowerCase().includes(query.toLowerCase())
+			);
+		}
+		this.displayIcons(this.gridContainer); // Use the reference
+	}
 
-    private displayIcons(container: HTMLElement) {
-        container.empty();
-        this.filteredIcons.forEach((iconName) => {
-            const iconEl = container.createEl("div", { cls: "icon-item" });
-            const iconSVG = getIcon(iconName); // Get the SVG element for the icon
-            if (iconSVG instanceof SVGSVGElement) {
-                iconSVG.addClass("icon-svg"); // Add a class for styling if needed
-                iconEl.appendChild(iconSVG); // Append the SVG to the icon element
-            }
+	private displayIcons(container: HTMLElement) {
+		container.empty();
+		this.filteredIcons.forEach((iconName) => {
+			const iconEl = container.createEl("div", { cls: "icon-item" });
+			const iconSVG = getIcon(iconName); // Get the SVG element for the icon
+			if (iconSVG instanceof SVGSVGElement) {
+				iconSVG.addClass("icon-svg"); // Add a class for styling if needed
+				iconEl.appendChild(iconSVG); // Append the SVG to the icon element
+			}
 			iconEl.setAttribute("title", iconName); // Set the title attribute for tooltip
-            // const iconLabel = iconEl.createEl("span", { cls: "icon-name" });
-            // iconLabel.setText(iconName); // Set the text label for the icon (optional, uncomment if you want labels)
-            iconEl.addEventListener("click", () => {
-                this.resolve(iconName);
-                this.close();
-            });
-        });
-    }
+			// const iconLabel = iconEl.createEl("span", { cls: "icon-name" });
+			// iconLabel.setText(iconName); // Set the text label for the icon (optional, uncomment if you want labels)
+			iconEl.addEventListener("click", () => {
+				this.resolve(iconName);
+				this.close();
+			});
+		});
+	}
 
-    getInput(): Promise<string> {
-        return this.promise ?? Promise.resolve("");
-    }
+	getInput(): Promise<string> {
+		return this.promise ?? Promise.resolve("");
+	}
 }

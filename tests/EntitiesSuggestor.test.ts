@@ -1,18 +1,25 @@
 import { App, Editor, EditorSuggestContext, TFile } from "obsidian";
 import Entities from "../src/main";
-import { EntitiesSuggestor, EntityProvider } from "../src/EntitiesSuggestor";
+import { EntitiesSuggestor, EntitySuggestionItem } from "../src/EntitiesSuggestor";
+import { EntityProvider, EntityProviderUserSettings } from "../src/Providers/EntityProvider";
+import ProviderRegistry from "src/Providers/ProviderRegistry";
 
 // Mocking the necessary Obsidian interfaces and classes inline
 jest.mock("obsidian", () => {
-	return {
-		EditorSuggest: class {},
-		Plugin: class {
-			app: jest.MockedObject<App>;
-			constructor(app: App) {
-				this.app = app;
-			}
-		},
-	};
+    return {
+        EditorSuggest: class {},
+        Plugin: class {
+            app: jest.MockedObject<App>;
+            constructor(app: App) {
+                this.app = app;
+            }
+        },
+        prepareQuery: jest.fn().mockImplementation((query) => query), // Mock prepareQuery to return the query itself
+        fuzzySearch: jest.fn().mockImplementation((query, text) => {
+            // Simple mock implementation of fuzzySearch
+            return query === text ? { score: 100, matches: [0, query.length] } : null;
+        }),
+    };
 });
 
 // Creating a mock for the Entities plugin
@@ -24,9 +31,12 @@ describe("onTrigger tests", () => {
 	let suggestor: EntitiesSuggestor;
 	let mockEditor: jest.Mocked<Editor>;
 	let mockFile: jest.Mocked<TFile>;
+	let registry: jest.Mocked<ProviderRegistry>;
+
 
 	beforeEach(() => {
-		suggestor = new EntitiesSuggestor(mockPlugin);
+		// eslint-disable-next-line @typescript-eslint/no-explicit-any
+		suggestor = new EntitiesSuggestor(mockPlugin, registry);
 
 		// Mocking the editor instance
 		mockEditor = {
@@ -213,121 +223,100 @@ describe("onTrigger tests", () => {
 	});
 });
 
-describe("getSuggestions", () => {
-	let suggestor: EntitiesSuggestor;
-	let mockEditor: jest.Mocked<Editor>;
-	let mockFile: jest.Mocked<TFile>;
+describe("getSuggestions tests", () => {
+    let suggestor: EntitiesSuggestor;
+    let mockEditor: jest.Mocked<Editor>;
+    let mockFile: jest.Mocked<TFile>;
+    let mockEntityProvider: jest.Mocked<EntityProvider<EntityProviderUserSettings>>;
+    let mockRegistry: jest.Mocked<ProviderRegistry>;
 
-	beforeEach(() => {
-		jest.useFakeTimers();
-		suggestor = new EntitiesSuggestor(mockPlugin, [
-			new EntityProvider({
-				plugin: mockPlugin,
-				getEntityList: (query: string) => [
-					{
-						suggestionText: "Alice",
-						icon: "p",
-						noteText: "Note about Alice",
-					},
-					{
-						suggestionText: "Bob",
-						icon: "p",
-						noteText: "Note about Bob",
-					},
-					{
-						suggestionText: "Charlie",
-						icon: "p",
-						noteText: "Note about Charlie",
-					},
-				],
-			}),
-		]);
-	});
+    beforeEach(() => {
+        // Mocking the ProviderRegistry
+        mockRegistry = {
+            getProviders: jest.fn(),
+        } as unknown as jest.Mocked<ProviderRegistry>;
 
-	afterEach(() => {
-		jest.useRealTimers();
-	});
+        suggestor = new EntitiesSuggestor(mockPlugin, mockRegistry);
 
-	test("getSuggestions should return filtered suggestions based on the query", async () => {
-		const context = { query: "Al", editor: mockEditor, file: mockFile };
-		const suggestions = await suggestor.getSuggestions(
-			context as unknown as EditorSuggestContext
-		);
-		// Expectations updated to match against EntitySuggestionItem objects
-		expect(suggestions).toEqual([
-			{
-				suggestionText: "Alice",
-				icon: "p",
-				noteText: "Note about Alice",
-			},
-		]);
-	});
+        // Mocking the editor instance
+        mockEditor = {
+            getLine: jest.fn(),
+        } as unknown as jest.Mocked<Editor>;
 
-	test("getSuggestions should use the local cache if called again within 200ms", async () => {
-		const context1 = { query: "Al", editor: mockEditor, file: mockFile };
-		const context2 = { query: "Bo", editor: mockEditor, file: mockFile };
+        // Mocking the TFile instance
+        mockFile = {} as unknown as TFile;
 
-		// First call to getSuggestions
-		const suggestions1 = await suggestor.getSuggestions(
-			context1 as unknown as EditorSuggestContext
-		);
-		expect(suggestions1).toEqual([
-			{
-				suggestionText: "Alice",
-				icon: "p",
-				noteText: "Note about Alice",
-			},
-		]);
+        // Mocking EntityProvider
+        mockEntityProvider = {
+            getEntityList: jest.fn(),
+            getTemplateCreationSuggestions: jest.fn(),
+        } as unknown as jest.Mocked<EntityProvider<EntityProviderUserSettings>>;
 
-		// Advance time by less than 200ms
-		jest.advanceTimersByTime(100);
+        mockRegistry.getProviders.mockReturnValue([mockEntityProvider]);
+    });
 
-		// Second call to getSuggestions
-		const suggestions2 = await suggestor.getSuggestions(
-			context2 as unknown as EditorSuggestContext
-		);
-		expect(suggestions2).toEqual([
-			{ suggestionText: "Bob", icon: "p", noteText: "Note about Bob" },
-		]);
-	});
+    test("getSuggestions should return a list of suggestions based on the query", () => {
+        const context = {
+            query: "test",
+            editor: mockEditor,
+            file: mockFile,
+        } as unknown as EditorSuggestContext;
 
-	test("getSuggestions should update the local cache if called again after 200ms", async () => {
-		const context1 = { query: "Al", editor: mockEditor, file: mockFile };
-		const context2 = { query: "Ali", editor: mockEditor, file: mockFile };
+        const expectedSuggestions: EntitySuggestionItem[] = [
+            {
+                suggestionText: "Test suggestion",
+                match: { score: 10, matches: [] },
+            },
+        ];
 
-		// First call to getSuggestions
-		const suggestions1 = await suggestor.getSuggestions(
-			context1 as unknown as EditorSuggestContext
-		);
-		expect(suggestions1).toEqual([
-			{
-				suggestionText: "Alice",
-				icon: "p",
-				noteText: "Note about Alice",
-			},
-		]);
+        mockEntityProvider.getEntityList.mockReturnValue(expectedSuggestions);
+        mockEntityProvider.getTemplateCreationSuggestions.mockReturnValue([]);
 
-		// Advance time by more than 200ms
-		jest.advanceTimersByTime(300);
+        const result = suggestor.getSuggestions(context);
 
-		// Second call to getSuggestions
-		const suggestions2 = await suggestor.getSuggestions(
-			context2 as unknown as EditorSuggestContext
-		);
-		expect(suggestions2).toEqual([
-			{
-				suggestionText: "Alice",
-				icon: "p",
-				noteText: "Note about Alice",
-			}, // Assuming 'Ali' still matches 'Alice'
-		]);
-	});
+        expect(result).toEqual(expectedSuggestions);
+        expect(mockEntityProvider.getEntityList).toHaveBeenCalledWith("test");
+    });
 
-	test("getSuggestions should return an empty array if no suggestions match the query", async () => {
-		const context = { query: "Z", editor: mockEditor, file: mockFile };
-		const suggestions = await suggestor.getSuggestions(
-			context as unknown as EditorSuggestContext
-		);
-		expect(suggestions).toEqual([]);
-	});
+    test("getSuggestions should include template creation suggestions", () => {
+        const context = {
+            query: "note",
+            editor: mockEditor,
+            file: mockFile,
+        } as unknown as EditorSuggestContext;
+
+        const entitySuggestions: EntitySuggestionItem[] = [
+            {
+                suggestionText: "Note suggestion",
+                match: { score: 5, matches: [] },
+            },
+        ];
+
+        const templateSuggestions: EntitySuggestionItem[] = [
+            {
+                suggestionText: "New Note: note",
+                icon: "plus-circle",
+                action: jest.fn(),
+                match: { score: -10, matches: [] },
+            },
+        ];
+
+        mockEntityProvider.getEntityList.mockReturnValue(entitySuggestions);
+        mockEntityProvider.getTemplateCreationSuggestions.mockReturnValue(templateSuggestions);
+
+        const result = suggestor.getSuggestions(context);
+
+        expect(result).toContainEqual({
+            suggestionText: "Note suggestion",
+            match: { score: 5, matches: [] },
+        });
+        expect(result).toContainEqual({
+            suggestionText: "New Note: note",
+            icon: "plus-circle",
+            action: expect.any(Function),
+            match: { score: -10, matches: [] },
+        });
+        expect(mockEntityProvider.getEntityList).toHaveBeenCalledWith("note");
+        expect(mockEntityProvider.getTemplateCreationSuggestions).toHaveBeenCalledWith("note");
+    });
 });

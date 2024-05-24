@@ -22,6 +22,10 @@
 // LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
+// 
+// Additional modifications by Ryan C
+// 2024-05-21: Added `additionalClasses` parameter to constructor
+// 2024-05-23: Added `options` parameter to constructor with `shouldCloseIfNoSuggestions` option
 
 import { createPopper, type Instance as PopperInstance } from "@popperjs/core";
 import { App, type ISuggestOwner, Scope } from "obsidian";
@@ -122,6 +126,16 @@ class Suggest<T> {
   }
 }
 
+export interface TextInputSuggestOptions {
+  shouldCloseIfNoSuggestions: boolean;
+  additionalClasses: string[] | string;
+}
+
+const defaultTextInputSuggestOptions: TextInputSuggestOptions = {
+  shouldCloseIfNoSuggestions: false,
+  additionalClasses: [],
+};
+
 export abstract class TextInputSuggest<T> implements ISuggestOwner<T> {
   protected app: App;
   protected inputEl: HTMLInputElement;
@@ -130,13 +144,23 @@ export abstract class TextInputSuggest<T> implements ISuggestOwner<T> {
   private scope: Scope;
   private suggestEl: HTMLElement;
   private suggest: Suggest<T>;
+  private options: TextInputSuggestOptions;
 
-  constructor(app: App, inputEl: HTMLInputElement) {
+  constructor(
+    app: App,
+    inputEl: HTMLInputElement,
+    options?: Partial<TextInputSuggestOptions>,
+  ) {
     this.app = app;
     this.inputEl = inputEl;
+    this.options = {...defaultTextInputSuggestOptions, ...options};
     this.scope = new Scope();
 
-    this.suggestEl = createDiv("suggestion-container");
+	this.suggestEl = createDiv("suggestion-container");
+	this.suggestEl.addClass(
+		"popover",
+		...(Array.isArray(this.options.additionalClasses) ? this.options.additionalClasses : [this.options.additionalClasses])
+	);
     const suggestion = this.suggestEl.createDiv("suggestion");
     this.suggest = new Suggest(this, suggestion, this.scope);
 
@@ -158,6 +182,10 @@ export abstract class TextInputSuggest<T> implements ISuggestOwner<T> {
       this.suggest.setSuggestions(suggestions);
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       this.open((<any>this.app).dom.appContainerEl, this.inputEl);
+    } else {
+      if (this.options.shouldCloseIfNoSuggestions) {
+        this.close();
+      }
     }
   }
 
