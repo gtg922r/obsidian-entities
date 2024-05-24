@@ -1,17 +1,18 @@
 import { EntitySuggestionItem } from "src/EntitiesSuggestor";
 import { EntityProvider, EntityProviderUserSettings } from "./EntityProvider";
-import { Plugin, TFile, TFolder } from "obsidian";
-import { EntitiesModalInput } from "src/userComponents";
+import { ExtraButtonComponent, Plugin, Setting, TFile, TFolder } from "obsidian";
+import { EntitiesModalInput, IconPickerModal } from "src/userComponents";
 import {
 	createNewNoteFromTemplate,
 	insertTemplateUsingTemplater,
 } from "src/entititiesUtilities";
+import { FolderSuggest } from "src/ui/file-suggest";
 
 const templateProviderTypeID = "template";
 
 export interface TemplateProviderUserSettings extends EntityProviderUserSettings {
 	providerTypeID: string;
-	path: string | string[];
+	path: string;
 	actionType: "insert" | "create";
 }
 
@@ -77,8 +78,97 @@ export class TemplateEntityProvider extends EntityProvider<TemplateProviderUserS
         }));
     }
 
-	static buildSummarySetting(settings: TemplateProviderUserSettings, onShouldSave: (newSettings: TemplateProviderUserSettings) => void): void {
-		console.log("TemplateEntityProvider.buildSummarySetting called");
+	static buildSummarySetting(
+		settingContainer: Setting,
+		settings: TemplateProviderUserSettings,
+		onShouldSave: (newSettings: TemplateProviderUserSettings) => void,
+		plugin: Plugin
+	): void {
+		const folderExists = (folderPath: string) =>
+			plugin.app.vault.getFolderByPath(folderPath) !== null;
+		let folderExistsIcon: ExtraButtonComponent;
+		const updateFolderExistsIcon = (path: string) => {
+			if (folderExists(path) && folderExistsIcon) {
+				folderExistsIcon.setIcon("folder-check");
+				folderExistsIcon.setTooltip("Folder Found");
+				folderExistsIcon.extraSettingsEl.style.color = "";
+			} else if (folderExistsIcon) {
+				folderExistsIcon.setIcon("folder-x");
+				folderExistsIcon.setTooltip("Folder Not Found");
+				folderExistsIcon.extraSettingsEl.style.color =
+					"var(--text-error)";
+			}
+		};
+		settingContainer.addExtraButton((button) => {
+			folderExistsIcon = button;
+			updateFolderExistsIcon(settings.path);
+			button.setDisabled(true);
+		});
+
+		settingContainer.addText((text) => {
+			text.setPlaceholder("Folder Path").setValue(settings.path);
+			text.onChange((value) => {
+				if (folderExists(value)) {
+					updateFolderExistsIcon(value);
+					settings.path = value;
+					onShouldSave(settings);
+				} else {
+					updateFolderExistsIcon(value);
+				}
+			});
+
+			new FolderSuggest(plugin.app, text.inputEl, {additionalClasses:"entities-settings"});
+		});		
+		
+	}
+
+	static buildSimpleSettings?(
+		settingContainer: HTMLElement,
+		settings: TemplateProviderUserSettings,
+		onShouldSave: (newSettings: TemplateProviderUserSettings) => void,
+		plugin: Plugin
+	): void {
+
+		new Setting(settingContainer)
+			.setName("Icon")
+			.setDesc("Icon for the entities returned by this provider")
+			.addButton((button) =>
+				button
+					.setIcon(settings.icon ?? "box-select")
+					.setDisabled(false)
+					.onClick(() => {
+						const iconPickerModal = new IconPickerModal(plugin.app);
+						iconPickerModal.open();
+						iconPickerModal.getInput().then((iconName) => {
+							settings.icon = iconName;
+							onShouldSave(settings);
+							button.setIcon(iconName);
+						});
+					})
+			);
+			
+		new Setting(settingContainer)
+			.setName("Action Type")
+			.setDesc("Action to perform with the templates")
+			.addDropdown((dropdown) => {
+				dropdown.addOption("create", "Create a new note from template")
+				dropdown.addOption("insert", "Insert the template into the current note")
+				dropdown.onChange((value) => {
+					settings.actionType = value as "create" | "insert";
+					onShouldSave(settings);
+				});
+				dropdown.setValue(settings.actionType);
+			})
+
+		const folderPathSetting = new Setting(settingContainer)
+			.setName("Folder Path")
+			.setDesc("The path of the folder where Templates are located");
+		this.buildSummarySetting(
+			folderPathSetting,
+			settings,
+			onShouldSave,
+			plugin
+		);			
 	}
 
     private actionFunction(file: TFile): Promise<string> {

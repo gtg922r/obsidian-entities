@@ -224,7 +224,6 @@ export class EntitiesSettingTab extends PluginSettingTab {
 							button.setDisabled(true);
 						}
 						button.onClick(() => {
-							console.log("Settings Button Clicked");
 							const modal = new ProviderSettingsModal(
 								this.app,
 								providerType,
@@ -382,14 +381,5 @@ export class ProviderSettingsModal extends Modal {
 				);
 			}
 		}
-
-		// new Setting(contentEl).addButton((button) =>
-		// 	button
-		// 		.setButtonText("Close")
-		// 		.setCta()
-		// 		.onClick(() => {
-		// 			this.close();
-		// 		})
-		// );
 	}
 }

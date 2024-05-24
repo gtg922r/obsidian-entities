@@ -36,7 +36,7 @@ export default class Entities extends Plugin {
 		this.providerRegistry
 			.registerProviderType(FolderEntityProvider)
 			.registerProviderType(DataviewEntityProvider)
-			// this.providerRegistry.registerProviderType(TemplateEntityProvider)
+			.registerProviderType(TemplateEntityProvider)
 			.registerProviderType(DateEntityProvider);
 	}
 
