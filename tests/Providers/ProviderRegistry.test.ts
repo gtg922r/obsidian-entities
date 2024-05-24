@@ -38,12 +38,19 @@ class MockEntityProvider extends EntityProvider<MockEntityProviderUserSettings> 
 	static getDescription(settings: MockEntityProviderUserSettings): string {
 		return `Mock Entity Provider (${settings.mockSetting})`;
 	}
-	static buildSummarySetting(settings: MockEntityProviderUserSettings, onShouldSave: (newSettings: MockEntityProviderUserSettings) => void): void {
+	getDescription(): string {
+		return MockEntityProvider.getDescription(this.settings);
+	}
+	static buildSummarySetting(
+		settingContainer: unknown,
+		settings: MockEntityProviderUserSettings,
+		onShouldSave: (newSettings: MockEntityProviderUserSettings) => void,
+		plugin: Plugin
+	): void {
 		console.log("MockEntityProvider.buildSummarySetting called");
 	}
 
-
-	getDefaultSettings(): MockEntityProviderUserSettings {
+	static getDefaultSettings(): MockEntityProviderUserSettings {
 		return {
 			providerTypeID: mockProviderTypeID,
 			enabled: true,
@@ -51,6 +58,11 @@ class MockEntityProvider extends EntityProvider<MockEntityProviderUserSettings> 
 			mockSetting: "mock-setting",
 		};
 	}
+
+	getDefaultSettings(): MockEntityProviderUserSettings {
+		return MockEntityProvider.getDefaultSettings();
+	}
+
 	getEntityList(query: string) {
 		return [];
 	}
