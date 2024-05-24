@@ -11,6 +11,22 @@ import { entityFromTemplateSettings } from "./entities.types";
 import { FileSuggest } from "./ui/file-suggest";
 
 
+import { Notice, setIcon } from "obsidian";
+
+export class EntitiesNotice extends Notice {
+	constructor(message: string, icon: string, duration?: number) {
+		super("", duration);
+		this.noticeEl.addClass("entities-notice");
+		const noticeIconEl = this.noticeEl.createSpan({
+			cls: "entities-notice-icon",
+		});
+		setIcon(noticeIconEl, icon);
+		this.noticeEl
+			.createSpan({ cls: "entities-notice-text" })
+			.setText(message);
+	}
+}
+
 export interface EntitiesModalInputOptions {
 	placeholder?: string;
 	instructions?: {

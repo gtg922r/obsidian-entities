@@ -4,16 +4,13 @@ import { EntitiesSettings, DEFAULT_SETTINGS } from "./entities.types";
 import { EntitiesSuggestor } from "./EntitiesSuggestor";
 import ProviderRegistry from "./Providers/ProviderRegistry";
 import {
-	FolderEntityProvider,
-	FolderProviderUserSettings,
+	FolderEntityProvider
 } from "./Providers/FolderEntityProvider";
 import {
-	DataviewEntityProvider,
-	DataviewProviderUserSettings,
+	DataviewEntityProvider
 } from "./Providers/DataviewEntityProvider";
 import { TemplateEntityProvider } from "./Providers/TemplateProvider";
-import { DateEntityProvider, DatesProviderUserSettings } from "./Providers/DateEntityProvider";
-import { EntityProviderUserSettings } from "./Providers/EntityProvider";
+import { DateEntityProvider } from "./Providers/DateEntityProvider";
 
 export default class Entities extends Plugin {
 	settings: EntitiesSettings;

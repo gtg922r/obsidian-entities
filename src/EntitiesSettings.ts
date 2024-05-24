@@ -4,10 +4,11 @@ import {
 	Setting,
 	App,
 	Modal,
-	Notice,
+	DropdownComponent,
+	ButtonComponent,
 } from "obsidian";
 import Entities from "./main";
-import { IconPickerModal } from "./userComponents";
+import { EntitiesNotice, IconPickerModal } from "./userComponents";
 import { EntityProviderUserSettings } from "./Providers/EntityProvider";
 import { RegisterableEntityProvider } from "./Providers/ProviderRegistry";
 
@@ -30,7 +31,7 @@ function updateProviderAtIndexAndSaveAndReload(
 				providerConfig;
 			settingsTab.plugin.saveSettings().then(() => {
 				settingsTab.plugin.loadEntityProviders(); // Reload providers after setting change
-				new Notice("✅ Entities Settings Providers Updated");
+				console.log("✅ Settings saved and providers reloaded");
 			});
 			saveTimeout = undefined;
 			if (shouldRefreshUI) {
@@ -58,21 +59,72 @@ export class EntitiesSettingTab extends PluginSettingTab {
 			.setDesc("Settings for each active Entity provider")
 			.setHeading();
 
+		let newProviderDropdown: DropdownComponent;
 		new Setting(containerEl)
 			.setName("Add New Provider")
 			.setDesc("Open New Provider Settings")
 			.addDropdown((dropdown) => {
-				dropdown.addOption("folder", "Folder");
-				dropdown.addOption("dataview", "Dataview");
-				dropdown.addOption("noteFromTemplate", "Note from Template");
-				dropdown.addOption("insertTemplate", "Insert Template");
-				dropdown.onChange((value) => {
-					console.log("Dropdown Changed", value);
+				newProviderDropdown = dropdown;
+				const providerTypes =
+					this.plugin.providerRegistry.getProviderClasses();
+				providerTypes.forEach((providerType, providerTypeID) => {
+					dropdown.addOption(
+						providerTypeID,
+						providerType.getDescription()
+					);
 				});
 			})
 			.addButton((button) =>
 				button.setIcon("plus").onClick(() => {
-					console.log("Extra Button Clicked");
+					const providerTypeID = newProviderDropdown.getValue();
+					if (!providerTypeID) {
+						new EntitiesNotice("Please select a provider type.", "alert-triangle");
+						return;
+					}
+					const providerType = this.plugin.providerRegistry
+						.getProviderClasses()
+						.get(providerTypeID);
+					if (!providerType) {
+						console.error(
+							`Provider type "${providerTypeID}" not found.`
+						);
+						return;
+					}
+					const providerSettings = providerType.getDefaultSettings();
+					const index =
+						this.plugin.settings.providerSettings.push(
+							providerSettings
+						) - 1;
+					this.plugin.saveSettings().then(() => {
+						this.plugin.loadEntityProviders();
+						this.display();
+
+						if (
+							providerType.buildSimpleSettings ||
+							providerType.buildAdvancedSettings
+						) {
+							// Open the ProviderSettingsModal for the new provider
+							const modal = new ProviderSettingsModal(
+								this.app,
+								providerType,
+								providerSettings,
+								this.plugin,
+								(newSettings) => {
+									updateProviderAtIndexAndSaveAndReload(
+										this,
+										newSettings,
+										index,
+										true,
+										true
+									);
+								},
+								() => {
+									this.display();
+								}
+							);
+							modal.open();
+						}
+					});
 				})
 			);
 
@@ -152,18 +204,27 @@ export class EntitiesSettingTab extends PluginSettingTab {
 								});
 							})
 					)
-					.addButton((button) =>
-						button.setIcon("settings").onClick(() => {
+					.addButton((button) => {
+						button.setIcon("settings");
+						const providerType = this.plugin.providerRegistry
+							.getProviderClasses()
+							.get(providerSettings.providerTypeID);
+
+						if (!providerType) {
+							new EntitiesNotice(
+								`Provider type "${providerSettings.providerTypeID}" not found.`,
+								"x-octagon"
+							);
+							return;
+						}
+						if (
+							!providerType.buildSimpleSettings &&
+							!providerType.buildAdvancedSettings
+						) {
+							button.setDisabled(true);
+						}
+						button.onClick(() => {
 							console.log("Settings Button Clicked");
-							const providerType = this.plugin.providerRegistry
-								.getProviderClasses()
-								.get(providerSettings.providerTypeID);
-							if (!providerType) {
-								new Notice(
-									`Provider type "${providerSettings.providerTypeID}" not found.`
-								);
-								return;
-							}
 							const modal = new ProviderSettingsModal(
 								this.app,
 								providerType,
@@ -184,10 +245,20 @@ export class EntitiesSettingTab extends PluginSettingTab {
 								}
 							);
 							modal.open();
-						})
-					)
+						});
+					})
 					.addButton((button) =>
-						button.setIcon("trash").onClick(() => {})
+						button.setIcon("trash").onClick(() => {
+							this.plugin.settings.providerSettings.splice(
+								index,
+								1
+							);
+							this.plugin.saveSettings().then(() => {
+								this.plugin.loadEntityProviders();
+								this.display();
+								new EntitiesNotice("Provider deleted successfully", "trash-2");
+							});
+						})
 					);
 			}
 		);
@@ -208,7 +279,6 @@ export class EntitiesSettingTab extends PluginSettingTab {
 			)
 			.addButton((button) => {
 				button.setButtonText("Reload").onClick(() => {
-					console.log("Reloading entity providers...");
 					this.plugin.loadEntityProviders();
 				});
 			});
@@ -222,6 +292,7 @@ export class ProviderSettingsModal extends Modal {
 	private saveCallback: (newSettings: EntityProviderUserSettings) => void;
 	private closeCallback?: () => void;
 	private advancedSettingsOpen = false;
+	buttonContainerEl: HTMLElement;
 
 	constructor(
 		app: App,
@@ -236,6 +307,18 @@ export class ProviderSettingsModal extends Modal {
 		this.providerSettings = providerSettings;
 		this.plugin = plugin;
 		this.saveCallback = saveCallback;
+
+		this.modalEl.addClass("entities-wide-modal");
+
+		this.buttonContainerEl = this.modalEl.createDiv({
+			cls: "modal-button-container",
+		});
+		new ButtonComponent(this.buttonContainerEl)
+			.setButtonText("Close")
+			.setCta()
+			.onClick(() => {
+				this.close();
+			});
 	}
 
 	onOpen() {
@@ -249,45 +332,64 @@ export class ProviderSettingsModal extends Modal {
 	display() {
 		const { contentEl } = this;
 		contentEl.empty();
-		contentEl.parentElement?.toggleClass("entities-wide-modal", true);
 
-		this.provider.buildSimpleSettings?.(
-			contentEl,
-			this.providerSettings,
-			(newSettings) => {
-				console.log("Saving new settings", newSettings);
-				this.saveCallback(newSettings);
-			},
-			this.plugin
-		);
+		this.titleEl.setText(`${this.provider.getDescription()} Settings`);
 
-		new Setting(contentEl)
-			.setHeading()
-			.setName("Advanced Settings")
-			.setDesc(
-				"Settings that are more advanced and may require more care"
-			)
-			.addButton((button) => {
-				if (this.advancedSettingsOpen) {
-					button.setButtonText("Hide");
-				} else {
-					button.setButtonText("Show");
-				}
-				button.onClick(() => {
-					this.advancedSettingsOpen = !this.advancedSettingsOpen;
-					this.display();
-				});
-			});
-
-		if (this.advancedSettingsOpen) {
-			this.provider.buildAdvancedSettings?.(
+		if (this.provider.buildSimpleSettings) {
+			this.provider.buildSimpleSettings(
 				contentEl,
 				this.providerSettings,
 				(newSettings) => {
 					console.log("Saving new settings", newSettings);
+					this.saveCallback(newSettings);
 				},
 				this.plugin
 			);
+		} else {
+			new Setting(contentEl)
+				.setName(`Settings: ${this.provider.getDescription()}`)
+				.setDesc("No simple settings available for this provider.")
+				.setHeading();
 		}
+
+		if (this.provider.buildAdvancedSettings) {
+			new Setting(contentEl)
+				.setHeading()
+				.setName("Advanced Settings")
+				.setDesc(
+					"Settings that are more advanced and may require more care"
+				)
+				.addButton((button) => {
+					if (this.advancedSettingsOpen) {
+						button.setButtonText("Hide");
+					} else {
+						button.setButtonText("Show");
+					}
+					button.onClick(() => {
+						this.advancedSettingsOpen = !this.advancedSettingsOpen;
+						this.display();
+					});
+				});
+
+			if (this.advancedSettingsOpen) {
+				this.provider.buildAdvancedSettings?.(
+					contentEl,
+					this.providerSettings,
+					(newSettings) => {
+						console.log("Saving new settings", newSettings);
+					},
+					this.plugin
+				);
+			}
+		}
+
+		// new Setting(contentEl).addButton((button) =>
+		// 	button
+		// 		.setButtonText("Close")
+		// 		.setCta()
+		// 		.onClick(() => {
+		// 			this.close();
+		// 		})
+		// );
 	}
 }

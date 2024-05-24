@@ -28,15 +28,23 @@ export class TemplateEntityProvider extends EntityProvider<TemplateProviderUserS
 	static readonly providerTypeID: string = templateProviderTypeID;
     private files: TFile[];
 
-	static getDescription(settings: TemplateProviderUserSettings): string {
-		return `📄 Template Entity Provider - ${settings.actionType} (${settings.path})`;
+	static getDescription(settings?: TemplateProviderUserSettings): string {
+		if (settings) {
+			return `📄 Template Entity Provider - ${settings.actionType} (${settings.path})`;
+		} else {
+			return `Template Entity Provider`;
+		}
 	}
 
 	getDescription(): string {
 		return TemplateEntityProvider.getDescription(this.settings);
 	}
-	getDefaultSettings(): TemplateProviderUserSettings {
+	static getDefaultSettings(): TemplateProviderUserSettings {
 		return defaultTemplateProviderUserSettings;
+	}
+
+	getDefaultSettings(): TemplateProviderUserSettings {
+		return TemplateEntityProvider.getDefaultSettings();
 	}
 
     constructor(plugin: Plugin, settings: Partial<TemplateProviderUserSettings>) {

@@ -37,13 +37,20 @@ const defaultFolderProviderUserSettings: FolderProviderUserSettings = {
 export class FolderEntityProvider extends EntityProvider<FolderProviderUserSettings> {
 	static readonly providerTypeID: string = folderProviderTypeID;
 
-	getDefaultSettings(): FolderProviderUserSettings {
+	static getDefaultSettings(): FolderProviderUserSettings {
 		return defaultFolderProviderUserSettings;
 	}
 
-	static getDescription(settings: FolderProviderUserSettings): string {
-		return `📂 Folder Entity Provider (${settings.path})`;
-		// return `Folder Entity Provider (${settings.path})`;
+	getDefaultSettings(): FolderProviderUserSettings {
+		return FolderEntityProvider.getDefaultSettings();
+	}
+
+	static getDescription(settings?: FolderProviderUserSettings): string {
+		if (settings) {
+			return `📂 Folder Entity Provider (${settings.path})`;
+		} else {
+			return `Folder Entity Provider`;
+		}
 	}
 
 	getDescription(): string {
@@ -137,12 +144,6 @@ export class FolderEntityProvider extends EntityProvider<FolderProviderUserSetti
 		onShouldSave: (newSettings: FolderProviderUserSettings) => void,
 		plugin: Plugin
 	): void {
-		new Setting(settingContainer)
-			.setName("Folder Provider Settings")
-			.setDesc(
-				"Settings for Provider which searches a specified folder and generates entities based on the files in the folder."
-			)
-			.setHeading();
 
 		new Setting(settingContainer)
 			.setName("Icon")

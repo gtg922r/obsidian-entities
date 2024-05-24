@@ -4,7 +4,8 @@ import { DerivedClassWithConstructorArgs } from "src/entities.types";
 
 
 interface ProviderRegistryClassMethods<T extends EntityProviderUserSettings> {
-	getDescription(settings: T): string;
+	getDescription(settings?: T): string;
+	getDefaultSettings(): T;
 	buildSummarySetting(
 		settingContainer: Setting,
 		settings: T,

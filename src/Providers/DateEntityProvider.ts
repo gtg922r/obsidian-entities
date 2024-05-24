@@ -1,8 +1,9 @@
-import { Notice, Plugin, Setting } from "obsidian";
+import { Plugin, Setting } from "obsidian";
 import { Moment } from "moment";
 import { EntitySuggestionItem } from "src/EntitiesSuggestor";
 import { EntityProvider, EntityProviderUserSettings } from "./EntityProvider";
 import { AppWithPlugins } from "src/entities.types";
+import { EntitiesNotice } from "src/userComponents";
 
 const dateProviderTypeID = "nlDates";
 
@@ -37,16 +38,23 @@ export class DateEntityProvider extends EntityProvider<DatesProviderUserSettings
 	static readonly providerTypeID: string = dateProviderTypeID;
 	private nlpPlugin: NLPlugin | undefined;
 
-	static getDescription(settings: DatesProviderUserSettings): string {
-		return `📅 Dates Entity Provider`;
-		// return `Dates Entity Provider`;
+	static getDescription(settings?: DatesProviderUserSettings): string {
+		if (settings) {
+			return `📅 Dates Entity Provider`;
+		} else {
+			return `Dates Provider`;
+		}
 	}
 
 	getDescription(): string {
 		return DateEntityProvider.getDescription(this.settings);
 	}
-	getDefaultSettings(): DatesProviderUserSettings {
+	static getDefaultSettings(): DatesProviderUserSettings {
 		return defaultDatesProviderUserSettings;
+	}
+
+	getDefaultSettings(): DatesProviderUserSettings {
+		return DateEntityProvider.getDefaultSettings();
 	}
 
 	constructor(plugin: Plugin, settings: Partial<DatesProviderUserSettings>) {
@@ -152,9 +160,10 @@ export class DateEntityProvider extends EntityProvider<DatesProviderUserSettings
 				);
 				button.extraSettingsEl.style.color = "var(--text-error)";
 				button.onClick(() => {
-					new Notice(
+					new EntitiesNotice(
 						"NLDates Plugin Conflicts with Autocomplete. " +
-							"Disable autocomplete in NLDates settings, or change its trigger phrase."
+							"Disable autocomplete in NLDates settings, or change its trigger phrase.",
+						"alert-triangle"
 					);
 				});
 				return;

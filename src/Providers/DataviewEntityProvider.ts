@@ -37,16 +37,23 @@ export class DataviewEntityProvider extends EntityProvider<DataviewProviderUserS
 	static readonly providerTypeID: string = dataviewProviderTypeID;
 	protected dv: DataviewApi | undefined;
 
-	static getDescription(settings: DataviewProviderUserSettings): string {
-		return `🧠 Dataview Entity Provider (${settings.query})`;
-		// return `Dataview Entity Provider (${settings.query})`;
+	static getDescription(settings?: DataviewProviderUserSettings): string {
+		if (settings) {
+			return `🧠 Dataview Entity Provider (${settings.query})`;
+		} else {
+			return `Dataview Entity Provider`;
+		}
 	}
 
 	getDescription(): string {
 		return DataviewEntityProvider.getDescription(this.settings);
 	}
-	getDefaultSettings(): DataviewProviderUserSettings {
+	static getDefaultSettings(): DataviewProviderUserSettings {
 		return defaultDataviewProviderUserSettings;
+	}
+
+	getDefaultSettings(): DataviewProviderUserSettings {
+		return DataviewEntityProvider.getDefaultSettings();
 	}
 
 	constructor(
@@ -166,12 +173,6 @@ export class DataviewEntityProvider extends EntityProvider<DataviewProviderUserS
 		onShouldSave: (newSettings: DataviewProviderUserSettings) => void,
 		plugin: Plugin
 	): void {
-		new Setting(settingContainer)
-			.setName("Dataview Provider Settings")
-			.setDesc(
-				"Settings for Provider which retrieves notes based on a Dataview source query"
-			)
-			.setHeading();
 
 		new Setting(settingContainer)
 			.setName("Icon")
