@@ -35,7 +35,6 @@ export interface ProviderTemplateCreationSettings {
 	newEntityFromTemplates?: entityFromTemplateSettings[];
 } 
 
-
 export interface EntitiesSettings {
 	providerSettings: EntityProviderUserSettings[];
 }
