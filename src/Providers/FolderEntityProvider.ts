@@ -38,7 +38,7 @@ export class FolderEntityProvider extends EntityProvider<FolderProviderUserSetti
 	static readonly providerTypeID: string = folderProviderTypeID;
 
 	static getDefaultSettings(): FolderProviderUserSettings {
-		return defaultFolderProviderUserSettings;
+		return { ...defaultFolderProviderUserSettings };
 	}
 
 	getDefaultSettings(): FolderProviderUserSettings {

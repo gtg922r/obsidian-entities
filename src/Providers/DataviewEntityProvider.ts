@@ -49,7 +49,7 @@ export class DataviewEntityProvider extends EntityProvider<DataviewProviderUserS
 		return DataviewEntityProvider.getDescription(this.settings);
 	}
 	static getDefaultSettings(): DataviewProviderUserSettings {
-		return defaultDataviewProviderUserSettings;
+		return { ...defaultDataviewProviderUserSettings };
 	}
 
 	getDefaultSettings(): DataviewProviderUserSettings {

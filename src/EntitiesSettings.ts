@@ -140,21 +140,6 @@ export class EntitiesSettingTab extends PluginSettingTab {
 					return;
 				}
 				const settingContainer = new Setting(containerEl);
-				// const providerIcon = settingContainer.settingEl.createEl('div', { cls: 'setting-item-provider-icon' });
-				// settingContainer.settingEl.prepend(providerIcon);
-				// if (providerSettings.providerTypeID === "dataview") {
-				// 	setIcon(providerIcon, "search-code");
-				// } else if (providerSettings.providerTypeID === "folder") {
-				// 	setIcon(providerIcon, "folder");
-				// } else if (providerSettings.providerTypeID === "noteFromTemplate") {
-				// 	setIcon(providerIcon, "note-template");
-				// } else if (providerSettings.providerTypeID === "insertTemplate") {
-				// 	setIcon(providerIcon, "note-template");
-				// } else if (providerSettings.providerTypeID === "nlDates") {
-				// 	setIcon(providerIcon, "calendar");
-				// } else {
-				// 	setIcon(providerIcon, "package");
-				// }
 
 				settingContainer
 					.setName(`Provider #${index + 1}`)

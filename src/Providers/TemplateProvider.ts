@@ -41,7 +41,7 @@ export class TemplateEntityProvider extends EntityProvider<TemplateProviderUserS
 		return TemplateEntityProvider.getDescription(this.settings);
 	}
 	static getDefaultSettings(): TemplateProviderUserSettings {
-		return defaultTemplateProviderUserSettings;
+		return { ...defaultTemplateProviderUserSettings };
 	}
 
 	getDefaultSettings(): TemplateProviderUserSettings {

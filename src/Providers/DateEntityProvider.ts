@@ -50,7 +50,7 @@ export class DateEntityProvider extends EntityProvider<DatesProviderUserSettings
 		return DateEntityProvider.getDescription(this.settings);
 	}
 	static getDefaultSettings(): DatesProviderUserSettings {
-		return defaultDatesProviderUserSettings;
+		return { ...defaultDatesProviderUserSettings };
 	}
 
 	getDefaultSettings(): DatesProviderUserSettings {
