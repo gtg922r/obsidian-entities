@@ -118,11 +118,15 @@ export class EntitiesSuggestor extends EditorSuggest<EntitySuggestionItem> {
 			);
 			fuzzySearchResults.push(...templateSuggestions);
 		});
-
-		fuzzySearchResults.sort(
+		const uniqueSuggestions = new Map<string, EntitySuggestionItem>();
+		fuzzySearchResults.forEach((result) => {
+			if (!uniqueSuggestions.has(result.suggestionText)) {
+				uniqueSuggestions.set(result.suggestionText, result);
+			}
+		});
+		return Array.from(uniqueSuggestions.values()).sort(
 			(a, b) => (b.match?.score ?? -10) - (a.match?.score ?? -10)
 		);
-		return fuzzySearchResults.map((result) => result);
 	}
 
 	renderSuggestion(value: EntitySuggestionItem, el: HTMLElement): void {
@@ -207,3 +211,4 @@ export class EntitiesSuggestor extends EditorSuggest<EntitySuggestionItem> {
 		this.close();
 	}
 }
+
