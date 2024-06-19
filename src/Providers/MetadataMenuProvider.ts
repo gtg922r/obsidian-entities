@@ -1,4 +1,4 @@
-import { Plugin, SearchResult, Setting, TFile } from "obsidian";
+import { ExtraButtonComponent, Plugin, SearchResult, Setting, TFile } from "obsidian";
 import { EntitySuggestionItem } from "src/EntitiesSuggestor";
 import { EntityProvider, EntityProviderUserSettings } from "./EntityProvider";
 import { AppWithPlugins } from "src/entities.types";
