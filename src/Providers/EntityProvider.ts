@@ -49,15 +49,16 @@ export abstract class EntityProvider<T extends EntityProviderUserSettings> {
 		return creationTemplates.map((template) => ({
 			suggestionText: `New ${template.entityName}: ${query}`,
 			icon: "plus-circle",
-			action: () => {
+			action: async () => {
 				console.log(`New ${template.entityName}: ${query}`);
-				createNewNoteFromTemplate(
+				await createNewNoteFromTemplate(
 					this.plugin,
 					template.templatePath,
 					"TODO FIX FOLDER",
 					query,
 					false
 				);
+				await new Promise(resolve => setTimeout(resolve, 20));
 				return `[[${query}]]`;
 			},
 			match: { score: -10, matches: [] } as SearchResult,
