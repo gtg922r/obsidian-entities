@@ -45,7 +45,7 @@ export interface TemplaterPlugin {
 			folderSetting: string,
 			newTemplateName: string,
 			openNewNote: boolean
-		) => void;
+		) => Promise<TFile | undefined>;
 		append_template_to_active_file?: (
 			template_file: TFile
 		) => Promise<void>;

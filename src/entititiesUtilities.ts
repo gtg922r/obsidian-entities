@@ -25,7 +25,7 @@ export function insertTemplateUsingTemplater(plugin: Plugin, template: TFile): P
 	}
     return templaterPlugin.templater.append_template_to_active_file(template);
 }
-export function createNewNoteFromTemplate(plugin: Plugin, template: TFile | string, folderSetting: string, newTemplateName: string, openNewNote: boolean): void {
+export async function createNewNoteFromTemplate(plugin: Plugin, template: TFile | string, folderSetting: string, newTemplateName: string, openNewNote: boolean): Promise<TFile | undefined> {
     const templaterPlugin = getTemplaterPlugin(plugin);
     if (typeof template === 'string') {
         const templateFile = plugin.app.vault.getAbstractFileByPath(template);
@@ -41,5 +41,5 @@ export function createNewNoteFromTemplate(plugin: Plugin, template: TFile | stri
         console.error("Templater plugin not found!");
         return;
     }
-    templaterPlugin.templater.create_new_note_from_template(template, folderSetting, newTemplateName, openNewNote);
+    return templaterPlugin.templater.create_new_note_from_template(template, folderSetting, newTemplateName, openNewNote);
 }
