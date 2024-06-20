@@ -3,13 +3,13 @@ import { EntitySuggestionItem } from "src/EntitiesSuggestor";
 import { EntityProvider, EntityProviderUserSettings } from "./EntityProvider";
 import { AppWithPlugins } from "src/entities.types";
 import { createNewNoteFromTemplate } from "src/entititiesUtilities";
-import { FolderSuggest } from "src/ui/file-suggest";
 
 const newProviderTypeID = "metadata-menu";
 
 interface MetadataMenuPlugin extends Plugin {
 	fieldIndex?: {
 		fileClassesName: Map<string, MDMFileClass>;
+		fileClassesPath: Map<string, MDMFileClass>;
 	};
 	settings?: {
 		fileClassAlias?: string;
@@ -26,8 +26,6 @@ interface MDMFileClass {
 export interface MetadataMenuProviderUserSettings
 	extends EntityProviderUserSettings {
 	providerTypeID: string;
-	fileClassPropertyName: string;
-	templatePath: string;
 	// Add any additional settings here
 }
 
@@ -36,8 +34,6 @@ const defaultNewProviderUserSettings: MetadataMenuProviderUserSettings = {
 	enabled: true,
 	icon: "database",
 	entityCreationTemplates: [],
-	fileClassPropertyName: "fileClass",
-	templatePath: "Templater",
 	// Add default values for additional settings here
 };
 
@@ -100,41 +96,32 @@ export class MetadataMenuProvider extends EntityProvider<MetadataMenuProviderUse
 	getTemplateCreationSuggestions(query: string): EntitySuggestionItem[] {
 		if (!this.mdmPlugin || !this.mdmPlugin.fieldIndex) return [];
 
-		const fileClassPairs: [string, MDMFileClass][] = Array.from(
-			this.mdmPlugin.fieldIndex.fileClassesName
+		const mdmPathsAndFileClasses: [string, MDMFileClass][] = Array.from(
+			this.mdmPlugin.fieldIndex.fileClassesPath
 		);
-
-		const fileClassPropertyName =
-			this.mdmPlugin.settings?.fileClassAlias || "fileClass";
-		const templateFolder = this.plugin.app.vault.getFolderByPath(
-			this.settings.templatePath
-		);
-		const templates: TFile[] | undefined = templateFolder?.children.filter(
-			(file: unknown) => file instanceof TFile
-		) as TFile[] | undefined;
-
-		const fileClassTemplates: Map<string, TFile> = new Map();
-
-		if (templates) {
-			const metadataCache = this.plugin.app.metadataCache;
-			templates.forEach((template) => {
-				const fileCache = metadataCache.getFileCache(template);
-				if (fileCache && fileCache.frontmatter) {
-					const fileClass =
-						fileCache.frontmatter[fileClassPropertyName];
-					if (fileClass) {
-						fileClassTemplates.set(fileClass, template);
+		const fileClassTemplates:Map<string, TFile> = new Map();
+		mdmPathsAndFileClasses.forEach(([path, fileClass]) => {			
+			const fileCache = this.plugin.app.metadataCache.getCache(path);
+			if (fileCache && fileCache.frontmatter) {
+				const newNoteTemplate = Array.isArray(fileCache.frontmatter.newNoteTemplate)
+					? fileCache.frontmatter.newNoteTemplate[0]
+					: fileCache.frontmatter.newNoteTemplate;
+				const strippedFileName = newNoteTemplate.replace(/^\[\[|\]\]$/g, '');
+				if (strippedFileName) {
+					const newNoteTemplateFile = this.plugin.app.metadataCache.getFirstLinkpathDest(strippedFileName, path);
+					if (newNoteTemplateFile) {
+						fileClassTemplates.set(fileClass.name, newNoteTemplateFile);
 					}
 				}
-			});
-		}
+			}
+		});
 
 		// TODO add support for both Template and Templater
-		return fileClassPairs.map(([fileClassName, fileClass]) => {
-			const templatePath = fileClassTemplates.get(fileClassName);
-			if (!templatePath) {
+		return Array.from(fileClassTemplates).map(([fileClassName, fileClassTemplate]) => {
+			const fileClass = this.mdmPlugin?.fieldIndex?.fileClassesName.get(fileClassName);
+			if (!fileClass) {
 				throw new Error(
-					`Template not found for file class: ${fileClassName}`
+					`File class not found: ${fileClassName}`
 				);
 			}
 			return {
@@ -143,7 +130,7 @@ export class MetadataMenuProvider extends EntityProvider<MetadataMenuProviderUse
 				action: async () => {
 					await createNewNoteFromTemplate(
 						this.plugin,
-						templatePath,
+						fileClassTemplate,
 						"", // TODO THINK ABOUT FOLDER
 						query,
 						false
@@ -162,8 +149,6 @@ export class MetadataMenuProvider extends EntityProvider<MetadataMenuProviderUse
 		onShouldSave: (newSettings: MetadataMenuProviderUserSettings) => void,
 		plugin: Plugin
 	): void {
-		const folderExists = (folderPath: string) =>
-			plugin.app.vault.getFolderByPath(folderPath) !== null;
 		let pluginConfiguredOKIcon: ExtraButtonComponent;
 		const mdmPluginOK =
 			(plugin.app as AppWithPlugins).plugins?.getPlugin(
@@ -172,23 +157,17 @@ export class MetadataMenuProvider extends EntityProvider<MetadataMenuProviderUse
 		const templaterPluginOK =
 			(plugin.app as AppWithPlugins).plugins?.getPlugin("templater") !==
 			undefined;
-		const updatePluginConfiguredOKIcon = (path: string) => {
+		const updatePluginConfiguredOKIcon = () => {
 			if (
-				folderExists(path) &&
 				mdmPluginOK &&
 				templaterPluginOK &&
 				pluginConfiguredOKIcon
 			) {
-				pluginConfiguredOKIcon.setIcon("folder-check");
-				pluginConfiguredOKIcon.setTooltip("Folder Found");
+				pluginConfiguredOKIcon.setIcon("package-check");
+				pluginConfiguredOKIcon.setTooltip("Necessary Plugins Installed");
 				pluginConfiguredOKIcon.extraSettingsEl.style.color = "";
 			} else if (pluginConfiguredOKIcon) {
-				if (!folderExists(path)) {
-					pluginConfiguredOKIcon.setIcon("folder-x");
-					pluginConfiguredOKIcon.setTooltip(
-						"Template Folder Not Found"
-					);
-				} else if (!mdmPluginOK) {
+				if (!mdmPluginOK) {
 					pluginConfiguredOKIcon.setIcon("alert-triangle");
 					pluginConfiguredOKIcon.setTooltip(
 						"Metadata Menu plugin not found"
@@ -206,46 +185,29 @@ export class MetadataMenuProvider extends EntityProvider<MetadataMenuProviderUse
 
 		settingContainer.addExtraButton((button) => {
 			pluginConfiguredOKIcon = button;
-			updatePluginConfiguredOKIcon(settings.templatePath);
+			updatePluginConfiguredOKIcon();
 			button.setDisabled(true);
-		});
-
-		settingContainer.addText((text) => {
-			text.setPlaceholder("Template Folder Path").setValue(settings.templatePath);
-			text.onChange((value) => {
-				if (folderExists(value)) {
-					settings.templatePath = value;
-					updatePluginConfiguredOKIcon(value);
-					onShouldSave(settings);
-				} else {
-					updatePluginConfiguredOKIcon(value);
-				}
-			});
-
-			new FolderSuggest(plugin.app, text.inputEl, {
-				additionalClasses: "entities-settings",
-			});
 		});
 		// Implement logic to build summary settings UI
 	}
 
-	static buildSimpleSettings?(
-		settingContainer: HTMLElement,
-		settings: MetadataMenuProviderUserSettings,
-		onShouldSave: (newSettings: MetadataMenuProviderUserSettings) => void,
-		plugin: Plugin
-	): void {
-		// Implement logic to build simple settings UI
-		// TODO check for Metadata Menu plugin and Templater plugin
-		// TODO add support for both Template and Templater
-	}
+	// static buildSimpleSettings?(
+	// 	settingContainer: HTMLElement,
+	// 	settings: MetadataMenuProviderUserSettings,
+	// 	onShouldSave: (newSettings: MetadataMenuProviderUserSettings) => void,
+	// 	plugin: Plugin
+	// ): void {
+	// 	// Implement logic to build simple settings UI
+	// 	// TODO check for Metadata Menu plugin and Templater plugin
+	// 	// TODO add support for both Template and Templater
+	// }
 
-	static buildAdvancedSettings?(
-		settingContainer: HTMLElement,
-		settings: MetadataMenuProviderUserSettings,
-		onShouldSave: (newSettings: MetadataMenuProviderUserSettings) => void,
-		plugin: Plugin
-	): void {
-		// Implement logic to build advanced settings UI
-	}
+	// static buildAdvancedSettings?(
+	// 	settingContainer: HTMLElement,
+	// 	settings: MetadataMenuProviderUserSettings,
+	// 	onShouldSave: (newSettings: MetadataMenuProviderUserSettings) => void,
+	// 	plugin: Plugin
+	// ): void {
+	// 	// Implement logic to build advanced settings UI
+	// }
 }
