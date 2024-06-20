@@ -103,10 +103,11 @@ export class MetadataMenuProvider extends EntityProvider<MetadataMenuProviderUse
 		mdmPathsAndFileClasses.forEach(([path, fileClass]) => {			
 			const fileCache = this.plugin.app.metadataCache.getCache(path);
 			if (fileCache && fileCache.frontmatter) {
+				// TODO: make newNoteTemplate field settable in the settings
 				const newNoteTemplate = Array.isArray(fileCache.frontmatter.newNoteTemplate)
 					? fileCache.frontmatter.newNoteTemplate[0]
 					: fileCache.frontmatter.newNoteTemplate;
-				const strippedFileName = newNoteTemplate.replace(/^\[\[|\]\]$/g, '');
+				const strippedFileName = newNoteTemplate?.replace(/^\[\[|\]\]$/g, '');
 				if (strippedFileName) {
 					const newNoteTemplateFile = this.plugin.app.metadataCache.getFirstLinkpathDest(strippedFileName, path);
 					if (newNoteTemplateFile) {
