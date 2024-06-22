@@ -99,7 +99,7 @@ export class MetadataMenuProvider extends EntityProvider<MetadataMenuProviderUse
 		const mdmPathsAndFileClasses: [string, MDMFileClass][] = Array.from(
 			this.mdmPlugin.fieldIndex.fileClassesPath
 		);
-		const fileClassTemplates:Map<string, TFile> = new Map();
+		const fileClassTemplates: Map<string, { template: TFile, icon: string }> = new Map();
 		mdmPathsAndFileClasses.forEach(([path, fileClass]) => {			
 			const fileCache = this.plugin.app.metadataCache.getCache(path);
 			if (fileCache && fileCache.frontmatter) {
@@ -108,17 +108,21 @@ export class MetadataMenuProvider extends EntityProvider<MetadataMenuProviderUse
 					? fileCache.frontmatter.newNoteTemplate[0]
 					: fileCache.frontmatter.newNoteTemplate;
 				const strippedFileName = newNoteTemplate?.replace(/^\[\[|\]\]$/g, '');
+
+				// Extract newEntityIcon from frontmatter
+				const newEntityIcon = fileCache.frontmatter.newEntityIcon || fileClass.options?.icon || "plus-circle";
+
 				if (strippedFileName) {
 					const newNoteTemplateFile = this.plugin.app.metadataCache.getFirstLinkpathDest(strippedFileName, path);
 					if (newNoteTemplateFile) {
-						fileClassTemplates.set(fileClass.name, newNoteTemplateFile);
+						fileClassTemplates.set(fileClass.name, { template: newNoteTemplateFile, icon: newEntityIcon });
 					}
 				}
 			}
 		});
 
 		// TODO add support for both Template and Templater
-		return Array.from(fileClassTemplates).map(([fileClassName, fileClassTemplate]) => {
+		return Array.from(fileClassTemplates).map(([fileClassName, { template, icon }]) => {
 			const fileClass = this.mdmPlugin?.fieldIndex?.fileClassesName.get(fileClassName);
 			if (!fileClass) {
 				throw new Error(
@@ -127,11 +131,11 @@ export class MetadataMenuProvider extends EntityProvider<MetadataMenuProviderUse
 			}
 			return {
 				suggestionText: `New ${fileClassName}: ${query}`,
-				icon: fileClass.options?.icon || "plus-circle",
+				icon: icon,
 				action: async () => {
 					await createNewNoteFromTemplate(
 						this.plugin,
-						fileClassTemplate,
+						template,
 						"", // TODO THINK ABOUT FOLDER
 						query,
 						false
