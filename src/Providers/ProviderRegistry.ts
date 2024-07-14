@@ -12,7 +12,7 @@ interface ProviderRegistryClassMethods<T extends EntityProviderUserSettings> {
 		onShouldSave: (newSettings: T) => void,
 		plugin: Plugin
 	): void;
-	buildSimpleSettings?(
+	buildSimpleSettings(
 		containerElement: HTMLElement,
 		settings: T,
 		onShouldSave: (newSettings: T) => void,

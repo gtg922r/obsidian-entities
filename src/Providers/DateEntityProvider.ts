@@ -4,6 +4,7 @@ import { EntityProvider, EntityProviderUserSettings } from "./EntityProvider";
 import { AppWithPlugins } from "src/entities.types";
 import { EntitiesNotice } from "src/userComponents";
 import { RefreshBehavior } from "./EntityProvider";
+import { IconPickerModal } from "src/userComponents";
 
 const dateProviderTypeID = "nlDates";
 
@@ -24,6 +25,7 @@ interface NLPlugin extends Plugin {
 export interface DatesProviderUserSettings extends EntityProviderUserSettings {
 	providerTypeID: string;
 	shouldCreateIfNotExists: boolean;
+	includeWeekSuggestions: boolean; // New setting
 }
 
 const defaultDatesProviderUserSettings: DatesProviderUserSettings = {
@@ -31,6 +33,7 @@ const defaultDatesProviderUserSettings: DatesProviderUserSettings = {
 	enabled: true,
 	icon: "calendar",
 	shouldCreateIfNotExists: true, // Not yet implemented
+	includeWeekSuggestions: true, // Default to true
 	entityCreationTemplates: [],
 };
 
@@ -114,7 +117,27 @@ export class DateEntityProvider extends EntityProvider<DatesProviderUserSettings
 			});
 		}
 
-		dates.push(...this.dateStringToWeekResults(query));
+		if (this.settings.includeWeekSuggestions) {
+			const currentYear = moment().year();
+			const currentIsoWeek = moment().isoWeek();
+			const semanticWeeks = {
+				"this week": `${currentYear}-W${currentIsoWeek}`,
+				"last week": `${currentYear}-W${currentIsoWeek - 1}`,
+				"next week": `${currentYear}-W${currentIsoWeek + 1}`
+			};
+
+			Object.entries(semanticWeeks).forEach(([desciptor, isoDate]) => {
+				const suggestion: EntitySuggestionItem = {
+					suggestionText: desciptor,
+					noteText: `${isoDate}`,
+					replacementText: isoDate,
+					icon: "calendar-range",
+				};
+				dates.push(suggestion);
+			});
+			
+			dates.push(...this.dateStringToWeekResults(query));
+		}
 
 		return dates;
 	}
@@ -216,6 +239,53 @@ export class DateEntityProvider extends EntityProvider<DatesProviderUserSettings
 				button.extraSettingsEl.style.color = "";
 			}
 		});
+	}
+
+	static buildSimpleSettings(
+		settingContainer: HTMLElement,
+		settings: DatesProviderUserSettings,
+		onShouldSave: (newSettings: DatesProviderUserSettings) => void,
+			plugin: Plugin
+	): void {
+		new Setting(settingContainer)
+			.setName("Icon")
+			.setDesc("Icon for the date entities returned by this provider")
+			.addButton((button) =>
+				button
+					.setIcon(settings.icon ?? "calendar")
+					.setDisabled(false)
+					.onClick(() => {
+						const iconPickerModal = new IconPickerModal(plugin.app);
+						iconPickerModal.open();
+						iconPickerModal.getInput().then((iconName) => {
+							settings.icon = iconName;
+							onShouldSave(settings);
+							button.setIcon(iconName);
+						});
+					})
+			);
+
+		new Setting(settingContainer)
+			.setName("Create Non-Existent Dates")
+			.setDesc("Whether to create date notes that don't exist yet")
+			.addToggle((toggle) => {
+				toggle.setValue(settings.shouldCreateIfNotExists);
+				toggle.onChange((value) => {
+					settings.shouldCreateIfNotExists = value;
+					onShouldSave(settings);
+				});
+			});
+
+		new Setting(settingContainer)
+			.setName("Include Week Suggestions")
+			.setDesc("Whether to include week-based date suggestions (e.g., 2023-W01)")
+			.addToggle((toggle) => {
+				toggle.setValue(settings.includeWeekSuggestions);
+				toggle.onChange((value) => {
+					settings.includeWeekSuggestions = value;
+					onShouldSave(settings);
+				});
+			});
 	}
 
 	getRefreshBehavior(): RefreshBehavior {
