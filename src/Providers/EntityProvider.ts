@@ -14,6 +14,13 @@ export interface EntityProviderUserSettings extends EntityProviderID {
 	entityCreationTemplates?: entityFromTemplateSettings[];
 }
 
+export enum RefreshBehavior {
+  ShouldRefresh = "shouldRefresh",
+  Default = "default",
+  // TODO: Implement NoRefresh option in the future
+  // NoRefresh = "noRefresh"
+}
+
 /**
  * Base class for all entity providers
  * NOTE: Extending classes must provider a unique providerTypeID in order to be registered
@@ -24,6 +31,11 @@ export abstract class EntityProvider<T extends EntityProviderUserSettings> {
 
 	abstract getDefaultSettings(): T;
 	abstract getEntityList(query: string): EntitySuggestionItem[];
+
+	// New method to determine refresh behavior
+	getRefreshBehavior(): RefreshBehavior {
+		return RefreshBehavior.Default;
+	}
 
 	constructor(plugin: Plugin, settings: Partial<T>) {
 		this.plugin = plugin;

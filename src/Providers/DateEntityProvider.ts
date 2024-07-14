@@ -1,16 +1,16 @@
-import { Plugin, Setting } from "obsidian";
-import { Moment } from "moment";
+import { Plugin, Setting, moment } from "obsidian";
 import { EntitySuggestionItem } from "src/EntitiesSuggestor";
 import { EntityProvider, EntityProviderUserSettings } from "./EntityProvider";
 import { AppWithPlugins } from "src/entities.types";
 import { EntitiesNotice } from "src/userComponents";
+import { RefreshBehavior } from "./EntityProvider";
 
 const dateProviderTypeID = "nlDates";
 
 interface NLDResult {
 	formattedString: string;
 	date: Date;
-	moment: Moment;
+	moment: moment.Moment;
 }
 
 interface NLPlugin extends Plugin {
@@ -113,7 +113,50 @@ export class DateEntityProvider extends EntityProvider<DatesProviderUserSettings
 				icon: this.settings.icon,
 			});
 		}
+
+		dates.push(...this.dateStringToWeekResults(query));
+
 		return dates;
+	}
+
+	private dateStringToWeekResults(dateString: string): EntitySuggestionItem[] {
+		// Matching rules:
+		// - Optional year (2 or 4 digits)
+		// - Optional dash or space
+		// - Week abbreviation (w, wk, week)
+		// - Optional dash or space
+		// - Week number (1 to 99)
+		const regex = /(?:(\d{2}|\d{4})?[-\s]?(?:w|wk|week)\s?(\d{1,2}))/i;
+		const match = dateString.match(regex);
+
+		if (!match) {
+			return [];
+		}
+
+		const currentMoment = moment();
+		const currentYear = currentMoment.year();
+		const currentWeek = currentMoment.isoWeek();
+
+		let year = match[1] ? (match[1].length === 2 ? `20${match[1]}` : match[1]) : currentYear.toString();
+		const week = parseInt(match[2]);
+
+		// If year is not specified and the week is more than 4 weeks before the current week,
+		// use next year
+		if (!match[1] && week < currentWeek - 4) {
+			year = (currentYear + 1).toString();
+		}
+
+		const weekMoment = moment().year(parseInt(year)).isoWeek(week).startOf('isoWeek');
+		const weekStartDate = weekMoment.format('YYYY-MM-DD');
+		const weekStartDateShort = weekMoment.format('M/D');
+
+		console.log(weekStartDate);
+		return [{
+			suggestionText: dateString,
+			noteText: `${year}-W${week.toString().padStart(2, '0')} (Wk of ${weekStartDateShort})`,
+			replacementText: `${year}-W${week.toString().padStart(2, '0')}|${year}-W${week.toString().padStart(2, '0')} (Wk of ${weekStartDateShort})`,
+			icon: "calendar-range",
+		}];
 	}
 
 	private dateStringsToDateResults(
@@ -173,5 +216,9 @@ export class DateEntityProvider extends EntityProvider<DatesProviderUserSettings
 				button.extraSettingsEl.style.color = "";
 			}
 		});
+	}
+
+	getRefreshBehavior(): RefreshBehavior {
+		return RefreshBehavior.ShouldRefresh; // Always refresh for date suggestions
 	}
 }

@@ -12,6 +12,7 @@ import {
 	SearchResult,
 } from "obsidian";
 import ProviderRegistry from "./Providers/ProviderRegistry";
+import { RefreshBehavior } from "./Providers/EntityProvider";
 
 export interface EntitySuggestionItem {
 	suggestionText: string;
@@ -24,7 +25,6 @@ export interface EntitySuggestionItem {
 		context: EditorSuggestContext | null
 	) => Promise<string> | string | void;
 }
-
 
 export class EntitiesSuggestor extends EditorSuggest<EntitySuggestionItem> {
 	plugin: Entities;
@@ -87,24 +87,47 @@ export class EntitiesSuggestor extends EditorSuggest<EntitySuggestionItem> {
 		return null;
 	}
 
+	private providerSuggestions: Map<string, EntitySuggestionItem[]> = new Map();
+	private lastRefreshTime: Map<string, number> = new Map();
+
 	getSuggestions(
 		context: EditorSuggestContext
 	): EntitySuggestionItem[] | Promise<EntitySuggestionItem[]> {
-		if (
-			this.lastSuggestionListUpdate == undefined ||
-			performance.now() - this.lastSuggestionListUpdate > 200
-		) {
-			this.localSuggestionCache = this.providerRegistry.getProviders().flatMap(
-				(provider) => provider.getEntityList(context.query)
-			);
-			this.lastSuggestionListUpdate = performance.now();
-		}
+		const startTime = performance.now(); // Start timing
+		const currentTime = performance.now();
+		const refreshThreshold = 200; // milliseconds
+
+		const allSuggestions: EntitySuggestionItem[] = [];
+
+		this.providerRegistry.getProviders().forEach((provider) => {
+			const providerId = provider.constructor.name;
+			const refreshBehavior = provider.getRefreshBehavior();
+			const lastRefresh = this.lastRefreshTime.get(providerId) || 0;
+
+			let providerSuggestions: EntitySuggestionItem[];
+
+			if (
+				refreshBehavior === RefreshBehavior.ShouldRefresh ||
+				(refreshBehavior === RefreshBehavior.Default &&
+					currentTime - lastRefresh > refreshThreshold) ||
+				!this.providerSuggestions.has(providerId)
+			) {
+				providerSuggestions = provider.getEntityList(context.query);
+				this.providerSuggestions.set(providerId, providerSuggestions);
+				this.lastRefreshTime.set(providerId, currentTime);
+			} else {
+				providerSuggestions = this.providerSuggestions.get(providerId) || [];
+			}
+
+			allSuggestions.push(...providerSuggestions);
+		});
+
 		// Prepare the search query for fuzzy search
 		const preparedQuery = prepareQuery(context.query);
 
 		// Perform fuzzy search on the cached suggestions
 		const fuzzySearchResults: EntitySuggestionItem[] =
-			this.localSuggestionCache.flatMap((suggestionItem) => {
+			allSuggestions.flatMap((suggestionItem) => {
 				const match: SearchResult | null = fuzzySearch(
 					preparedQuery,
 					suggestionItem.suggestionText
@@ -124,9 +147,14 @@ export class EntitiesSuggestor extends EditorSuggest<EntitySuggestionItem> {
 				uniqueSuggestions.set(result.suggestionText, result);
 			}
 		});
-		return Array.from(uniqueSuggestions.values()).sort(
+		const sortedSuggestions = Array.from(uniqueSuggestions.values()).sort(
 			(a, b) => (b.match?.score ?? -10) - (a.match?.score ?? -10)
 		);
+
+		const endTime = performance.now(); // End timing
+		console.log(`getSuggestions took ${endTime - startTime} milliseconds.`); // Report time to console
+
+		return sortedSuggestions;
 	}
 
 	renderSuggestion(value: EntitySuggestionItem, el: HTMLElement): void {
@@ -197,9 +225,8 @@ export class EntitiesSuggestor extends EditorSuggest<EntitySuggestionItem> {
 		const editor = context.editor;
 		const start = {
 			...context.start,
-			ch: context.start.ch - 1,
+			ch: Math.max(context.start.ch - 1, 0), // Ensure ch is not negative
 		};
-		// const end = editor.getCursor();
 		const end = context.end;
 
 		editor.replaceRange(text, start, end);
@@ -211,4 +238,3 @@ export class EntitiesSuggestor extends EditorSuggest<EntitySuggestionItem> {
 		this.close();
 	}
 }
-
