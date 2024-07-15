@@ -78,7 +78,10 @@ export class EntitiesSettingTab extends PluginSettingTab {
 				button.setIcon("plus").onClick(() => {
 					const providerTypeID = newProviderDropdown.getValue();
 					if (!providerTypeID) {
-						new EntitiesNotice("Please select a provider type.", "alert-triangle");
+						new EntitiesNotice(
+							"Please select a provider type.",
+							"alert-triangle"
+						);
 						return;
 					}
 					const providerType = this.plugin.providerRegistry
@@ -100,8 +103,10 @@ export class EntitiesSettingTab extends PluginSettingTab {
 						this.display();
 
 						if (
-							providerType.buildSimpleSettings ||
-							providerType.buildAdvancedSettings
+							typeof providerType.buildSimpleSettings ===
+								"function" ||
+							typeof providerType.buildAdvancedSettings ===
+								"function"
 						) {
 							// Open the ProviderSettingsModal for the new provider
 							const modal = new ProviderSettingsModal(
@@ -240,7 +245,10 @@ export class EntitiesSettingTab extends PluginSettingTab {
 							this.plugin.saveSettings().then(() => {
 								this.plugin.loadEntityProviders();
 								this.display();
-								new EntitiesNotice("Provider deleted successfully", "trash-2");
+								new EntitiesNotice(
+									"Provider deleted successfully",
+									"trash-2"
+								);
 							});
 						})
 					);

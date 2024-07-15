@@ -122,7 +122,7 @@ export class TemplateEntityProvider extends EntityProvider<TemplateProviderUserS
 		
 	}
 
-	static buildSimpleSettings?(
+	static buildSimpleSettings(
 		settingContainer: HTMLElement,
 		settings: TemplateProviderUserSettings,
 		onShouldSave: (newSettings: TemplateProviderUserSettings) => void,

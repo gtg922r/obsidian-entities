@@ -138,7 +138,7 @@ export class FolderEntityProvider extends EntityProvider<FolderProviderUserSetti
 		});
 	}
 
-	static buildSimpleSettings?(
+	static buildSimpleSettings(
 		settingContainer: HTMLElement,
 		settings: FolderProviderUserSettings,
 		onShouldSave: (newSettings: FolderProviderUserSettings) => void,

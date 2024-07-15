@@ -167,7 +167,7 @@ export class DataviewEntityProvider extends EntityProvider<DataviewProviderUserS
 		});
 	}
 
-	static buildSimpleSettings?(
+	static buildSimpleSettings(
 		settingContainer: HTMLElement,
 		settings: DataviewProviderUserSettings,
 		onShouldSave: (newSettings: DataviewProviderUserSettings) => void,
