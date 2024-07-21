@@ -85,7 +85,6 @@ export class HelperEntityProvider extends EntityProvider<HelperProviderUserSetti
 				suggestionText: `Checkbox: ${checkboxType.charAt(0).toUpperCase() + checkboxType.slice(1)}`,
 				icon: this.settings.icon ?? "wand",
 				action: (item, context) => {
-					console.log(`${checkboxType} Checkbox Action`);
 					if (context) {
 						this.checkboxUtilityFunction(checkboxContent, context);
 					} else {
@@ -115,7 +114,7 @@ export class HelperEntityProvider extends EntityProvider<HelperProviderUserSetti
 			ch: editor.getLine(context.end.line).length,
 		};
 		const currentLineText = editor.getRange(lineStart, lineEnd);
-		const replaceRegx = /(^\s*)(?:- \[.?\]\s)?(.*)/;
+		const replaceRegx = /(^\s*)(?:- \[.?\]\s|- )(.*)/;
 		const match = currentLineText.match(replaceRegx);
 		const replacementText = match
 			? `${match[1]}- [${checkboxType}] ${match[2]}`
