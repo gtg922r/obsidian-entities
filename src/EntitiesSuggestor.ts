@@ -93,7 +93,7 @@ export class EntitiesSuggestor extends EditorSuggest<EntitySuggestionItem> {
 	getSuggestions(
 		context: EditorSuggestContext
 	): EntitySuggestionItem[] | Promise<EntitySuggestionItem[]> {
-		const startTime = performance.now(); // Start timing
+		// const startTime = performance.now(); // Start timing
 		const currentTime = performance.now();
 		const refreshThreshold = 200; // milliseconds
 
@@ -151,8 +151,8 @@ export class EntitiesSuggestor extends EditorSuggest<EntitySuggestionItem> {
 			(a, b) => (b.match?.score ?? -10) - (a.match?.score ?? -10)
 		);
 
-		const endTime = performance.now(); // End timing
-		console.log(`getSuggestions took ${endTime - startTime} milliseconds.`); // Report time to console
+		// const endTime = performance.now(); // End timing
+		// console.log(`getSuggestions took ${endTime - startTime} milliseconds.`); // Report time to console
 
 		return sortedSuggestions;
 	}
@@ -185,7 +185,7 @@ export class EntitiesSuggestor extends EditorSuggest<EntitySuggestionItem> {
 		value: EntitySuggestionItem,
 		evt: MouseEvent | KeyboardEvent
 	): void {
-		console.log("context entering select:", this.context);
+		// console.log("context entering select:", this.context);
 		if (!this.context) {
 			console.error("No context found for suggestion selection");
 			return;
@@ -194,8 +194,8 @@ export class EntitiesSuggestor extends EditorSuggest<EntitySuggestionItem> {
 		if (value.action) {
 			const actionResult = value.action(value, originalContext);
 			Promise.resolve(actionResult).then((result) => {
-				console.log("Action result:", result);
-				console.log("Action context:", this.context);
+				// console.log("Action result:", result);
+				// console.log("Action context:", this.context);
 				if (result != undefined) {
 					this.replaceTextAtContext(result, originalContext);
 				}
@@ -208,8 +208,8 @@ export class EntitiesSuggestor extends EditorSuggest<EntitySuggestionItem> {
 	}
 
 	private insertText(text: string): void {
-		console.log("Inserting text:", text);
-		console.log("Inserting using Context:", this.context);
+		// console.log("Inserting text:", text);
+		// console.log("Inserting using Context:", this.context);
 		if (this.context) {
 			this.replaceTextAtContext(text, this.context);
 		}
@@ -219,8 +219,8 @@ export class EntitiesSuggestor extends EditorSuggest<EntitySuggestionItem> {
 		text: string,
 		context: EditorSuggestContext
 	): void {
-		console.log("Inserting text:", text);
-		console.log("Inserting using Context:", context);
+		// console.log("Inserting text:", text);
+		// console.log("Inserting using Context:", context);
 
 		const editor = context.editor;
 		const start = {
