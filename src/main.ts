@@ -13,6 +13,7 @@ import { TemplateEntityProvider } from "./Providers/TemplateProvider";
 import { DateEntityProvider } from "./Providers/DateEntityProvider";
 import { MetadataMenuProvider } from "./Providers/MetadataMenuProvider";
 import { HelperEntityProvider } from "./Providers/HelperActionsProvider";
+import { CharacterProvider } from "./Providers/CharacterProvider";
 
 export default class Entities extends Plugin {
 	settings: EntitiesSettings;
@@ -41,7 +42,8 @@ export default class Entities extends Plugin {
 			.registerProviderType(TemplateEntityProvider)
 			.registerProviderType(DateEntityProvider)
 			.registerProviderType(MetadataMenuProvider)
-			.registerProviderType(HelperEntityProvider);
+			.registerProviderType(HelperEntityProvider)
+			.registerProviderType(CharacterProvider);
 	}
 
 	async loadEntityProviders() {

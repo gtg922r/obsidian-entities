@@ -1,7 +1,7 @@
 import { Plugin, Setting } from "obsidian";
 import { EntityProvider, EntityProviderID, EntityProviderUserSettings } from "./EntityProvider";
 import { DerivedClassWithConstructorArgs } from "src/entities.types";
-
+import { CharacterProvider } from "./CharacterProvider";
 
 interface ProviderRegistryClassMethods<T extends EntityProviderUserSettings> {
 	getDescription(settings?: T): string;
@@ -120,3 +120,7 @@ class ProviderRegistry {
 }
 
 export default ProviderRegistry;
+
+// Register the CharacterProvider
+ProviderRegistry.getInstance()
+    .registerProviderType(CharacterProvider)
