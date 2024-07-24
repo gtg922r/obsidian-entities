@@ -100,7 +100,8 @@ export class CharacterProvider extends EntityProvider<CharacterProviderUserSetti
 		const lowerCaseQuery = query.toLowerCase();
 
 		for (const [keyword, entries] of Object.entries(dictionary)) {
-			if (keyword.toLowerCase().includes(lowerCaseQuery)) {
+			const normalizedKeyword = keyword.toLowerCase().replace(/_/g, " ");
+			if (normalizedKeyword.includes(lowerCaseQuery)) {
 				for (const entry of entries) {
 					results.push({
 						suggestionText: `${entry.char}: ${prefix}-${entry.name} (${keyword})`,
@@ -177,5 +178,3 @@ export class CharacterProvider extends EntityProvider<CharacterProviderUserSetti
 		// This could include more complex options like custom character attributes, relationships, etc.
 	}
 }
-
-
