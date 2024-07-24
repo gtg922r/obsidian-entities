@@ -115,12 +115,12 @@ export class HelperEntityProvider extends EntityProvider<HelperProviderUserSetti
 			ch: editor.getLine(context.end.line).length,
 		};
 		const currentLineText = editor.getRange(lineStart, lineEnd);
-		const replaceRegx = /(^\s*)(?:- \[.?\]\s|- )(.*)(\[created)/;
+		const replaceRegx = /(^\s*)(?:- \[.?\]\s|- )(.*)(?:\[created)?/;
 		const match = currentLineText.match(replaceRegx);
 		const currentDate = moment().format('YYYY-MM-DD');
 		// TODO: add a setting to specify whether should add created field 
 		const replacementText = match
-			? `${match[1]}- [${checkboxType}] ${currentDate} ${match[2]} [created::${currentDate}]`
+			? `${match[1]}- [${checkboxType}] ${match[2]} [created::${currentDate}]`
 			: currentLineText;
 		editor.replaceRange(replacementText, lineStart, lineEnd);
 	}
