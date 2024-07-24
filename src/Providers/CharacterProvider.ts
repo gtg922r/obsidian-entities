@@ -47,16 +47,9 @@ const emojiDictionary: CharacterKeywordDictionary = Object.entries(
 	return acc;
 }, {} as CharacterKeywordDictionary);
 
-console.log("Emoji Dictionary:", emojiDictionary);
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const fontAwesomeDictionary = require("./fontAwesomeDictionary.json") as CharacterKeywordDictionary;
 
-const fontAwesomeDictionary: CharacterKeywordDictionary = {
-	house: [{ char: "", name: "house" }],
-	tree: [{ char: "", name: "tree" }],
-	water: [{ char: "", name: "water" }],
-	fire: [{ char: "", name: "fire" }],
-	earth: [{ char: "", name: "earth_africa" }],
-	wind: [{ char: "", name: "wind" }],
-};
 
 export class CharacterProvider extends EntityProvider<CharacterProviderUserSettings> {
 	readonly emojiDictionary: CharacterKeywordDictionary = emojiDictionary;
