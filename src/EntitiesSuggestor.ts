@@ -13,6 +13,7 @@ import {
 } from "obsidian";
 import ProviderRegistry from "./Providers/ProviderRegistry";
 import { RefreshBehavior } from "./Providers/EntityProvider";
+import { TriggerCharacter } from "src/entities.types";
 
 export interface EntitySuggestionItem {
 	suggestionText: string;
@@ -71,16 +72,18 @@ export class EntitiesSuggestor extends EditorSuggest<EntitySuggestionItem> {
 			.getLine(currentLine)
 			.slice(0, cursor.ch);
 
-		const match = currentLineToCursor.match(/(^|[\W])@(.*)$/);
+		const match = currentLineToCursor.match(/(^|[\W])([@:/])(.*)$/);
 
 		if (match && match.index !== undefined) {
-			const start = match.index + match[1].length + 1; // Correctly adjust start to include '@' directly
-			const query = match[2]; // The captured query part after '@'
+			const start = match.index + match[1].length + 1; // Correctly adjust start to include trigger character
+			const trigger = match[2] as TriggerCharacter; // The trigger character
+			const query = match[3]; // The captured query part after the trigger
 
 			return {
 				start: { line: currentLine, ch: start },
 				query,
 				end: cursor,
+				trigger, // Include the trigger character in the context
 			};
 		}
 
@@ -93,13 +96,13 @@ export class EntitiesSuggestor extends EditorSuggest<EntitySuggestionItem> {
 	getSuggestions(
 		context: EditorSuggestContext
 	): EntitySuggestionItem[] | Promise<EntitySuggestionItem[]> {
-		// const startTime = performance.now(); // Start timing
 		const currentTime = performance.now();
 		const refreshThreshold = 200; // milliseconds
 
 		const allSuggestions: EntitySuggestionItem[] = [];
+		const trigger = context.trigger as TriggerCharacter || TriggerCharacter.At; // Default to '@' if trigger is not specified
 
-		this.providerRegistry.getProviders().forEach((provider) => {
+		this.providerRegistry.getProvidersForTrigger(trigger).forEach((provider) => {
 			const providerId = provider.constructor.name;
 			const refreshBehavior = provider.getRefreshBehavior();
 			const lastRefresh = this.lastRefreshTime.get(providerId) || 0;
@@ -112,7 +115,7 @@ export class EntitiesSuggestor extends EditorSuggest<EntitySuggestionItem> {
 					currentTime - lastRefresh > refreshThreshold) ||
 				!this.providerSuggestions.has(providerId)
 			) {
-				providerSuggestions = provider.getEntityList(context.query);
+				providerSuggestions = provider.getEntityList(context.query, trigger);
 				this.providerSuggestions.set(providerId, providerSuggestions);
 				this.lastRefreshTime.set(providerId, currentTime);
 			} else {
@@ -150,9 +153,6 @@ export class EntitiesSuggestor extends EditorSuggest<EntitySuggestionItem> {
 		const sortedSuggestions = Array.from(uniqueSuggestions.values()).sort(
 			(a, b) => (b.match?.score ?? -10) - (a.match?.score ?? -10)
 		);
-
-		// const endTime = performance.now(); // End timing
-		// console.log(`getSuggestions took ${endTime - startTime} milliseconds.`); // Report time to console
 
 		return sortedSuggestions;
 	}

@@ -2,6 +2,7 @@ import { Plugin, Setting } from "obsidian";
 import { EntitySuggestionItem } from "src/EntitiesSuggestor";
 import { EntityProvider, EntityProviderUserSettings } from "./EntityProvider";
 import emojilib from "emojilib";
+import { TriggerCharacter } from "src/entities.types";
 
 const characterProviderTypeID = "characterProvider";
 
@@ -109,7 +110,11 @@ export class CharacterProvider extends EntityProvider<CharacterProviderUserSetti
 		return results;
 	}
 
-	getEntityList(query: string): EntitySuggestionItem[] {
+	get triggers(): TriggerCharacter[] {
+		return [TriggerCharacter.Colon]; // Specify the ':' trigger
+	}
+
+	getEntityList(query: string, trigger: TriggerCharacter): EntitySuggestionItem[] {
 		return [
 			...(this.settings.suggestEmoji
 				? this.searchDictionary(emojiDictionary, query, "em")

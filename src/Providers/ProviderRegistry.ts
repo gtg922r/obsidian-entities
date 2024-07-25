@@ -2,6 +2,7 @@ import { Plugin, Setting } from "obsidian";
 import { EntityProvider, EntityProviderID, EntityProviderUserSettings } from "./EntityProvider";
 import { DerivedClassWithConstructorArgs } from "src/entities.types";
 import { CharacterProvider } from "./CharacterProvider";
+import { TriggerCharacter } from "src/entities.types";
 
 interface ProviderRegistryClassMethods<T extends EntityProviderUserSettings> {
 	getDescription(settings?: T): string;
@@ -116,6 +117,10 @@ class ProviderRegistry {
 
 	getProviderClasses(): Map<string, RegisterableEntityProvider> {
 		return this.providerClasses;
+	}
+
+	getProvidersForTrigger(trigger: TriggerCharacter): EntityProvider<EntityProviderUserSettings>[] {
+		return this.providers.filter(provider => provider.triggers.includes(trigger));
 	}
 }
 

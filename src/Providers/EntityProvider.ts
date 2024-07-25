@@ -2,6 +2,7 @@ import { EntitySuggestionItem } from "src/EntitiesSuggestor";
 import { entityFromTemplateSettings } from "../entities.types";
 import { createNewNoteFromTemplate } from "../entititiesUtilities";
 import { Plugin, SearchResult } from "obsidian";
+import { TriggerCharacter } from "src/entities.types";
 
 // Base interfaces and classes for Providers
 export interface EntityProviderID {
@@ -30,7 +31,7 @@ export abstract class EntityProvider<T extends EntityProviderUserSettings> {
 	plugin: Plugin;
 
 	abstract getDefaultSettings(): T;
-	abstract getEntityList(query: string): EntitySuggestionItem[];
+	abstract getEntityList(query: string, trigger: TriggerCharacter): EntitySuggestionItem[];
 
 	// New method to determine refresh behavior
 	getRefreshBehavior(): RefreshBehavior {
@@ -42,6 +43,10 @@ export abstract class EntityProvider<T extends EntityProviderUserSettings> {
 		this.settings = { ...this.getDefaultSettings(), ...settings };
 	}
 
+	// New getter function for triggers
+	get triggers(): TriggerCharacter[] {
+		return [TriggerCharacter.At]; // Default to '@' if not overridden
+	}
 
 	/**
 	 * Generates suggestions for creating new notes based on templates for a given query.

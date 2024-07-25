@@ -1,6 +1,11 @@
 import { App, Plugin, TFile } from "obsidian";
 import { EntityProviderUserSettings } from "./Providers/EntityProvider";
 
+export enum TriggerCharacter {
+	At = "@",
+	Colon = ":",
+	Slash = "/",
+}
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type DerivedFrom<T, Arguments extends unknown[] = any[]> = {
