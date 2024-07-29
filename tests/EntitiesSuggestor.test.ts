@@ -1,8 +1,9 @@
-import { App, Editor, EditorSuggestContext, TFile } from "obsidian";
+import { App, Editor, TFile } from "obsidian";
 import Entities from "../src/main";
-import { EntitiesSuggestor, EntitySuggestionItem } from "../src/EntitiesSuggestor";
+import { EntitiesSuggestContext, EntitiesSuggestor, EntitySuggestionItem } from "../src/EntitiesSuggestor";
 import { EntityProvider, EntityProviderUserSettings } from "../src/Providers/EntityProvider";
-import ProviderRegistry from "src/Providers/ProviderRegistry";
+import ProviderRegistry from "../src/Providers/ProviderRegistry";
+import { TriggerCharacter } from "../src/entities.types";
 
 // Mocking the necessary Obsidian interfaces and classes inline
 jest.mock("obsidian", () => {
@@ -75,6 +76,7 @@ describe("onTrigger tests", () => {
 			start: { line: 0, ch: 11 },
 			end: cursorPosition,
 			query: "keyword",
+			trigger: TriggerCharacter.At,
 		});
 	});
 
@@ -260,7 +262,8 @@ describe("getSuggestions tests", () => {
             query: "test",
             editor: mockEditor,
             file: mockFile,
-        } as unknown as EditorSuggestContext;
+			trigger: TriggerCharacter.At
+        } as unknown as EntitiesSuggestContext;
 
         const expectedSuggestions: EntitySuggestionItem[] = [
             {
@@ -283,7 +286,8 @@ describe("getSuggestions tests", () => {
             query: "note",
             editor: mockEditor,
             file: mockFile,
-        } as unknown as EditorSuggestContext;
+			trigger: TriggerCharacter.At
+        } as unknown as EntitiesSuggestContext;
 
         const entitySuggestions: EntitySuggestionItem[] = [
             {

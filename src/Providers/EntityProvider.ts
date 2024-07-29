@@ -2,7 +2,7 @@ import { EntitySuggestionItem } from "src/EntitiesSuggestor";
 import { entityFromTemplateSettings } from "../entities.types";
 import { createNewNoteFromTemplate } from "../entititiesUtilities";
 import { Plugin, SearchResult } from "obsidian";
-import { TriggerCharacter } from "src/entities.types";
+import { TriggerCharacter } from "../entities.types";
 
 // Base interfaces and classes for Providers
 export interface EntityProviderID {

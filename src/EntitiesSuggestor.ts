@@ -13,7 +13,7 @@ import {
 } from "obsidian";
 import ProviderRegistry from "./Providers/ProviderRegistry";
 import { RefreshBehavior } from "./Providers/EntityProvider";
-import { TriggerCharacter } from "src/entities.types";
+import { TriggerCharacter } from "./entities.types";
 
 export interface EntitySuggestionItem {
 	suggestionText: string;
@@ -25,6 +25,14 @@ export interface EntitySuggestionItem {
 		item: EntitySuggestionItem,
 		context: EditorSuggestContext | null
 	) => Promise<string> | string | void;
+}
+
+export interface EntitiesSuggestTriggerInfo extends EditorSuggestTriggerInfo {
+	trigger: TriggerCharacter;
+}
+
+export interface EntitiesSuggestContext extends EditorSuggestContext {
+	trigger: TriggerCharacter;
 }
 
 export class EntitiesSuggestor extends EditorSuggest<EntitySuggestionItem> {
@@ -66,7 +74,7 @@ export class EntitiesSuggestor extends EditorSuggest<EntitySuggestionItem> {
 		cursor: EditorPosition,
 		editor: Editor,
 		file: TFile
-	): EditorSuggestTriggerInfo | null {
+	): EntitiesSuggestTriggerInfo | null {
 		const currentLine = cursor.line;
 		const currentLineToCursor = editor
 			.getLine(currentLine)
@@ -94,7 +102,7 @@ export class EntitiesSuggestor extends EditorSuggest<EntitySuggestionItem> {
 	private lastRefreshTime: Map<string, number> = new Map();
 
 	getSuggestions(
-		context: EditorSuggestContext
+		context: EntitiesSuggestContext
 	): EntitySuggestionItem[] | Promise<EntitySuggestionItem[]> {
 		const currentTime = performance.now();
 		const refreshThreshold = 200; // milliseconds
