@@ -94,6 +94,7 @@ describe("onTrigger tests", () => {
 			start: { line: 0, ch: 1 },
 			end: cursorPosition,
 			query: "keyword",
+			trigger: TriggerCharacter.At,
 		});
 	});
 
@@ -113,6 +114,7 @@ describe("onTrigger tests", () => {
 			start: { line: 0, ch: 11 },
 			end: cursorPosition,
 			query: "keyword",
+			trigger: TriggerCharacter.At,
 		});
 	});
 
@@ -132,6 +134,7 @@ describe("onTrigger tests", () => {
 			start: { line: 0, ch: 11 },
 			end: cursorPosition,
 			query: "keyword and some more text",
+			trigger: TriggerCharacter.At,
 		});
 	});
 
@@ -173,6 +176,7 @@ describe("onTrigger tests", () => {
 			start: { line: 0, ch: 1 },
 			end: { line: 0, ch: 4 },
 			query: "   ",
+			trigger: TriggerCharacter.At,
 		});
 	});
 
@@ -190,6 +194,7 @@ describe("onTrigger tests", () => {
 			start: { line: 0, ch: 1 },
 			end: { line: 0, ch: 8 },
 			query: "example",
+			trigger: TriggerCharacter.At,
 		});
 	});
 
@@ -221,6 +226,7 @@ describe("onTrigger tests", () => {
 			start: { line: 0, ch: 6 },
 			end: { line: 0, ch: 18 },
 			query: "first @secon",
+			trigger: TriggerCharacter.At,
 		});
 	});
 });
