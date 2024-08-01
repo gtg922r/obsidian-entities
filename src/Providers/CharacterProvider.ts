@@ -34,7 +34,7 @@ interface CharacterKeywordDictionary {
 }
 
 const emojiDictionary: CharacterKeywordDictionary = Object.entries(
-	emojilib
+	emojilib ?? {}
 ).reduce((acc, [emoji, keywords]) => {
 	if (Array.isArray(keywords) && keywords.length > 0) {
 		const primaryName = keywords[0];
