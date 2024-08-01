@@ -1,7 +1,7 @@
 import { App, Editor, TFile } from "obsidian";
 import Entities from "../src/main";
 import { EntitiesSuggestContext, EntitiesSuggestor, EntitySuggestionItem } from "../src/EntitiesSuggestor";
-import { EntityProvider, EntityProviderUserSettings } from "../src/Providers/EntityProvider";
+import { EntityProvider, EntityProviderUserSettings, RefreshBehavior } from "../src/Providers/EntityProvider";
 import ProviderRegistry from "../src/Providers/ProviderRegistry";
 import { TriggerCharacter } from "../src/entities.types";
 
@@ -242,6 +242,7 @@ describe("getSuggestions tests", () => {
         // Mocking the ProviderRegistry
         mockRegistry = {
             getProviders: jest.fn(),
+			getProvidersForTrigger: jest.fn(),
         } as unknown as jest.Mocked<ProviderRegistry>;
 
         suggestor = new EntitiesSuggestor(mockPlugin, mockRegistry);
@@ -258,9 +259,11 @@ describe("getSuggestions tests", () => {
         mockEntityProvider = {
             getEntityList: jest.fn(),
             getTemplateCreationSuggestions: jest.fn(),
+			getRefreshBehavior: jest.fn(),
         } as unknown as jest.Mocked<EntityProvider<EntityProviderUserSettings>>;
 
         mockRegistry.getProviders.mockReturnValue([mockEntityProvider]);
+		mockRegistry.getProvidersForTrigger.mockReturnValue([mockEntityProvider]);
     });
 
     test("getSuggestions should return a list of suggestions based on the query", () => {
@@ -280,6 +283,7 @@ describe("getSuggestions tests", () => {
 
         mockEntityProvider.getEntityList.mockReturnValue(expectedSuggestions);
         mockEntityProvider.getTemplateCreationSuggestions.mockReturnValue([]);
+		mockEntityProvider.getRefreshBehavior.mockReturnValue(RefreshBehavior.Default);
 
         const result = suggestor.getSuggestions(context);
 
