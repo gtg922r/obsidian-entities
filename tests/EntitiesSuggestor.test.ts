@@ -1,8 +1,9 @@
 import { App, Editor, EditorSuggestContext, TFile } from "obsidian";
 import Entities from "../src/main";
 import { EntitiesSuggestor, EntitySuggestionItem } from "../src/EntitiesSuggestor";
-import { EntityProvider, EntityProviderUserSettings } from "../src/Providers/EntityProvider";
-import ProviderRegistry from "src/Providers/ProviderRegistry";
+import { EntityProvider, EntityProviderUserSettings, RefreshBehavior } from "../src/Providers/EntityProvider";
+import ProviderRegistry from "../src/Providers/ProviderRegistry";
+import { TriggerCharacter } from "../src/entities.types";
 
 // Mocking the necessary Obsidian interfaces and classes inline
 jest.mock("obsidian", () => {
@@ -16,8 +17,11 @@ jest.mock("obsidian", () => {
         },
         prepareQuery: jest.fn().mockImplementation((query) => query), // Mock prepareQuery to return the query itself
         fuzzySearch: jest.fn().mockImplementation((query, text) => {
-            // Simple mock implementation of fuzzySearch
-            return query === text ? { score: 100, matches: [0, query.length] } : null;
+            // Mock implementation of fuzzySearch
+            if (text.toLowerCase().includes(query.toLowerCase())) {
+                return { score: 10, matches: [[0, query.length]] };
+            }
+            return null;
         }),
     };
 });
@@ -74,7 +78,7 @@ describe("onTrigger tests", () => {
 		expect(result).toEqual({
 			start: { line: 0, ch: 11 },
 			end: cursorPosition,
-			query: "keyword",
+			query: "@keyword",
 		});
 	});
 
@@ -91,7 +95,7 @@ describe("onTrigger tests", () => {
 		expect(result).toEqual({
 			start: { line: 0, ch: 1 },
 			end: cursorPosition,
-			query: "keyword",
+			query: "@keyword",
 		});
 	});
 
@@ -110,7 +114,7 @@ describe("onTrigger tests", () => {
 		expect(result).toEqual({
 			start: { line: 0, ch: 11 },
 			end: cursorPosition,
-			query: "keyword",
+			query: "@keyword",
 		});
 	});
 
@@ -129,7 +133,7 @@ describe("onTrigger tests", () => {
 		expect(result).toEqual({
 			start: { line: 0, ch: 11 },
 			end: cursorPosition,
-			query: "keyword and some more text",
+			query: "@keyword and some more text",
 		});
 	});
 
@@ -170,7 +174,7 @@ describe("onTrigger tests", () => {
 		expect(result).toEqual({
 			start: { line: 0, ch: 1 },
 			end: { line: 0, ch: 4 },
-			query: "   ",
+			query: "@   ",
 		});
 	});
 
@@ -187,7 +191,7 @@ describe("onTrigger tests", () => {
 		expect(result).toEqual({
 			start: { line: 0, ch: 1 },
 			end: { line: 0, ch: 8 },
-			query: "example",
+			query: "@example",
 		});
 	});
 
@@ -205,7 +209,7 @@ describe("onTrigger tests", () => {
 		expect(result).toBeNull();
 	});
 
-	test("onTrigger should handle multiple @ characters correctly", () => {
+	test("onTrigger should handle multiple @ characters correctly and when cursor is mid-word", () => {
 		mockEditor.getLine.mockImplementationOnce(() => "text @first @second");
 		const cursorPosition = { line: 0, ch: 18 }; // Assuming cursor is one character before end of line
 		const result = suggestor.onTrigger(
@@ -218,7 +222,7 @@ describe("onTrigger tests", () => {
 		expect(result).toEqual({
 			start: { line: 0, ch: 6 },
 			end: { line: 0, ch: 18 },
-			query: "first @secon",
+			query: "@first @secon",
 		});
 	});
 });
@@ -234,6 +238,7 @@ describe("getSuggestions tests", () => {
         // Mocking the ProviderRegistry
         mockRegistry = {
             getProviders: jest.fn(),
+			getProvidersForTrigger: jest.fn(),
         } as unknown as jest.Mocked<ProviderRegistry>;
 
         suggestor = new EntitiesSuggestor(mockPlugin, mockRegistry);
@@ -250,14 +255,16 @@ describe("getSuggestions tests", () => {
         mockEntityProvider = {
             getEntityList: jest.fn(),
             getTemplateCreationSuggestions: jest.fn(),
+			getRefreshBehavior: jest.fn(),
         } as unknown as jest.Mocked<EntityProvider<EntityProviderUserSettings>>;
 
         mockRegistry.getProviders.mockReturnValue([mockEntityProvider]);
+		mockRegistry.getProvidersForTrigger.mockReturnValue([mockEntityProvider]);
     });
 
     test("getSuggestions should return a list of suggestions based on the query", () => {
         const context = {
-            query: "test",
+            query: "@test",
             editor: mockEditor,
             file: mockFile,
         } as unknown as EditorSuggestContext;
@@ -265,22 +272,29 @@ describe("getSuggestions tests", () => {
         const expectedSuggestions: EntitySuggestionItem[] = [
             {
                 suggestionText: "Test suggestion",
-                match: { score: 10, matches: [] },
             },
         ];
 
+		const expectedSuggestionsWithMatches: EntitySuggestionItem[] = [
+			{
+				suggestionText: "Test suggestion",
+				match: { score: 10, matches: [[0, 4]] },
+			},
+		];
+
         mockEntityProvider.getEntityList.mockReturnValue(expectedSuggestions);
         mockEntityProvider.getTemplateCreationSuggestions.mockReturnValue([]);
+		mockEntityProvider.getRefreshBehavior.mockReturnValue(RefreshBehavior.Default);
 
         const result = suggestor.getSuggestions(context);
 
-        expect(result).toEqual(expectedSuggestions);
-        expect(mockEntityProvider.getEntityList).toHaveBeenCalledWith("test");
+        expect(result).toEqual(expectedSuggestionsWithMatches);
+        expect(mockEntityProvider.getEntityList).toHaveBeenCalledWith("test", TriggerCharacter.At);
     });
 
     test("getSuggestions should include template creation suggestions", () => {
         const context = {
-            query: "note",
+            query: "@note",
             editor: mockEditor,
             file: mockFile,
         } as unknown as EditorSuggestContext;
@@ -297,7 +311,7 @@ describe("getSuggestions tests", () => {
                 suggestionText: "New Note: note",
                 icon: "plus-circle",
                 action: jest.fn(),
-                match: { score: -10, matches: [] },
+                match: { score: -10, matches: [[0, 4]] },
             },
         ];
 
@@ -308,15 +322,15 @@ describe("getSuggestions tests", () => {
 
         expect(result).toContainEqual({
             suggestionText: "Note suggestion",
-            match: { score: 5, matches: [] },
+            match: { score: 10, matches: [[0, 4]] },
         });
         expect(result).toContainEqual({
             suggestionText: "New Note: note",
             icon: "plus-circle",
             action: expect.any(Function),
-            match: { score: -10, matches: [] },
+            match: { score: -10, matches: [[0, 4]] },
         });
-        expect(mockEntityProvider.getEntityList).toHaveBeenCalledWith("note");
+        expect(mockEntityProvider.getEntityList).toHaveBeenCalledWith("note", TriggerCharacter.At);
         expect(mockEntityProvider.getTemplateCreationSuggestions).toHaveBeenCalledWith("note");
     });
 });

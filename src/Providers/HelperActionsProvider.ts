@@ -7,6 +7,7 @@ import {
 	moment
 } from "obsidian";
 import { IconPickerModal } from "src/userComponents";
+import { TriggerCharacter } from "src/entities.types";
 
 const helperProviderTypeID = "helper";
 
@@ -78,23 +79,29 @@ export class HelperEntityProvider extends EntityProvider<HelperProviderUserSetti
 		super(plugin, settings);
 	}
 
-	getEntityList(): EntitySuggestionItem[] {
+	get triggers(): TriggerCharacter[] {
+		return [TriggerCharacter.Slash]; // Specify the '/' trigger
+	}
 
-		return checkboxTypes.map(type => {
-			const [checkboxType, checkboxContent] = Object.entries(type)[0];
-			return {
-				suggestionText: `Checkbox: ${checkboxType.charAt(0).toUpperCase() + checkboxType.slice(1)}`,
-				icon: this.settings.icon ?? "wand",
-				action: (item, context) => {
-					if (context) {
-						this.checkboxUtilityFunction(checkboxContent, context);
-					} else {
-						console.log("Utility Function Provider: No context given");
-					}
-					return undefined;
-				},
-			};
-		});
+	getEntityList(query: string, trigger: TriggerCharacter): EntitySuggestionItem[] {
+		if (trigger === TriggerCharacter.Slash) {
+			return checkboxTypes.map(type => {
+				const [checkboxType, checkboxContent] = Object.entries(type)[0];
+				return {
+					suggestionText: `Checkbox: ${checkboxType.charAt(0).toUpperCase() + checkboxType.slice(1)}`,
+					icon: this.settings.icon ?? "wand",
+					action: (item, context) => {
+						if (context) {
+							this.checkboxUtilityFunction(checkboxContent, context);
+						} else {
+							console.log("Utility Function Provider: No context given");
+						}
+						return undefined;
+					},
+				};
+			});
+		}
+		return [];
 	}
 
 	private checkboxUtilityFunction(

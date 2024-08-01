@@ -2,6 +2,7 @@ import { Plugin, Setting } from "obsidian";
 import { EntitySuggestionItem } from "src/EntitiesSuggestor";
 import { EntityProvider, EntityProviderUserSettings } from "./EntityProvider";
 import emojilib from "emojilib";
+import { TriggerCharacter } from "../entities.types";
 
 const characterProviderTypeID = "characterProvider";
 
@@ -33,7 +34,7 @@ interface CharacterKeywordDictionary {
 }
 
 const emojiDictionary: CharacterKeywordDictionary = Object.entries(
-	emojilib
+	emojilib ?? {}
 ).reduce((acc, [emoji, keywords]) => {
 	if (Array.isArray(keywords) && keywords.length > 0) {
 		const primaryName = keywords[0];
@@ -84,7 +85,7 @@ export class CharacterProvider extends EntityProvider<CharacterProviderUserSetti
 		// Initialize any additional properties or methods specific to CharacterProvider here
 	}
 
-	private searchDictionary(
+	private getSuggestionsFromDictionary(
 		dictionary: CharacterKeywordDictionary,
 		query: string,
 		prefix: string
@@ -96,10 +97,15 @@ export class CharacterProvider extends EntityProvider<CharacterProviderUserSetti
 			const normalizedKeyword = keyword.toLowerCase().replace(/_/g, " ");
 			if (normalizedKeyword.includes(lowerCaseQuery)) {
 				for (const entry of entries) {
+					const isSynonym = keyword !== entry.name;
 					results.push({
-						suggestionText: `${entry.char}: ${prefix}-${entry.name} (${keyword})`,
+						// suggestionText: `${entry.char}: ${prefix}-${entry.name} (${keyword})`,
+						// suggestionText: `${entry.name} (${prefix}: ${keyword})`,
+						suggestionText: `${entry.name} (${prefix})${isSynonym ? ` for "${keyword}"` : ''}`,
 						replacementText: entry.char,
-						icon: this.settings.icon,
+						// icon: this.settings.icon,
+						flair: entry.char,
+						// flair: prefix,
 						action: async () => entry.char,
 					});
 				}
@@ -109,15 +115,22 @@ export class CharacterProvider extends EntityProvider<CharacterProviderUserSetti
 		return results;
 	}
 
-	getEntityList(query: string): EntitySuggestionItem[] {
-		return [
-			...(this.settings.suggestEmoji
-				? this.searchDictionary(emojiDictionary, query, "em")
+	get triggers(): TriggerCharacter[] {
+		return [TriggerCharacter.Colon]; // Specify the ':' trigger
+	}
+
+	getEntityList(query: string, trigger: TriggerCharacter): EntitySuggestionItem[] {
+		if (trigger === TriggerCharacter.Colon) {
+			return [
+				...(this.settings.suggestEmoji
+				? this.getSuggestionsFromDictionary(emojiDictionary, query, "em")
 				: []),
 			...(this.settings.suggestFontAwesome
-				? this.searchDictionary(fontAwesomeDictionary, query, "fa")
+				? this.getSuggestionsFromDictionary(fontAwesomeDictionary, query, "fa")
 				: []),
-		];
+			];
+		}
+		return [];
 	}
 
 	static buildSummarySetting(
