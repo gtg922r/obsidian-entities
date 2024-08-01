@@ -225,6 +225,106 @@ describe("onTrigger tests", () => {
 			query: "@first @secon",
 		});
 	});
+
+	test("onTrigger should return word after : character when cursor is at end of line", () => {
+		mockEditor.getLine.mockImplementationOnce(() => "some text :keyword");
+		const cursorPosition = { line: 0, ch: 18 }; // Assuming cursor is at the end of "some text :keyword"
+		const result = suggestor.onTrigger(
+			cursorPosition,
+			mockEditor as Editor,
+			mockFile
+		);
+
+		expect(result).not.toBeNull();
+		expect(result).toEqual({
+			start: { line: 0, ch: 11 },
+			end: cursorPosition,
+			query: ":keyword",
+		});
+	});
+
+	test("onTrigger should return word after / character when cursor is at end of line", () => {
+		mockEditor.getLine.mockImplementationOnce(() => "some text /keyword");
+		const cursorPosition = { line: 0, ch: 18 }; // Assuming cursor is at the end of "some text /keyword"
+		const result = suggestor.onTrigger(
+			cursorPosition,
+			mockEditor as Editor,
+			mockFile
+		);
+
+		expect(result).not.toBeNull();
+		expect(result).toEqual({
+			start: { line: 0, ch: 11 },
+			end: cursorPosition,
+			query: "/keyword",
+		});
+	});
+
+	test("onTrigger should return word after : character when cursor is in middle of the line", () => {
+		mockEditor.getLine.mockImplementationOnce(
+			() => "some text :keyword and some more text"
+		);
+		const cursorPosition = { line: 0, ch: 18 }; // Assuming cursor is right after "some text :keyword"
+		const result = suggestor.onTrigger(
+			cursorPosition,
+			mockEditor as Editor,
+			mockFile
+		);
+
+		expect(result).not.toBeNull();
+		expect(result).toEqual({
+			start: { line: 0, ch: 11 },
+			end: cursorPosition,
+			query: ":keyword",
+		});
+	});
+
+	test("onTrigger should return word after / character when cursor is in middle of the line", () => {
+		mockEditor.getLine.mockImplementationOnce(
+			() => "some text /keyword and some more text"
+		);
+		const cursorPosition = { line: 0, ch: 18 }; // Assuming cursor is right after "some text /keyword"
+		const result = suggestor.onTrigger(
+			cursorPosition,
+			mockEditor as Editor,
+			mockFile
+		);
+
+		expect(result).not.toBeNull();
+		expect(result).toEqual({
+			start: { line: 0, ch: 11 },
+			end: cursorPosition,
+			query: "/keyword",
+		});
+	});
+
+	test("onTrigger should return null when : is not present", () => {
+		mockEditor.getLine.mockImplementationOnce(
+			() => "no special character"
+		);
+		const cursorPosition = { line: 0, ch: 10 };
+		const result = suggestor.onTrigger(
+			cursorPosition,
+			mockEditor as Editor,
+			mockFile
+		);
+
+		expect(result).toBeNull();
+	});
+
+	test("onTrigger should return null when / is not present", () => {
+		mockEditor.getLine.mockImplementationOnce(
+			() => "no special character"
+		);
+		const cursorPosition = { line: 0, ch: 10 };
+		const result = suggestor.onTrigger(
+			cursorPosition,
+			mockEditor as Editor,
+			mockFile
+		);
+
+		expect(result).toBeNull();
+	});
 });
 
 describe("getSuggestions tests", () => {

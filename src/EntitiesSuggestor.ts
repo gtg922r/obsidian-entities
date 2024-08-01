@@ -73,7 +73,11 @@ export class EntitiesSuggestor extends EditorSuggest<EntitySuggestionItem> {
 			.getLine(currentLine)
 			.slice(0, cursor.ch);
 
-		const match = currentLineToCursor.match(/(^|[\W])([@:/])(.*)$/);
+		// TODO: Consider this is the desired behavior, i.e. @ only triggers when it's the first character or after non-word characters
+		let match = currentLineToCursor.match(/(^|[\W])([@])(.*)$/);
+		if (!match) {
+			match = currentLineToCursor.match(/(^|.)([:/])(.*)$/);
+		}
 
 		if (match && match.index !== undefined) {
 			const start = match.index + match[1].length + 1; // Correctly adjust start to include trigger character
