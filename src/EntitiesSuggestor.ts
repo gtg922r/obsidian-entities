@@ -4,12 +4,12 @@ import {
 	EditorPosition,
 	Editor,
 	TFile,
-	EditorSuggestTriggerInfo,
 	EditorSuggestContext,
 	setIcon,
 	fuzzySearch,
 	prepareQuery,
 	SearchResult,
+	EditorSuggestTriggerInfo,
 } from "obsidian";
 import ProviderRegistry from "./Providers/ProviderRegistry";
 import { RefreshBehavior } from "./Providers/EntityProvider";
@@ -19,20 +19,13 @@ export interface EntitySuggestionItem {
 	suggestionText: string;
 	replacementText?: string;
 	icon?: string;
+	flair?: string;
 	noteText?: string;
 	match?: SearchResult;
 	action?: (
 		item: EntitySuggestionItem,
 		context: EditorSuggestContext | null
 	) => Promise<string> | string | void;
-}
-
-export interface EntitiesSuggestTriggerInfo extends EditorSuggestTriggerInfo {
-	trigger: TriggerCharacter;
-}
-
-export interface EntitiesSuggestContext extends EditorSuggestContext {
-	trigger: TriggerCharacter;
 }
 
 export class EntitiesSuggestor extends EditorSuggest<EntitySuggestionItem> {
@@ -74,7 +67,7 @@ export class EntitiesSuggestor extends EditorSuggest<EntitySuggestionItem> {
 		cursor: EditorPosition,
 		editor: Editor,
 		file: TFile
-	): EntitiesSuggestTriggerInfo | null {
+	): EditorSuggestTriggerInfo | null {
 		const currentLine = cursor.line;
 		const currentLineToCursor = editor
 			.getLine(currentLine)
@@ -84,14 +77,12 @@ export class EntitiesSuggestor extends EditorSuggest<EntitySuggestionItem> {
 
 		if (match && match.index !== undefined) {
 			const start = match.index + match[1].length + 1; // Correctly adjust start to include trigger character
-			const trigger = match[2] as TriggerCharacter; // The trigger character
-			const query = match[3]; // The captured query part after the trigger
+			const query = match[2] + match[3]; // The trigger and the captured query part after the trigger
 
 			return {
 				start: { line: currentLine, ch: start },
 				query,
 				end: cursor,
-				trigger, // Include the trigger character in the context
 			};
 		}
 
@@ -102,14 +93,16 @@ export class EntitiesSuggestor extends EditorSuggest<EntitySuggestionItem> {
 	private lastRefreshTime: Map<string, number> = new Map();
 
 	getSuggestions(
-		context: EntitiesSuggestContext
+		context: EditorSuggestContext
 	): EntitySuggestionItem[] | Promise<EntitySuggestionItem[]> {
 		const currentTime = performance.now();
 		const refreshThreshold = 200; // milliseconds
 
 		const allSuggestions: EntitySuggestionItem[] = [];
-		const trigger = context.trigger as TriggerCharacter || TriggerCharacter.At; // Default to '@' if trigger is not specified
-
+		const trigger = context.query.charAt(0) as TriggerCharacter || TriggerCharacter.At; // Default to '@' if trigger is not specified
+		const searchQuery = context.query.slice(1);
+		
+		console.log("trigger:", trigger);
 		this.providerRegistry.getProvidersForTrigger(trigger).forEach((provider) => {
 			const providerId = provider.constructor.name;
 			const refreshBehavior = provider.getRefreshBehavior();
@@ -123,7 +116,7 @@ export class EntitiesSuggestor extends EditorSuggest<EntitySuggestionItem> {
 					currentTime - lastRefresh > refreshThreshold) ||
 				!this.providerSuggestions.has(providerId)
 			) {
-				providerSuggestions = provider.getEntityList(context.query, trigger);
+				providerSuggestions = provider.getEntityList(searchQuery, trigger);
 				this.providerSuggestions.set(providerId, providerSuggestions);
 				this.lastRefreshTime.set(providerId, currentTime);
 			} else {
@@ -134,7 +127,7 @@ export class EntitiesSuggestor extends EditorSuggest<EntitySuggestionItem> {
 		});
 
 		// Prepare the search query for fuzzy search
-		const preparedQuery = prepareQuery(context.query);
+		const preparedQuery = prepareQuery(searchQuery);
 
 		// Perform fuzzy search on the cached suggestions
 		const fuzzySearchResults: EntitySuggestionItem[] =
@@ -146,12 +139,16 @@ export class EntitiesSuggestor extends EditorSuggest<EntitySuggestionItem> {
 				return match ? [{ ...suggestionItem, match }] : [];
 			});
 
-		this.providerRegistry.getProviders().forEach((provider) => {
-			const templateSuggestions = provider.getTemplateCreationSuggestions(
-				context.query
-			);
-			fuzzySearchResults.push(...templateSuggestions);
-		});
+		// Only fetch template suggestions if the trigger is '@'
+		if (trigger === TriggerCharacter.At) {
+			this.providerRegistry.getProviders().forEach((provider) => {
+				const templateSuggestions = provider.getTemplateCreationSuggestions(
+					searchQuery
+				);
+				fuzzySearchResults.push(...templateSuggestions);
+			});
+		}
+
 		const uniqueSuggestions = new Map<string, EntitySuggestionItem>();
 		fuzzySearchResults.forEach((result) => {
 			if (!uniqueSuggestions.has(result.suggestionText)) {
@@ -181,6 +178,8 @@ export class EntitiesSuggestor extends EditorSuggest<EntitySuggestionItem> {
 
 		if (value.icon) {
 			setIcon(suggestionFlair, value.icon);
+		} else if (value.flair) {
+			suggestionFlair.setText(value.flair);
 		}
 		// suggestionTitle.setText(value.suggestionText + ` (${value.match?.score ?? -10})`);
 		suggestionTitle.setText(value.suggestionText);
