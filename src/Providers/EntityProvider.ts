@@ -18,8 +18,7 @@ export interface EntityProviderUserSettings extends EntityProviderID {
 export enum RefreshBehavior {
   ShouldRefresh = "shouldRefresh",
   Default = "default",
-  // TODO: Implement NoRefresh option in the future
-  // NoRefresh = "noRefresh"
+  Never = "never", // New refresh behavior
 }
 
 /**

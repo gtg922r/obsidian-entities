@@ -1,5 +1,5 @@
 import { EntitySuggestionItem } from "src/EntitiesSuggestor";
-import { EntityProvider, EntityProviderUserSettings } from "./EntityProvider";
+import { EntityProvider, EntityProviderUserSettings, RefreshBehavior } from "./EntityProvider";
 import {
 	EditorSuggestContext,
 	Plugin,
@@ -81,6 +81,10 @@ export class HelperEntityProvider extends EntityProvider<HelperProviderUserSetti
 
 	get triggers(): TriggerCharacter[] {
 		return [TriggerCharacter.Slash]; // Specify the '/' trigger
+	}
+
+	getRefreshBehavior(): RefreshBehavior {
+		return RefreshBehavior.Never; // Use the "Never" refresh behavior
 	}
 
 	getEntityList(query: string, trigger: TriggerCharacter): EntitySuggestionItem[] {

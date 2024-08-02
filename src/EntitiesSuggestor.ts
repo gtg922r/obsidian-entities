@@ -111,7 +111,7 @@ export class EntitiesSuggestor extends EditorSuggest<EntitySuggestionItem> {
 			const providerId = provider.constructor.name;
 			const refreshBehavior = provider.getRefreshBehavior();
 			const lastRefresh = this.lastRefreshTime.get(providerId) || 0;
-
+			//TODO: Support multiple trigger types from a provider with suggestion cacheing
 			let providerSuggestions: EntitySuggestionItem[];
 
 			if (
@@ -123,8 +123,12 @@ export class EntitiesSuggestor extends EditorSuggest<EntitySuggestionItem> {
 				providerSuggestions = provider.getEntityList(searchQuery, trigger);
 				this.providerSuggestions.set(providerId, providerSuggestions);
 				this.lastRefreshTime.set(providerId, currentTime);
-			} else {
+			} else if (refreshBehavior === RefreshBehavior.Never && this.providerSuggestions.has(providerId)) {
 				providerSuggestions = this.providerSuggestions.get(providerId) || [];
+			} else {
+				providerSuggestions = provider.getEntityList(searchQuery, trigger);
+				this.providerSuggestions.set(providerId, providerSuggestions);
+				this.lastRefreshTime.set(providerId, currentTime);
 			}
 
 			allSuggestions.push(...providerSuggestions);
