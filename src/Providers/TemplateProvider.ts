@@ -7,6 +7,7 @@ import {
 	insertTemplateUsingTemplater,
 } from "src/entititiesUtilities";
 import { FolderSuggest } from "src/ui/file-suggest";
+import { TriggerCharacter } from "src/entities.types";
 
 const templateProviderTypeID = "template";
 
@@ -14,6 +15,7 @@ export interface TemplateProviderUserSettings extends EntityProviderUserSettings
 	providerTypeID: string;
 	path: string;
 	actionType: "insert" | "create";
+	trigger: TriggerCharacter; // Add trigger to settings
 }
 
 const defaultTemplateProviderUserSettings: TemplateProviderUserSettings = {
@@ -23,6 +25,7 @@ const defaultTemplateProviderUserSettings: TemplateProviderUserSettings = {
 	path: "",
 	entityCreationTemplates: [],
 	actionType: "create",
+	trigger: TriggerCharacter.Slash, // Default to '/'
 };
 
 export class TemplateEntityProvider extends EntityProvider<TemplateProviderUserSettings> {
@@ -69,6 +72,10 @@ export class TemplateEntityProvider extends EntityProvider<TemplateProviderUserS
                 ) as TFile[]
         );
     }
+
+	get triggers(): TriggerCharacter[] {
+		return [this.settings.trigger]; // Use the trigger from settings
+	}
 
     getEntityList(): EntitySuggestionItem[] {
         return this.files.map((file) => ({
@@ -158,7 +165,21 @@ export class TemplateEntityProvider extends EntityProvider<TemplateProviderUserS
 					onShouldSave(settings);
 				});
 				dropdown.setValue(settings.actionType);
-			})
+			});
+
+		new Setting(settingContainer)
+			.setName("Trigger Character")
+			.setDesc("Character to trigger the template suggestions")
+			.addDropdown((dropdown) => {
+				Object.values(TriggerCharacter).forEach((trigger) => {
+					dropdown.addOption(trigger, trigger);
+				});
+				dropdown.onChange((value) => {
+					settings.trigger = value as TriggerCharacter;
+					onShouldSave(settings);
+				});
+				dropdown.setValue(settings.trigger);
+			});
 
 		const folderPathSetting = new Setting(settingContainer)
 			.setName("Folder Path")
@@ -204,4 +225,3 @@ export class TemplateEntityProvider extends EntityProvider<TemplateProviderUserS
         return insertTemplateUsingTemplater(this.plugin, file).then(() => "");
     }
 }
-
