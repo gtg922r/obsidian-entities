@@ -76,9 +76,9 @@ export class DataviewEntityProvider extends EntityProvider<DataviewProviderUserS
 	}
 
 	getEntityList(query: string): EntitySuggestionItem[] {
-		const projects = this.dv?.pages(this.settings.query);
+		const dvQueryReults = this.dv?.pages(this.settings.query);
 
-		const projectEntitiesWithAliases = projects?.flatMap(
+		const entitiesWithAliases = dvQueryReults?.flatMap(
 			(project: { file: { name: string; aliases: string[] } }) => {
 				const baseEntity: EntitySuggestionItem = {
 					suggestionText: project.file.name,
@@ -98,7 +98,7 @@ export class DataviewEntityProvider extends EntityProvider<DataviewProviderUserS
 			}
 		);
 
-		return projectEntitiesWithAliases.array();
+		return entitiesWithAliases.array();
 	}
 
 	static buildSummarySetting(
@@ -129,10 +129,18 @@ export class DataviewEntityProvider extends EntityProvider<DataviewProviderUserS
 			button.setDisabled(true);
 		});
 
-		const updateQueryIcon = (query: string) => {
+		
+
+		const updateQueryIcon = async (query: string) => {
 			if (queryIsOK(query) === "ok") {
+				const dv = await DataviewEntityProvider.getDataviewApiWithRetry(
+					500,
+					2,
+					plugin.app
+				);
+				const numberNotesFromQuery = dv?.pages(query).length;
 				queryOKIcon.setIcon("search-check");
-				queryOKIcon.setTooltip("Dataview Source OK");
+				queryOKIcon.setTooltip(`Dataview Source OK (${numberNotesFromQuery} notes)`);
 				queryOKIcon.extraSettingsEl.style.color = "";
 			} else if (queryIsOK(query) === "empty") {
 				queryOKIcon.setIcon("search-x");

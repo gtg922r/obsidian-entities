@@ -106,8 +106,12 @@ export class FolderEntityProvider extends EntityProvider<FolderProviderUserSetti
 		let folderExistsIcon: ExtraButtonComponent;
 		const updateFolderExistsIcon = (path: string) => {
 			if (folderExists(path) && folderExistsIcon) {
+				const folder = plugin.app.vault.getFolderByPath(path);
+				const numberNotesInFolder = folder?.children.filter(
+					(file) => file instanceof TFile
+				).length;
 				folderExistsIcon.setIcon("folder-check");
-				folderExistsIcon.setTooltip("Folder Found");
+				folderExistsIcon.setTooltip(`Folder Found (${numberNotesInFolder} notes)`);
 				folderExistsIcon.extraSettingsEl.style.color = "";
 			} else if (folderExistsIcon) {
 				folderExistsIcon.setIcon("folder-x");
