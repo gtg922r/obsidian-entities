@@ -13,6 +13,7 @@ const helperProviderTypeID = "helper";
 
 export interface HelperProviderUserSettings extends EntityProviderUserSettings {
 	providerTypeID: string;
+	addCreatedTag: boolean; // New setting for adding the created tag
 }
 
 const defaultHelperProviderUserSettings: HelperProviderUserSettings = {
@@ -20,6 +21,7 @@ const defaultHelperProviderUserSettings: HelperProviderUserSettings = {
 	enabled: true,
 	icon: "wand",
 	entityCreationTemplates: [],
+	addCreatedTag: true, // New setting for adding the created tag
 };
 
 const checkboxTypes = [
@@ -126,12 +128,12 @@ export class HelperEntityProvider extends EntityProvider<HelperProviderUserSetti
 			ch: editor.getLine(context.end.line).length,
 		};
 		const currentLineText = editor.getRange(lineStart, lineEnd);
-		const replaceRegx = /(^\s*)(?:- \[.?\]\s|- )(.*)(?:\[created)?/;
+		const replaceRegx = /(^\s*)(?:- \[.?\]\s|- )?(.*)(?:\[created)?/;
 		const match = currentLineText.match(replaceRegx);
 		const currentDate = moment().format('YYYY-MM-DD');
-		// TODO: add a setting to specify whether should add created field 
+		const createdTag = this.settings.addCreatedTag ? ` [created::${currentDate}]` : '';
 		const replacementText = match
-			? `${match[1]}- [${checkboxType}] ${match[2]} [created::${currentDate}]`
+			? `${match[1]}- [${checkboxType}] ${match[2]}${createdTag}`
 			: currentLineText;
 		editor.replaceRange(replacementText, lineStart, lineEnd);
 	}
@@ -166,6 +168,19 @@ export class HelperEntityProvider extends EntityProvider<HelperProviderUserSetti
 							onShouldSave(settings);
 							button.setIcon(iconName);
 						});
+					})
+			);
+
+		// New setting for adding the created tag
+		new Setting(settingContainer)
+			.setName("Add Created Tag")
+			.setDesc("Whether to add the [created::...] tag at the end of a line from the checkbox function")
+			.addToggle((toggle) =>
+				toggle
+					.setValue(settings.addCreatedTag)
+					.onChange((value) => {
+						settings.addCreatedTag = value;
+						onShouldSave(settings);
 					})
 			);
 	}
