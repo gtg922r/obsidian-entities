@@ -215,9 +215,9 @@ describe("onTrigger tests", () => {
 
 		expect(result).not.toBeNull();
 		expect(result).toEqual({
-			start: { line: 0, ch: 6 },
+			start: { line: 0, ch: 13 },
 			end: { line: 0, ch: 18 },
-			query: "@first @secon",
+			query: "@secon",
 		});
 	});
 

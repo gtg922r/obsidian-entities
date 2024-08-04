@@ -45,6 +45,9 @@ export class EntitiesSuggestor extends EditorSuggest<EntitySuggestionItem> {
 	 * @private */
 	private localSuggestionCache: EntitySuggestionItem[] = [];
 
+	// Track the last dismissed query
+	private lastDismissedQuery: string | null = null;
+
 	//empty constructor
 	constructor(plugin: Entities, registry: ProviderRegistry) {
 		super(plugin.app);
@@ -75,18 +78,25 @@ export class EntitiesSuggestor extends EditorSuggest<EntitySuggestionItem> {
 
 
 		// Match the last occurrence of the trigger character
-		const match = currentLineToCursor.match(/(.*?)([@:/])($|[^\s].*)/);
+		const match = currentLineToCursor.match(/(.*)([@:/])($|(?:[^\s].*?$))/);
 
 		if (match && match.index !== undefined) {
 			const start = match.index + match[1].length + 1; // Correctly adjust start to include trigger character
 			const query = match[2] + match[3]; // The trigger and the captured query part after the trigger
+
+			// Check if the query starts with the last dismissed query
+			if (this.lastDismissedQuery && query.startsWith(this.lastDismissedQuery)) {
+				return null;
+			} else {
+				this.lastDismissedQuery = null;
+			}
 
 			return {
 				start: { line: currentLine, ch: start },
 				query,
 				end: cursor,
 			};
-		}
+		} 
 
 		return null;
 	}
@@ -104,7 +114,6 @@ export class EntitiesSuggestor extends EditorSuggest<EntitySuggestionItem> {
 		const trigger = context.query.charAt(0) as TriggerCharacter || TriggerCharacter.At; // Default to '@' if trigger is not specified
 		const searchQuery = context.query.slice(1);
 		
-		console.log("trigger:", trigger);
 		this.providerRegistry.getProvidersForTrigger(trigger).forEach((provider) => {
 			const providerId = provider.constructor.name;
 			const refreshBehavior = provider.getRefreshBehavior();
@@ -249,5 +258,13 @@ export class EntitiesSuggestor extends EditorSuggest<EntitySuggestionItem> {
 
 		editor.setCursor(newCursor);
 		this.close();
+	}
+
+	close(): void {
+		if (this.context) {
+			const { query } = this.context;
+			this.lastDismissedQuery = query;
+		}
+		super.close();
 	}
 }
