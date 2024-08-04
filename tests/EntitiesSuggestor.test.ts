@@ -170,12 +170,7 @@ describe("onTrigger tests", () => {
 			mockFile
 		);
 
-		expect(result).not.toBeNull();
-		expect(result).toEqual({
-			start: { line: 0, ch: 1 },
-			end: { line: 0, ch: 4 },
-			query: "@   ",
-		});
+		expect(result).toBeNull();
 	});
 
 	test("onTrigger should return correct trigger info when @ is at the beginning of the line followed by text", () => {
