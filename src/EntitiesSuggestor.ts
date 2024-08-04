@@ -46,14 +46,13 @@ export class EntitiesSuggestor extends EditorSuggest<EntitySuggestionItem> {
 	private localSuggestionCache: EntitySuggestionItem[] = [];
 
 	// Track the last dismissed query
-	private lastDismissedQuery: string | null = null;
+	private lastDismissedQuery: EditorPosition | null = null;
 
 	//empty constructor
 	constructor(plugin: Entities, registry: ProviderRegistry) {
 		super(plugin.app);
 		this.plugin = plugin;
 		this.providerRegistry = registry;
-		
 	}
 
 	/**
@@ -76,7 +75,6 @@ export class EntitiesSuggestor extends EditorSuggest<EntitySuggestionItem> {
 			.getLine(currentLine)
 			.slice(0, cursor.ch);
 
-
 		// Match the last occurrence of the trigger character
 		const match = currentLineToCursor.match(/(.*)([@:/])($|(?:[^\s].*?$))/);
 
@@ -85,7 +83,11 @@ export class EntitiesSuggestor extends EditorSuggest<EntitySuggestionItem> {
 			const query = match[2] + match[3]; // The trigger and the captured query part after the trigger
 
 			// Check if the query starts with the last dismissed query
-			if (this.lastDismissedQuery && query.startsWith(this.lastDismissedQuery)) {
+			if (
+				this.lastDismissedQuery &&
+				this.lastDismissedQuery.line === cursor.line &&
+				this.lastDismissedQuery.ch === start
+			) {
 				return null;
 			} else {
 				this.lastDismissedQuery = null;
@@ -96,12 +98,13 @@ export class EntitiesSuggestor extends EditorSuggest<EntitySuggestionItem> {
 				query,
 				end: cursor,
 			};
-		} 
+		}
 
 		return null;
 	}
 
-	private providerSuggestions: Map<string, EntitySuggestionItem[]> = new Map();
+	private providerSuggestions: Map<string, EntitySuggestionItem[]> =
+		new Map();
 	private lastRefreshTime: Map<string, number> = new Map();
 
 	getSuggestions(
@@ -111,35 +114,55 @@ export class EntitiesSuggestor extends EditorSuggest<EntitySuggestionItem> {
 		const refreshThreshold = 200; // milliseconds
 
 		const allSuggestions: EntitySuggestionItem[] = [];
-		const trigger = context.query.charAt(0) as TriggerCharacter || TriggerCharacter.At; // Default to '@' if trigger is not specified
+		const trigger =
+			(context.query.charAt(0) as TriggerCharacter) ||
+			TriggerCharacter.At; // Default to '@' if trigger is not specified
 		const searchQuery = context.query.slice(1);
-		
-		this.providerRegistry.getProvidersForTrigger(trigger).forEach((provider) => {
-			const providerId = provider.constructor.name;
-			const refreshBehavior = provider.getRefreshBehavior();
-			const lastRefresh = this.lastRefreshTime.get(providerId) || 0;
-			//TODO: Support multiple trigger types from a provider with suggestion cacheing
-			let providerSuggestions: EntitySuggestionItem[];
 
-			if (
-				refreshBehavior === RefreshBehavior.ShouldRefresh ||
-				(refreshBehavior === RefreshBehavior.Default &&
-					currentTime - lastRefresh > refreshThreshold) ||
-				!this.providerSuggestions.has(providerId)
-			) {
-				providerSuggestions = provider.getEntityList(searchQuery, trigger);
-				this.providerSuggestions.set(providerId, providerSuggestions);
-				this.lastRefreshTime.set(providerId, currentTime);
-			} else if (refreshBehavior === RefreshBehavior.Never && this.providerSuggestions.has(providerId)) {
-				providerSuggestions = this.providerSuggestions.get(providerId) || [];
-			} else {
-				providerSuggestions = provider.getEntityList(searchQuery, trigger);
-				this.providerSuggestions.set(providerId, providerSuggestions);
-				this.lastRefreshTime.set(providerId, currentTime);
-			}
+		this.providerRegistry
+			.getProvidersForTrigger(trigger)
+			.forEach((provider) => {
+				const providerId = provider.constructor.name;
+				const refreshBehavior = provider.getRefreshBehavior();
+				const lastRefresh = this.lastRefreshTime.get(providerId) || 0;
+				//TODO: Support multiple trigger types from a provider with suggestion cacheing
+				let providerSuggestions: EntitySuggestionItem[];
 
-			allSuggestions.push(...providerSuggestions);
-		});
+				if (
+					refreshBehavior === RefreshBehavior.ShouldRefresh ||
+					(refreshBehavior === RefreshBehavior.Default &&
+						currentTime - lastRefresh > refreshThreshold) ||
+					!this.providerSuggestions.has(providerId)
+				) {
+					providerSuggestions = provider.getEntityList(
+						searchQuery,
+						trigger
+					);
+					this.providerSuggestions.set(
+						providerId,
+						providerSuggestions
+					);
+					this.lastRefreshTime.set(providerId, currentTime);
+				} else if (
+					refreshBehavior === RefreshBehavior.Never &&
+					this.providerSuggestions.has(providerId)
+				) {
+					providerSuggestions =
+						this.providerSuggestions.get(providerId) || [];
+				} else {
+					providerSuggestions = provider.getEntityList(
+						searchQuery,
+						trigger
+					);
+					this.providerSuggestions.set(
+						providerId,
+						providerSuggestions
+					);
+					this.lastRefreshTime.set(providerId, currentTime);
+				}
+
+				allSuggestions.push(...providerSuggestions);
+			});
 
 		// Prepare the search query for fuzzy search
 		const preparedQuery = prepareQuery(searchQuery);
@@ -157,9 +180,8 @@ export class EntitiesSuggestor extends EditorSuggest<EntitySuggestionItem> {
 		// Only fetch template suggestions if the trigger is '@'
 		if (trigger === TriggerCharacter.At) {
 			this.providerRegistry.getProviders().forEach((provider) => {
-				const templateSuggestions = provider.getTemplateCreationSuggestions(
-					searchQuery
-				);
+				const templateSuggestions =
+					provider.getTemplateCreationSuggestions(searchQuery);
 				fuzzySearchResults.push(...templateSuggestions);
 			});
 		}
@@ -260,11 +282,15 @@ export class EntitiesSuggestor extends EditorSuggest<EntitySuggestionItem> {
 		this.close();
 	}
 
-	close(): void {
+	async close(): Promise<void> {
 		if (this.context) {
-			const { query } = this.context;
-			this.lastDismissedQuery = query;
+			const { start } = this.context;
+			const suggestions = await this.getSuggestions(this.context);
+			if (suggestions && suggestions.length > 0) {
+				this.lastDismissedQuery = start;
+			}
 		}
+		console.log("close");
 		super.close();
 	}
 }
