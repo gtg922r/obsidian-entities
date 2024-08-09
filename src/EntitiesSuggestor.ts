@@ -53,6 +53,29 @@ export class EntitiesSuggestor extends EditorSuggest<EntitySuggestionItem> {
 		super(plugin.app);
 		this.plugin = plugin;
 		this.providerRegistry = registry;
+
+		// Add event listeners for Tab, #, and |
+		this.scope.register([], 'Tab', (evt) => {
+
+				evt.preventDefault();
+				console.log("Tab");
+				// this.selectSuggestion(this.suggestions[this.selectedItem], evt);
+
+		});
+		this.scope.register([], '#', (evt) => {
+			
+				evt.preventDefault();
+				console.log("#");
+				// this.selectSuggestion(this.suggestions[this.selectedItem], evt);
+
+		});
+		this.scope.register([], '|', (evt) => {
+
+				evt.preventDefault();
+				console.log("|");
+				// this.selectSuggestion(this.suggestions[this.selectedItem], evt);
+
+		});
 	}
 
 	/**
@@ -245,9 +268,15 @@ export class EntitiesSuggestor extends EditorSuggest<EntitySuggestionItem> {
 				}
 			});
 		} else {
-			this.insertText(
-				`[[${value.replacementText ?? value.suggestionText}]]`
-			);
+			const replacementText = `[[${value.replacementText ?? value.suggestionText}]]`;
+			// if (evt instanceof KeyboardEvent) {
+			// 	if (evt.key === "#") {
+			// 		replacementText = `#${value.replacementText ?? value.suggestionText}`;
+			// 	} else if (evt.key === "|") {
+			// 		replacementText = `${value.replacementText ?? value.suggestionText}|`;
+			// 	}
+			// }
+			this.insertText(replacementText);
 		}
 	}
 
