@@ -9,7 +9,7 @@ import { EntitySuggestionItem } from "src/EntitiesSuggestor";
 import { EntityProvider, EntityProviderUserSettings } from "./EntityProvider";
 import { FolderSuggest } from "src/ui/file-suggest";
 import { IconPickerModal, openTemplateDetailsModal } from "src/userComponents";
-import { entityFromTemplateSettings } from "src/entities.types";
+import { EntityFilter, entityFromTemplateSettings } from "src/entities.types";
 
 const folderProviderTypeID = "folder";
 
@@ -20,6 +20,7 @@ export interface FolderProviderUserSettings extends EntityProviderUserSettings {
 	shouldCreateEntitiesForAliases?: boolean | undefined;
 	propertyToCreateEntitiesFor?: string | undefined;
 	propertyToFilterEntitiesBy?: string | undefined;
+	entityFilters?: EntityFilter[];
 }
 
 const defaultFolderProviderUserSettings: FolderProviderUserSettings = {
@@ -32,6 +33,7 @@ const defaultFolderProviderUserSettings: FolderProviderUserSettings = {
 	propertyToCreateEntitiesFor: undefined, // Not yet implemented
 	propertyToFilterEntitiesBy: undefined, // Not yet implemented
 	entityCreationTemplates: [],
+	entityFilters: [],
 };
 
 export class FolderEntityProvider extends EntityProvider<FolderProviderUserSettings> {
@@ -65,8 +67,10 @@ export class FolderEntityProvider extends EntityProvider<FolderProviderUserSetti
 			(file: unknown) => file instanceof TFile
 		) as TFile[] | undefined;
 
+		const filteredEntities = this.applyFilters(entities);
+
 		const entitySuggestions =
-			entities?.map((file) => ({
+			filteredEntities?.map((file) => ({
 				suggestionText: file.basename,
 				icon: this.settings.icon ?? "folder-open-dot",
 			})) ?? [];
@@ -80,7 +84,7 @@ export class FolderEntityProvider extends EntityProvider<FolderProviderUserSetti
 			replacementText: `${file.basename}|${alias}`,
 		});
 
-		const aliasEntitiesSuggestions = entities?.flatMap((file) => {
+		const aliasEntitiesSuggestions = filteredEntities?.flatMap((file) => {
 			const aliases = this.plugin.app.metadataCache.getFileCache(file)
 				?.frontmatter?.aliases as string | string[] | undefined;
 			if (typeof aliases === "string")
@@ -93,6 +97,25 @@ export class FolderEntityProvider extends EntityProvider<FolderProviderUserSetti
 		return aliasEntitiesSuggestions
 			? [...entitySuggestions, ...aliasEntitiesSuggestions]
 			: entitySuggestions;
+	}
+
+	private applyFilters(entities: TFile[] | undefined): TFile[] | undefined {
+		if (!this.settings.entityFilters || this.settings.entityFilters.length === 0) {
+			return entities;
+		}
+
+		return entities?.filter((file) => {
+			const metadata = this.plugin.app.metadataCache.getFileCache(file);
+			return this.settings.entityFilters?.every((filter) => {
+				const propertyValue = metadata?.frontmatter?.[filter.property];
+				if (!propertyValue) return filter.type === "exclude";
+
+				const regex = new RegExp(filter.value);
+				const matches = regex.test(propertyValue);
+
+				return filter.type === "include" ? matches : !matches;
+			});
+		});
 	}
 
 	static buildSummarySetting(
@@ -237,9 +260,72 @@ export class FolderEntityProvider extends EntityProvider<FolderProviderUserSetti
 					}
 				})
 		);
+
+
+		new Setting(settingContainer)
+			.setHeading()
+			.setName("Entity Filter")
+			.setDesc("Include or exclude entities based on whether property matches the following criteria.")
+			.addButton((button) => {
+				button.setButtonText("Add Filter")
+					.onClick(() => {
+						settings.entityFilters = settings.entityFilters || [];
+						settings.entityFilters.push({ type: "include", property: "", value: "" });
+						onShouldSave(settings);
+						rebuildFilters();
+					});
+			});
+
+		const filtersContainer = settingContainer.createDiv();
+		
+		const rebuildFilters = () => {
+			filtersContainer.empty();
+			settings.entityFilters?.forEach((filter, index) => {
+				const filterSetting = new Setting(filtersContainer);
+
+				filterSetting.addDropdown((dropdown) => {
+					dropdown.addOption("include", "Include If");
+					dropdown.addOption("exclude", "Exclude If");
+					dropdown.setValue(filter.type);
+					dropdown.onChange((value) => {
+						filter.type = value as "include" | "exclude";
+						onShouldSave(settings);
+					});
+				});
+
+				filterSetting.addText((text) => {
+					text.setPlaceholder("Property Name");
+					text.setValue(filter.property);
+					text.onChange((value) => {
+						filter.property = value;
+						onShouldSave(settings);
+					});
+				});
+
+				filterSetting.addText((text) => {
+					text.setPlaceholder("Property Value/Regex");
+					text.setValue(filter.value);
+					text.onChange((value) => {
+						filter.value = value;
+						onShouldSave(settings);
+					});
+				});
+
+				filterSetting.addButton((button) => {
+					button.setIcon("trash");
+					button.onClick(() => {
+						settings.entityFilters?.splice(index, 1);
+						onShouldSave(settings);
+						rebuildFilters();
+					});
+				});
+			});
+		};
+
+		rebuildFilters();		
 	}
 
-	static buildAdvancedSettings?(
+	static buildAdvancedSettings(
 		settingContainer: HTMLElement,
 		settings: FolderProviderUserSettings,
 		onShouldSave: (newSettings: FolderProviderUserSettings) => void,
@@ -265,5 +351,6 @@ export class FolderEntityProvider extends EntityProvider<FolderProviderUserSetti
 			.addText((text) => {
 				text.setPlaceholder("Property Name").setValue("");
 			});
+
 	}
 }
