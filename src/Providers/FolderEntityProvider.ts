@@ -67,6 +67,10 @@ export class FolderEntityProvider extends EntityProvider<FolderProviderUserSetti
 			(file: unknown) => file instanceof TFile
 		) as TFile[] | undefined;
 
+		if (!entities) {
+			return [];
+		}
+
 		const filteredEntities = this.applyFilters(entities);
 
 		const entitySuggestions =
@@ -104,15 +108,25 @@ export class FolderEntityProvider extends EntityProvider<FolderProviderUserSetti
 			return entities;
 		}
 
+		const compiledFilters = this.settings.entityFilters.map((filter) => {
+			try {
+				return { ...filter, regex: new RegExp(filter.value, 'i') };
+			} catch (e) {
+				console.error(`Invalid regex: ${filter.value}`, e);
+				return null;
+			}
+		}).filter((filter): filter is EntityFilter & { regex: RegExp } => filter !== null);
+
 		return entities?.filter((file) => {
 			const metadata = this.plugin.app.metadataCache.getFileCache(file);
-			return this.settings.entityFilters?.every((filter) => {
-				const propertyValue = metadata?.frontmatter?.[filter.property];
+			const frontmatter = metadata?.frontmatter;
+			if (!frontmatter) return false;
+
+			return compiledFilters.every((filter) => {
+				const propertyValue = frontmatter[filter.property];
 				if (!propertyValue) return filter.type === "exclude";
 
-				const regex = new RegExp(filter.value);
-				const matches = regex.test(propertyValue);
-
+				const matches = filter.regex.test(propertyValue);
 				return filter.type === "include" ? matches : !matches;
 			});
 		});
@@ -278,10 +292,44 @@ export class FolderEntityProvider extends EntityProvider<FolderProviderUserSetti
 
 		const filtersContainer = settingContainer.createDiv();
 		
+		const validateRegex = (regex: string): "valid" | "invalid" | "empty" => {
+			if (!regex) return "empty";
+			try {
+				new RegExp(regex);
+				return "valid";
+			} catch {
+				return "invalid";
+			}
+		};
+
 		const rebuildFilters = () => {
 			filtersContainer.empty();
 			settings.entityFilters?.forEach((filter, index) => {
 				const filterSetting = new Setting(filtersContainer);
+
+				let regexStatusIcon: ExtraButtonComponent;
+				const updateRegexStatusIcon = (regex: string) => {
+					const status = validateRegex(regex);
+					if (status === "valid") {
+						regexStatusIcon.setIcon("checkmark");
+						regexStatusIcon.setTooltip("Valid regex");
+						regexStatusIcon.extraSettingsEl.style.color = "";
+					} else if (status === "invalid") {
+						regexStatusIcon.setIcon("cross");
+						regexStatusIcon.setTooltip("Invalid regex");
+						regexStatusIcon.extraSettingsEl.style.color = "var(--text-error)";
+					} else {
+						regexStatusIcon.setIcon("help");
+						regexStatusIcon.setTooltip("Empty regex");
+						regexStatusIcon.extraSettingsEl.style.color = "var(--text-muted)";
+					}
+				};
+
+				filterSetting.addExtraButton((button) => {
+					regexStatusIcon = button;
+					button.setDisabled(true);
+					updateRegexStatusIcon(filter.value);
+				});				
 
 				filterSetting.addDropdown((dropdown) => {
 					dropdown.addOption("include", "Include If");
@@ -308,6 +356,7 @@ export class FolderEntityProvider extends EntityProvider<FolderProviderUserSetti
 					text.onChange((value) => {
 						filter.value = value;
 						onShouldSave(settings);
+						updateRegexStatusIcon(value);
 					});
 				});
 

@@ -38,6 +38,7 @@ const defaultDataviewProviderUserSettings: DataviewProviderUserSettings = {
 export class DataviewEntityProvider extends EntityProvider<DataviewProviderUserSettings> {
 	static readonly providerTypeID: string = dataviewProviderTypeID;
 	protected dv: DataviewApi | undefined;
+	
 
 	static getDescription(settings?: DataviewProviderUserSettings): string {
 		if (settings) {
@@ -79,6 +80,9 @@ export class DataviewEntityProvider extends EntityProvider<DataviewProviderUserS
 
 	getEntityList(query: string): EntitySuggestionItem[] {
 		const dvQueryReults = this.dv?.pages(this.settings.query);
+		if (!dvQueryReults) {
+			return [];
+		}
 
 		const filteredQueryResults = this.applyFilters(dvQueryReults);
 
@@ -102,7 +106,7 @@ export class DataviewEntityProvider extends EntityProvider<DataviewProviderUserS
 			}
 		);
 
-		return entitiesWithAliases;
+		return entitiesWithAliases || [];
 	}
 
 	private applyFilters(queryResults:{file: {path: string}}[]): unknown[] {
@@ -110,16 +114,23 @@ export class DataviewEntityProvider extends EntityProvider<DataviewProviderUserS
 			return queryResults;
 		}
 
+		const compiledFilters = this.settings.entityFilters.map((filter) => {
+			try {
+				return { ...filter, regex: new RegExp(filter.value, 'i') };
+			} catch (e) {
+				console.error(`Invalid regex: ${filter.value}`, e);
+				return null;
+			}
+		}).filter((filter): filter is EntityFilter & { regex: RegExp } => filter !== null);
+
 		return queryResults.filter((entity) => {
 			const file = this.plugin.app.vault.getAbstractFileByPath(entity.file.path) as TFile;
 			const metadata = this.plugin.app.metadataCache.getFileCache(file);
-			return this.settings?.entityFilters?.every((filter) => {
+			return compiledFilters.every((filter) => {
 				const propertyValue = metadata?.frontmatter?.[filter.property];
 				if (!propertyValue) return filter.type === "exclude";
 
-				const regex = new RegExp(filter.value);
-				const matches = regex.test(propertyValue);
-
+				const matches = filter.regex.test(propertyValue);
 				return filter.type === "include" ? matches : !matches;
 			});
 		});
@@ -313,10 +324,45 @@ export class DataviewEntityProvider extends EntityProvider<DataviewProviderUserS
 
 		const filtersContainer = settingContainer.createDiv();
 		
+		const validateRegex = (regex: string): "valid" | "invalid" | "empty" => {
+			if (!regex) return "empty";
+			try {
+				new RegExp(regex);
+				return "valid";
+			} catch {
+				return "invalid";
+			}
+		};
+
 		const rebuildFilters = () => {
 			filtersContainer.empty();
 			settings.entityFilters?.forEach((filter, index) => {
+				
 				const filterSetting = new Setting(filtersContainer);			
+
+				let regexStatusIcon: ExtraButtonComponent;
+				const updateRegexStatusIcon = (regex: string) => {
+					const status = validateRegex(regex);
+					if (status === "valid") {
+						regexStatusIcon.setIcon("checkmark");
+						regexStatusIcon.setTooltip("Valid regex");
+						regexStatusIcon.extraSettingsEl.style.color = "";
+					} else if (status === "invalid") {
+						regexStatusIcon.setIcon("cross");
+						regexStatusIcon.setTooltip("Invalid regex");
+						regexStatusIcon.extraSettingsEl.style.color = "var(--text-error)";
+					} else {
+						regexStatusIcon.setIcon("help");
+						regexStatusIcon.setTooltip("Empty regex");
+						regexStatusIcon.extraSettingsEl.style.color = "var(--text-muted)";
+					}
+				};
+
+				filterSetting.addExtraButton((button) => {
+					regexStatusIcon = button;
+					button.setDisabled(true);
+					updateRegexStatusIcon(filter.value);
+				});				
 
 				filterSetting.addDropdown((dropdown) => {
 					dropdown.addOption("include", "Include If");
@@ -343,6 +389,7 @@ export class DataviewEntityProvider extends EntityProvider<DataviewProviderUserS
 					text.onChange((value) => {
 						filter.value = value;
 						onShouldSave(settings);
+						updateRegexStatusIcon(value);
 					});
 				});
 
@@ -366,7 +413,7 @@ export class DataviewEntityProvider extends EntityProvider<DataviewProviderUserS
 	// 	onShouldSave: (newSettings: DataviewProviderUserSettings) => void,
 	// 	plugin: Plugin
 	// ): void {
-
+    // // TO IMPLEMENT AS NEEDEd
 	// }
 
 	static getDataviewApiWithRetry = (
