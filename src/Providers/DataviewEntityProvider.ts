@@ -38,7 +38,6 @@ const defaultDataviewProviderUserSettings: DataviewProviderUserSettings = {
 export class DataviewEntityProvider extends EntityProvider<DataviewProviderUserSettings> {
 	static readonly providerTypeID: string = dataviewProviderTypeID;
 	protected dv: DataviewApi | undefined;
-	
 
 	static getDescription(settings?: DataviewProviderUserSettings): string {
 		if (settings) {
@@ -109,22 +108,34 @@ export class DataviewEntityProvider extends EntityProvider<DataviewProviderUserS
 		return entitiesWithAliases || [];
 	}
 
-	private applyFilters(queryResults:{file: {path: string}}[]): unknown[] {
-		if (!this.settings.entityFilters || this.settings.entityFilters.length === 0) {
+	private applyFilters(
+		queryResults: { file: { path: string } }[]
+	): unknown[] {
+		if (
+			!this.settings.entityFilters ||
+			this.settings.entityFilters.length === 0
+		) {
 			return queryResults;
 		}
 
-		const compiledFilters = this.settings.entityFilters.map((filter) => {
-			try {
-				return { ...filter, regex: new RegExp(filter.value, 'i') };
-			} catch (e) {
-				console.error(`Invalid regex: ${filter.value}`, e);
-				return null;
-			}
-		}).filter((filter): filter is EntityFilter & { regex: RegExp } => filter !== null);
+		const compiledFilters = this.settings.entityFilters
+			.map((filter) => {
+				try {
+					return { ...filter, regex: new RegExp(filter.value, "i") };
+				} catch (e) {
+					console.error(`Invalid regex: ${filter.value}`, e);
+					return null;
+				}
+			})
+			.filter(
+				(filter): filter is EntityFilter & { regex: RegExp } =>
+					filter !== null
+			);
 
 		return queryResults.filter((entity) => {
-			const file = this.plugin.app.vault.getAbstractFileByPath(entity.file.path) as TFile;
+			const file = this.plugin.app.vault.getAbstractFileByPath(
+				entity.file.path
+			) as TFile;
 			const metadata = this.plugin.app.metadataCache.getFileCache(file);
 			return compiledFilters.every((filter) => {
 				const propertyValue = metadata?.frontmatter?.[filter.property];
@@ -164,8 +175,6 @@ export class DataviewEntityProvider extends EntityProvider<DataviewProviderUserS
 			button.setDisabled(true);
 		});
 
-		
-
 		const updateQueryIcon = async (query: string) => {
 			if (queryIsOK(query) === "ok") {
 				const dv = await DataviewEntityProvider.getDataviewApiWithRetry(
@@ -175,7 +184,9 @@ export class DataviewEntityProvider extends EntityProvider<DataviewProviderUserS
 				);
 				const numberNotesFromQuery = dv?.pages(query).length;
 				queryOKIcon.setIcon("search-check");
-				queryOKIcon.setTooltip(`Dataview Source OK (${numberNotesFromQuery} notes)`);
+				queryOKIcon.setTooltip(
+					`Dataview Source OK (${numberNotesFromQuery} notes)`
+				);
 				queryOKIcon.extraSettingsEl.style.color = "";
 			} else if (queryIsOK(query) === "empty") {
 				queryOKIcon.setIcon("search-x");
@@ -216,7 +227,6 @@ export class DataviewEntityProvider extends EntityProvider<DataviewProviderUserS
 		onShouldSave: (newSettings: DataviewProviderUserSettings) => void,
 		plugin: Plugin
 	): void {
-
 		new Setting(settingContainer)
 			.setName("Icon")
 			.setDesc("Icon for the entities returned by this provider")
@@ -311,20 +321,27 @@ export class DataviewEntityProvider extends EntityProvider<DataviewProviderUserS
 
 		new Setting(settingContainer)
 			.setName("Entity Filters")
-			.setDesc("Include or exclude entities based on whether property matches the following criteria.")
+			.setDesc(
+				"Include or exclude entities based on whether property matches the following criteria."
+			)
 			.addButton((button) => {
-				button.setButtonText("Add Filter")
-					.onClick(() => {
-						settings.entityFilters = settings.entityFilters || [];
-						settings.entityFilters.push({ type: "include", property: "", value: "" });
-						onShouldSave(settings);
-						rebuildFilters();
+				button.setButtonText("Add Filter").onClick(() => {
+					settings.entityFilters = settings.entityFilters || [];
+					settings.entityFilters.push({
+						type: "include",
+						property: "",
+						value: "",
 					});
+					onShouldSave(settings);
+					rebuildFilters();
+				});
 			});
 
 		const filtersContainer = settingContainer.createDiv();
-		
-		const validateRegex = (regex: string): "valid" | "invalid" | "empty" => {
+
+		const validateRegex = (
+			regex: string
+		): "valid" | "invalid" | "empty" => {
 			if (!regex) return "empty";
 			try {
 				new RegExp(regex);
@@ -337,8 +354,7 @@ export class DataviewEntityProvider extends EntityProvider<DataviewProviderUserS
 		const rebuildFilters = () => {
 			filtersContainer.empty();
 			settings.entityFilters?.forEach((filter, index) => {
-				
-				const filterSetting = new Setting(filtersContainer);			
+				const filterSetting = new Setting(filtersContainer);
 
 				let regexStatusIcon: ExtraButtonComponent;
 				const updateRegexStatusIcon = (regex: string) => {
@@ -350,11 +366,13 @@ export class DataviewEntityProvider extends EntityProvider<DataviewProviderUserS
 					} else if (status === "invalid") {
 						regexStatusIcon.setIcon("cross");
 						regexStatusIcon.setTooltip("Invalid regex");
-						regexStatusIcon.extraSettingsEl.style.color = "var(--text-error)";
+						regexStatusIcon.extraSettingsEl.style.color =
+							"var(--text-error)";
 					} else {
 						regexStatusIcon.setIcon("help");
 						regexStatusIcon.setTooltip("Empty regex");
-						regexStatusIcon.extraSettingsEl.style.color = "var(--text-muted)";
+						regexStatusIcon.extraSettingsEl.style.color =
+							"var(--text-muted)";
 					}
 				};
 
@@ -362,7 +380,7 @@ export class DataviewEntityProvider extends EntityProvider<DataviewProviderUserS
 					regexStatusIcon = button;
 					button.setDisabled(true);
 					updateRegexStatusIcon(filter.value);
-				});				
+				});
 
 				filterSetting.addDropdown((dropdown) => {
 					dropdown.addOption("include", "Include If");
@@ -404,7 +422,7 @@ export class DataviewEntityProvider extends EntityProvider<DataviewProviderUserS
 			});
 		};
 
-		rebuildFilters();		
+		rebuildFilters();
 	}
 
 	// static buildAdvancedSettings(
@@ -413,7 +431,7 @@ export class DataviewEntityProvider extends EntityProvider<DataviewProviderUserS
 	// 	onShouldSave: (newSettings: DataviewProviderUserSettings) => void,
 	// 	plugin: Plugin
 	// ): void {
-    // // TO IMPLEMENT AS NEEDEd
+	// // TO IMPLEMENT AS NEEDEd
 	// }
 
 	static getDataviewApiWithRetry = (
@@ -444,7 +462,7 @@ export class DataviewEntityProvider extends EntityProvider<DataviewProviderUserS
 
 export class DataviewSourceSuggest extends TextInputSuggest<string> {
 	getSuggestions(inputStr: string): string[] {
-		const abstractFiles = this.app.vault.getAllLoadedFiles();		
+		const abstractFiles = this.app.vault.getAllLoadedFiles();
 		const lowerCaseInputStr = inputStr.toLowerCase();
 
 		const suggestions: Set<string> = new Set();

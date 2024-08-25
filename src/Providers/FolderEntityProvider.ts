@@ -104,18 +104,26 @@ export class FolderEntityProvider extends EntityProvider<FolderProviderUserSetti
 	}
 
 	private applyFilters(entities: TFile[] | undefined): TFile[] | undefined {
-		if (!this.settings.entityFilters || this.settings.entityFilters.length === 0) {
+		if (
+			!this.settings.entityFilters ||
+			this.settings.entityFilters.length === 0
+		) {
 			return entities;
 		}
 
-		const compiledFilters = this.settings.entityFilters.map((filter) => {
-			try {
-				return { ...filter, regex: new RegExp(filter.value, 'i') };
-			} catch (e) {
-				console.error(`Invalid regex: ${filter.value}`, e);
-				return null;
-			}
-		}).filter((filter): filter is EntityFilter & { regex: RegExp } => filter !== null);
+		const compiledFilters = this.settings.entityFilters
+			.map((filter) => {
+				try {
+					return { ...filter, regex: new RegExp(filter.value, "i") };
+				} catch (e) {
+					console.error(`Invalid regex: ${filter.value}`, e);
+					return null;
+				}
+			})
+			.filter(
+				(filter): filter is EntityFilter & { regex: RegExp } =>
+					filter !== null
+			);
 
 		return entities?.filter((file) => {
 			const metadata = this.plugin.app.metadataCache.getFileCache(file);
@@ -148,7 +156,9 @@ export class FolderEntityProvider extends EntityProvider<FolderProviderUserSetti
 					(file) => file instanceof TFile
 				).length;
 				folderExistsIcon.setIcon("folder-check");
-				folderExistsIcon.setTooltip(`Folder Found (${numberNotesInFolder} notes)`);
+				folderExistsIcon.setTooltip(
+					`Folder Found (${numberNotesInFolder} notes)`
+				);
 				folderExistsIcon.extraSettingsEl.style.color = "";
 			} else if (folderExistsIcon) {
 				folderExistsIcon.setIcon("folder-x");
@@ -175,7 +185,9 @@ export class FolderEntityProvider extends EntityProvider<FolderProviderUserSetti
 				}
 			});
 
-			new FolderSuggest(plugin.app, text.inputEl, {additionalClasses:"entities-settings"});
+			new FolderSuggest(plugin.app, text.inputEl, {
+				additionalClasses: "entities-settings",
+			});
 		});
 	}
 
@@ -185,7 +197,6 @@ export class FolderEntityProvider extends EntityProvider<FolderProviderUserSetti
 		onShouldSave: (newSettings: FolderProviderUserSettings) => void,
 		plugin: Plugin
 	): void {
-
 		new Setting(settingContainer)
 			.setName("Icon")
 			.setDesc("Icon for the entities returned by this provider")
@@ -240,17 +251,25 @@ export class FolderEntityProvider extends EntityProvider<FolderProviderUserSetti
 					onShouldSave(settings);
 				});
 			});
-		const entityTemplateStatusFromSetting = (entityCreationTemplates: entityFromTemplateSettings[]) => {
+		const entityTemplateStatusFromSetting = (
+			entityCreationTemplates: entityFromTemplateSettings[]
+		) => {
 			if (entityCreationTemplates.length === 0) {
 				return "Set Template";
-			} else if (entityCreationTemplates.length === 1 && entityCreationTemplates[0].engine !== "disabled") {
+			} else if (
+				entityCreationTemplates.length === 1 &&
+				entityCreationTemplates[0].engine !== "disabled"
+			) {
 				return "1 template";
-			} else if (entityCreationTemplates.length === 1 && entityCreationTemplates[0].engine === "disabled") {
+			} else if (
+				entityCreationTemplates.length === 1 &&
+				entityCreationTemplates[0].engine === "disabled"
+			) {
 				return "Set Template";
 			} else {
 				return `${entityCreationTemplates.length} templates`;
 			}
-		}
+		};
 		const newEntityFromTemplatesSetting = new Setting(settingContainer)
 			.setName("New Entity From Templates")
 			.setDesc(
@@ -258,7 +277,11 @@ export class FolderEntityProvider extends EntityProvider<FolderProviderUserSetti
 			);
 		newEntityFromTemplatesSetting.addButton((button) =>
 			button
-				.setButtonText(entityTemplateStatusFromSetting(settings.entityCreationTemplates ?? []))
+				.setButtonText(
+					entityTemplateStatusFromSetting(
+						settings.entityCreationTemplates ?? []
+					)
+				)
 				.onClick(async () => {
 					// Open a modal or another UI component to input template details
 					// For simplicity, assuming a modal is used and returns an object with template details
@@ -269,30 +292,38 @@ export class FolderEntityProvider extends EntityProvider<FolderProviderUserSetti
 					);
 					if (templateDetails) {
 						settings.entityCreationTemplates = [templateDetails];
-						button.setButtonText(entityTemplateStatusFromSetting([templateDetails]))
+						button.setButtonText(
+							entityTemplateStatusFromSetting([templateDetails])
+						);
 						onShouldSave(settings);
 					}
 				})
 		);
 
-
 		new Setting(settingContainer)
 			.setHeading()
 			.setName("Entity Filter")
-			.setDesc("Include or exclude entities based on whether property matches the following criteria.")
+			.setDesc(
+				"Include or exclude entities based on whether property matches the following criteria."
+			)
 			.addButton((button) => {
-				button.setButtonText("Add Filter")
-					.onClick(() => {
-						settings.entityFilters = settings.entityFilters || [];
-						settings.entityFilters.push({ type: "include", property: "", value: "" });
-						onShouldSave(settings);
-						rebuildFilters();
+				button.setButtonText("Add Filter").onClick(() => {
+					settings.entityFilters = settings.entityFilters || [];
+					settings.entityFilters.push({
+						type: "include",
+						property: "",
+						value: "",
 					});
+					onShouldSave(settings);
+					rebuildFilters();
+				});
 			});
 
 		const filtersContainer = settingContainer.createDiv();
-		
-		const validateRegex = (regex: string): "valid" | "invalid" | "empty" => {
+
+		const validateRegex = (
+			regex: string
+		): "valid" | "invalid" | "empty" => {
 			if (!regex) return "empty";
 			try {
 				new RegExp(regex);
@@ -317,11 +348,13 @@ export class FolderEntityProvider extends EntityProvider<FolderProviderUserSetti
 					} else if (status === "invalid") {
 						regexStatusIcon.setIcon("cross");
 						regexStatusIcon.setTooltip("Invalid regex");
-						regexStatusIcon.extraSettingsEl.style.color = "var(--text-error)";
+						regexStatusIcon.extraSettingsEl.style.color =
+							"var(--text-error)";
 					} else {
 						regexStatusIcon.setIcon("help");
 						regexStatusIcon.setTooltip("Empty regex");
-						regexStatusIcon.extraSettingsEl.style.color = "var(--text-muted)";
+						regexStatusIcon.extraSettingsEl.style.color =
+							"var(--text-muted)";
 					}
 				};
 
@@ -329,7 +362,7 @@ export class FolderEntityProvider extends EntityProvider<FolderProviderUserSetti
 					regexStatusIcon = button;
 					button.setDisabled(true);
 					updateRegexStatusIcon(filter.value);
-				});				
+				});
 
 				filterSetting.addDropdown((dropdown) => {
 					dropdown.addOption("include", "Include If");
@@ -371,7 +404,7 @@ export class FolderEntityProvider extends EntityProvider<FolderProviderUserSetti
 			});
 		};
 
-		rebuildFilters();		
+		rebuildFilters();
 	}
 
 	static buildAdvancedSettings(
@@ -400,6 +433,5 @@ export class FolderEntityProvider extends EntityProvider<FolderProviderUserSetti
 			.addText((text) => {
 				text.setPlaceholder("Property Name").setValue("");
 			});
-
 	}
 }
