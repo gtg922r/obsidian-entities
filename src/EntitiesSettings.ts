@@ -369,6 +369,7 @@ export class ProviderSettingsModal extends Modal {
 					this.providerSettings,
 					(newSettings) => {
 						console.log("Saving new settings", newSettings);
+						this.saveCallback(newSettings);
 					},
 					this.plugin
 				);

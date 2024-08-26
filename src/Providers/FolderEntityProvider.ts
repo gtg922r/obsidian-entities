@@ -9,7 +9,7 @@ import { EntitySuggestionItem } from "src/EntitiesSuggestor";
 import { EntityProvider, EntityProviderUserSettings } from "./EntityProvider";
 import { FolderSuggest } from "src/ui/file-suggest";
 import { IconPickerModal, openTemplateDetailsModal } from "src/userComponents";
-import { entityFromTemplateSettings } from "src/entities.types";
+import { EntityFilter, entityFromTemplateSettings } from "src/entities.types";
 
 const folderProviderTypeID = "folder";
 
@@ -20,6 +20,7 @@ export interface FolderProviderUserSettings extends EntityProviderUserSettings {
 	shouldCreateEntitiesForAliases?: boolean | undefined;
 	propertyToCreateEntitiesFor?: string | undefined;
 	propertyToFilterEntitiesBy?: string | undefined;
+	entityFilters?: EntityFilter[];
 }
 
 const defaultFolderProviderUserSettings: FolderProviderUserSettings = {
@@ -32,6 +33,7 @@ const defaultFolderProviderUserSettings: FolderProviderUserSettings = {
 	propertyToCreateEntitiesFor: undefined, // Not yet implemented
 	propertyToFilterEntitiesBy: undefined, // Not yet implemented
 	entityCreationTemplates: [],
+	entityFilters: [],
 };
 
 export class FolderEntityProvider extends EntityProvider<FolderProviderUserSettings> {
@@ -65,8 +67,14 @@ export class FolderEntityProvider extends EntityProvider<FolderProviderUserSetti
 			(file: unknown) => file instanceof TFile
 		) as TFile[] | undefined;
 
+		if (!entities) {
+			return [];
+		}
+
+		const filteredEntities = this.applyFilters(entities);
+
 		const entitySuggestions =
-			entities?.map((file) => ({
+			filteredEntities?.map((file) => ({
 				suggestionText: file.basename,
 				icon: this.settings.icon ?? "folder-open-dot",
 			})) ?? [];
@@ -80,7 +88,7 @@ export class FolderEntityProvider extends EntityProvider<FolderProviderUserSetti
 			replacementText: `${file.basename}|${alias}`,
 		});
 
-		const aliasEntitiesSuggestions = entities?.flatMap((file) => {
+		const aliasEntitiesSuggestions = filteredEntities?.flatMap((file) => {
 			const aliases = this.plugin.app.metadataCache.getFileCache(file)
 				?.frontmatter?.aliases as string | string[] | undefined;
 			if (typeof aliases === "string")
@@ -93,6 +101,43 @@ export class FolderEntityProvider extends EntityProvider<FolderProviderUserSetti
 		return aliasEntitiesSuggestions
 			? [...entitySuggestions, ...aliasEntitiesSuggestions]
 			: entitySuggestions;
+	}
+
+	private applyFilters(entities: TFile[] | undefined): TFile[] | undefined {
+		if (
+			!this.settings.entityFilters ||
+			this.settings.entityFilters.length === 0
+		) {
+			return entities;
+		}
+
+		const compiledFilters = this.settings.entityFilters
+			.map((filter) => {
+				try {
+					return { ...filter, regex: new RegExp(filter.value, "i") };
+				} catch (e) {
+					console.error(`Invalid regex: ${filter.value}`, e);
+					return null;
+				}
+			})
+			.filter(
+				(filter): filter is EntityFilter & { regex: RegExp } =>
+					filter !== null
+			);
+
+		return entities?.filter((file) => {
+			const metadata = this.plugin.app.metadataCache.getFileCache(file);
+			const frontmatter = metadata?.frontmatter;
+			if (!frontmatter) return false;
+
+			return compiledFilters.every((filter) => {
+				const propertyValue = frontmatter[filter.property];
+				if (!propertyValue) return filter.type === "exclude";
+
+				const matches = filter.regex.test(propertyValue);
+				return filter.type === "include" ? matches : !matches;
+			});
+		});
 	}
 
 	static buildSummarySetting(
@@ -111,7 +156,9 @@ export class FolderEntityProvider extends EntityProvider<FolderProviderUserSetti
 					(file) => file instanceof TFile
 				).length;
 				folderExistsIcon.setIcon("folder-check");
-				folderExistsIcon.setTooltip(`Folder Found (${numberNotesInFolder} notes)`);
+				folderExistsIcon.setTooltip(
+					`Folder Found (${numberNotesInFolder} notes)`
+				);
 				folderExistsIcon.extraSettingsEl.style.color = "";
 			} else if (folderExistsIcon) {
 				folderExistsIcon.setIcon("folder-x");
@@ -138,7 +185,9 @@ export class FolderEntityProvider extends EntityProvider<FolderProviderUserSetti
 				}
 			});
 
-			new FolderSuggest(plugin.app, text.inputEl, {additionalClasses:"entities-settings"});
+			new FolderSuggest(plugin.app, text.inputEl, {
+				additionalClasses: "entities-settings",
+			});
 		});
 	}
 
@@ -148,7 +197,6 @@ export class FolderEntityProvider extends EntityProvider<FolderProviderUserSetti
 		onShouldSave: (newSettings: FolderProviderUserSettings) => void,
 		plugin: Plugin
 	): void {
-
 		new Setting(settingContainer)
 			.setName("Icon")
 			.setDesc("Icon for the entities returned by this provider")
@@ -203,17 +251,25 @@ export class FolderEntityProvider extends EntityProvider<FolderProviderUserSetti
 					onShouldSave(settings);
 				});
 			});
-		const entityTemplateStatusFromSetting = (entityCreationTemplates: entityFromTemplateSettings[]) => {
+		const entityTemplateStatusFromSetting = (
+			entityCreationTemplates: entityFromTemplateSettings[]
+		) => {
 			if (entityCreationTemplates.length === 0) {
 				return "Set Template";
-			} else if (entityCreationTemplates.length === 1 && entityCreationTemplates[0].engine !== "disabled") {
+			} else if (
+				entityCreationTemplates.length === 1 &&
+				entityCreationTemplates[0].engine !== "disabled"
+			) {
 				return "1 template";
-			} else if (entityCreationTemplates.length === 1 && entityCreationTemplates[0].engine === "disabled") {
+			} else if (
+				entityCreationTemplates.length === 1 &&
+				entityCreationTemplates[0].engine === "disabled"
+			) {
 				return "Set Template";
 			} else {
 				return `${entityCreationTemplates.length} templates`;
 			}
-		}
+		};
 		const newEntityFromTemplatesSetting = new Setting(settingContainer)
 			.setName("New Entity From Templates")
 			.setDesc(
@@ -221,7 +277,11 @@ export class FolderEntityProvider extends EntityProvider<FolderProviderUserSetti
 			);
 		newEntityFromTemplatesSetting.addButton((button) =>
 			button
-				.setButtonText(entityTemplateStatusFromSetting(settings.entityCreationTemplates ?? []))
+				.setButtonText(
+					entityTemplateStatusFromSetting(
+						settings.entityCreationTemplates ?? []
+					)
+				)
 				.onClick(async () => {
 					// Open a modal or another UI component to input template details
 					// For simplicity, assuming a modal is used and returns an object with template details
@@ -232,14 +292,122 @@ export class FolderEntityProvider extends EntityProvider<FolderProviderUserSetti
 					);
 					if (templateDetails) {
 						settings.entityCreationTemplates = [templateDetails];
-						button.setButtonText(entityTemplateStatusFromSetting([templateDetails]))
+						button.setButtonText(
+							entityTemplateStatusFromSetting([templateDetails])
+						);
 						onShouldSave(settings);
 					}
 				})
 		);
+
+		new Setting(settingContainer)
+			.setHeading()
+			.setName("Entity Filter")
+			.setDesc(
+				"Include or exclude entities based on whether property matches the following criteria."
+			)
+			.addButton((button) => {
+				button.setButtonText("Add Filter").onClick(() => {
+					settings.entityFilters = settings.entityFilters || [];
+					settings.entityFilters.push({
+						type: "include",
+						property: "",
+						value: "",
+					});
+					onShouldSave(settings);
+					rebuildFilters();
+				});
+			});
+
+		const filtersContainer = settingContainer.createDiv();
+
+		const validateRegex = (
+			regex: string
+		): "valid" | "invalid" | "empty" => {
+			if (!regex) return "empty";
+			try {
+				new RegExp(regex);
+				return "valid";
+			} catch {
+				return "invalid";
+			}
+		};
+
+		const rebuildFilters = () => {
+			filtersContainer.empty();
+			settings.entityFilters?.forEach((filter, index) => {
+				const filterSetting = new Setting(filtersContainer);
+
+				let regexStatusIcon: ExtraButtonComponent;
+				const updateRegexStatusIcon = (regex: string) => {
+					const status = validateRegex(regex);
+					if (status === "valid") {
+						regexStatusIcon.setIcon("checkmark");
+						regexStatusIcon.setTooltip("Valid regex");
+						regexStatusIcon.extraSettingsEl.style.color = "";
+					} else if (status === "invalid") {
+						regexStatusIcon.setIcon("cross");
+						regexStatusIcon.setTooltip("Invalid regex");
+						regexStatusIcon.extraSettingsEl.style.color =
+							"var(--text-error)";
+					} else {
+						regexStatusIcon.setIcon("help");
+						regexStatusIcon.setTooltip("Empty regex");
+						regexStatusIcon.extraSettingsEl.style.color =
+							"var(--text-muted)";
+					}
+				};
+
+				filterSetting.addExtraButton((button) => {
+					regexStatusIcon = button;
+					button.setDisabled(true);
+					updateRegexStatusIcon(filter.value);
+				});
+
+				filterSetting.addDropdown((dropdown) => {
+					dropdown.addOption("include", "Include If");
+					dropdown.addOption("exclude", "Exclude If");
+					dropdown.setValue(filter.type);
+					dropdown.onChange((value) => {
+						filter.type = value as "include" | "exclude";
+						onShouldSave(settings);
+					});
+				});
+
+				filterSetting.addText((text) => {
+					text.setPlaceholder("Property Name");
+					text.setValue(filter.property);
+					text.onChange((value) => {
+						filter.property = value;
+						onShouldSave(settings);
+					});
+				});
+
+				filterSetting.addText((text) => {
+					text.setPlaceholder("Property Value/Regex");
+					text.setValue(filter.value);
+					text.onChange((value) => {
+						filter.value = value;
+						onShouldSave(settings);
+						updateRegexStatusIcon(value);
+					});
+				});
+
+				filterSetting.addButton((button) => {
+					button.setIcon("trash");
+					button.onClick(() => {
+						settings.entityFilters?.splice(index, 1);
+						onShouldSave(settings);
+						rebuildFilters();
+					});
+				});
+			});
+		};
+
+		rebuildFilters();
 	}
 
-	static buildAdvancedSettings?(
+	static buildAdvancedSettings(
 		settingContainer: HTMLElement,
 		settings: FolderProviderUserSettings,
 		onShouldSave: (newSettings: FolderProviderUserSettings) => void,

@@ -13,7 +13,7 @@ import { EntitySuggestionItem } from "src/EntitiesSuggestor";
 import { EntityProvider, EntityProviderUserSettings } from "./EntityProvider";
 import { TextInputSuggest } from "src/ui/suggest";
 import { IconPickerModal, openTemplateDetailsModal } from "src/userComponents";
-import { entityFromTemplateSettings } from "src/entities.types";
+import { EntityFilter, entityFromTemplateSettings } from "src/entities.types";
 
 const dataviewProviderTypeID = "dataview";
 
@@ -22,6 +22,7 @@ export interface DataviewProviderUserSettings
 	providerTypeID: string;
 	query: string;
 	shouldCreateEntitiesForAliases?: boolean | undefined;
+	entityFilters?: EntityFilter[];
 }
 
 const defaultDataviewProviderUserSettings: DataviewProviderUserSettings = {
@@ -31,6 +32,7 @@ const defaultDataviewProviderUserSettings: DataviewProviderUserSettings = {
 	query: "",
 	entityCreationTemplates: [],
 	shouldCreateEntitiesForAliases: false,
+	entityFilters: [],
 };
 
 export class DataviewEntityProvider extends EntityProvider<DataviewProviderUserSettings> {
@@ -77,15 +79,20 @@ export class DataviewEntityProvider extends EntityProvider<DataviewProviderUserS
 
 	getEntityList(query: string): EntitySuggestionItem[] {
 		const dvQueryReults = this.dv?.pages(this.settings.query);
+		if (!dvQueryReults) {
+			return [];
+		}
 
-		const entitiesWithAliases = dvQueryReults?.flatMap(
+		const filteredQueryResults = this.applyFilters(dvQueryReults);
+
+		const entitiesWithAliases = filteredQueryResults?.flatMap(
 			(project: { file: { name: string; aliases: string[] } }) => {
 				const baseEntity: EntitySuggestionItem = {
 					suggestionText: project.file.name,
 					icon: this.settings.icon ?? "box",
 				};
 
-				const projectEntities = [
+				const projectEntities: EntitySuggestionItem[] = [
 					baseEntity,
 					...project.file.aliases.map((alias: string) => ({
 						suggestionText: alias,
@@ -98,7 +105,46 @@ export class DataviewEntityProvider extends EntityProvider<DataviewProviderUserS
 			}
 		);
 
-		return entitiesWithAliases.array();
+		return entitiesWithAliases || [];
+	}
+
+	private applyFilters(
+		queryResults: { file: { path: string } }[]
+	): unknown[] {
+		if (
+			!this.settings.entityFilters ||
+			this.settings.entityFilters.length === 0
+		) {
+			return queryResults;
+		}
+
+		const compiledFilters = this.settings.entityFilters
+			.map((filter) => {
+				try {
+					return { ...filter, regex: new RegExp(filter.value, "i") };
+				} catch (e) {
+					console.error(`Invalid regex: ${filter.value}`, e);
+					return null;
+				}
+			})
+			.filter(
+				(filter): filter is EntityFilter & { regex: RegExp } =>
+					filter !== null
+			);
+
+		return queryResults.filter((entity) => {
+			const file = this.plugin.app.vault.getAbstractFileByPath(
+				entity.file.path
+			) as TFile;
+			const metadata = this.plugin.app.metadataCache.getFileCache(file);
+			return compiledFilters.every((filter) => {
+				const propertyValue = metadata?.frontmatter?.[filter.property];
+				if (!propertyValue) return filter.type === "exclude";
+
+				const matches = filter.regex.test(propertyValue);
+				return filter.type === "include" ? matches : !matches;
+			});
+		});
 	}
 
 	static buildSummarySetting(
@@ -129,8 +175,6 @@ export class DataviewEntityProvider extends EntityProvider<DataviewProviderUserS
 			button.setDisabled(true);
 		});
 
-		
-
 		const updateQueryIcon = async (query: string) => {
 			if (queryIsOK(query) === "ok") {
 				const dv = await DataviewEntityProvider.getDataviewApiWithRetry(
@@ -140,7 +184,9 @@ export class DataviewEntityProvider extends EntityProvider<DataviewProviderUserS
 				);
 				const numberNotesFromQuery = dv?.pages(query).length;
 				queryOKIcon.setIcon("search-check");
-				queryOKIcon.setTooltip(`Dataview Source OK (${numberNotesFromQuery} notes)`);
+				queryOKIcon.setTooltip(
+					`Dataview Source OK (${numberNotesFromQuery} notes)`
+				);
 				queryOKIcon.extraSettingsEl.style.color = "";
 			} else if (queryIsOK(query) === "empty") {
 				queryOKIcon.setIcon("search-x");
@@ -181,7 +227,6 @@ export class DataviewEntityProvider extends EntityProvider<DataviewProviderUserS
 		onShouldSave: (newSettings: DataviewProviderUserSettings) => void,
 		plugin: Plugin
 	): void {
-
 		new Setting(settingContainer)
 			.setName("Icon")
 			.setDesc("Icon for the entities returned by this provider")
@@ -273,7 +318,121 @@ export class DataviewEntityProvider extends EntityProvider<DataviewProviderUserS
 					}
 				})
 		);
+
+		new Setting(settingContainer)
+			.setName("Entity Filters")
+			.setDesc(
+				"Include or exclude entities based on whether property matches the following criteria."
+			)
+			.addButton((button) => {
+				button.setButtonText("Add Filter").onClick(() => {
+					settings.entityFilters = settings.entityFilters || [];
+					settings.entityFilters.push({
+						type: "include",
+						property: "",
+						value: "",
+					});
+					onShouldSave(settings);
+					rebuildFilters();
+				});
+			});
+
+		const filtersContainer = settingContainer.createDiv();
+
+		const validateRegex = (
+			regex: string
+		): "valid" | "invalid" | "empty" => {
+			if (!regex) return "empty";
+			try {
+				new RegExp(regex);
+				return "valid";
+			} catch {
+				return "invalid";
+			}
+		};
+
+		const rebuildFilters = () => {
+			filtersContainer.empty();
+			settings.entityFilters?.forEach((filter, index) => {
+				const filterSetting = new Setting(filtersContainer);
+
+				let regexStatusIcon: ExtraButtonComponent;
+				const updateRegexStatusIcon = (regex: string) => {
+					const status = validateRegex(regex);
+					if (status === "valid") {
+						regexStatusIcon.setIcon("checkmark");
+						regexStatusIcon.setTooltip("Valid regex");
+						regexStatusIcon.extraSettingsEl.style.color = "";
+					} else if (status === "invalid") {
+						regexStatusIcon.setIcon("cross");
+						regexStatusIcon.setTooltip("Invalid regex");
+						regexStatusIcon.extraSettingsEl.style.color =
+							"var(--text-error)";
+					} else {
+						regexStatusIcon.setIcon("help");
+						regexStatusIcon.setTooltip("Empty regex");
+						regexStatusIcon.extraSettingsEl.style.color =
+							"var(--text-muted)";
+					}
+				};
+
+				filterSetting.addExtraButton((button) => {
+					regexStatusIcon = button;
+					button.setDisabled(true);
+					updateRegexStatusIcon(filter.value);
+				});
+
+				filterSetting.addDropdown((dropdown) => {
+					dropdown.addOption("include", "Include If");
+					dropdown.addOption("exclude", "Exclude If");
+					dropdown.setValue(filter.type);
+					dropdown.onChange((value) => {
+						filter.type = value as "include" | "exclude";
+						onShouldSave(settings);
+					});
+				});
+
+				filterSetting.addText((text) => {
+					text.setPlaceholder("Property Name");
+					text.setValue(filter.property);
+					text.onChange((value) => {
+						filter.property = value;
+						onShouldSave(settings);
+					});
+				});
+
+				filterSetting.addText((text) => {
+					text.setPlaceholder("Property Value/Regex");
+					text.setValue(filter.value);
+					text.onChange((value) => {
+						filter.value = value;
+						onShouldSave(settings);
+						updateRegexStatusIcon(value);
+					});
+				});
+
+				filterSetting.addButton((button) => {
+					button.setIcon("trash");
+					button.onClick(() => {
+						settings.entityFilters?.splice(index, 1);
+						onShouldSave(settings);
+						rebuildFilters();
+					});
+				});
+			});
+		};
+
+		rebuildFilters();
 	}
+
+	// static buildAdvancedSettings(
+	// 	settingContainer: HTMLElement,
+	// 	settings: DataviewProviderUserSettings,
+	// 	onShouldSave: (newSettings: DataviewProviderUserSettings) => void,
+	// 	plugin: Plugin
+	// ): void {
+	// // TO IMPLEMENT AS NEEDEd
+	// }
 
 	static getDataviewApiWithRetry = (
 		retryDelay: number,
@@ -303,7 +462,7 @@ export class DataviewEntityProvider extends EntityProvider<DataviewProviderUserS
 
 export class DataviewSourceSuggest extends TextInputSuggest<string> {
 	getSuggestions(inputStr: string): string[] {
-		const abstractFiles = this.app.vault.getAllLoadedFiles();		
+		const abstractFiles = this.app.vault.getAllLoadedFiles();
 		const lowerCaseInputStr = inputStr.toLowerCase();
 
 		const suggestions: Set<string> = new Set();

@@ -35,7 +35,12 @@ export type entityFromTemplateSettings = {
 	entityName: string;
 };
 
- 
+export interface EntityFilter {
+	type: "include" | "exclude";
+	property: string;
+	value: string;
+}
+
 export interface ProviderTemplateCreationSettings {
 	newEntityFromTemplates?: entityFromTemplateSettings[];
 } 
