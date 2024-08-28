@@ -10,6 +10,7 @@ import { EntityProvider, EntityProviderUserSettings } from "./EntityProvider";
 import { FolderSuggest } from "src/ui/file-suggest";
 import { IconPickerModal, openTemplateDetailsModal } from "src/userComponents";
 import { EntityFilter, entityFromTemplateSettings } from "src/entities.types";
+import { FrontmatterKeySuggest } from "src/ui/FrontmatterKeySuggest";
 
 const folderProviderTypeID = "folder";
 
@@ -380,6 +381,10 @@ export class FolderEntityProvider extends EntityProvider<FolderProviderUserSetti
 					text.onChange((value) => {
 						filter.property = value;
 						onShouldSave(settings);
+					});
+
+					new FrontmatterKeySuggest(plugin.app, text.inputEl, {
+						shouldCloseIfNoSuggestions: true,
 					});
 				});
 

@@ -11,9 +11,10 @@ import {
 import { getAPI, DataviewApi } from "obsidian-dataview";
 import { EntitySuggestionItem } from "src/EntitiesSuggestor";
 import { EntityProvider, EntityProviderUserSettings } from "./EntityProvider";
-import { TextInputSuggest } from "src/ui/suggest";
+import { TextInputSuggest, TextInputSuggestOptions } from "src/ui/suggest";
 import { IconPickerModal, openTemplateDetailsModal } from "src/userComponents";
 import { EntityFilter, entityFromTemplateSettings } from "src/entities.types";
+import { FrontmatterKeySuggest } from "src/ui/FrontmatterKeySuggest";
 
 const dataviewProviderTypeID = "dataview";
 
@@ -399,6 +400,10 @@ export class DataviewEntityProvider extends EntityProvider<DataviewProviderUserS
 						filter.property = value;
 						onShouldSave(settings);
 					});
+
+					new FrontmatterKeySuggest(plugin.app, text.inputEl, {
+						shouldCloseIfNoSuggestions: true,
+					});
 				});
 
 				filterSetting.addText((text) => {
@@ -408,7 +413,7 @@ export class DataviewEntityProvider extends EntityProvider<DataviewProviderUserS
 						filter.value = value;
 						onShouldSave(settings);
 						updateRegexStatusIcon(value);
-					});
+					});	
 				});
 
 				filterSetting.addButton((button) => {
@@ -461,41 +466,35 @@ export class DataviewEntityProvider extends EntityProvider<DataviewProviderUserS
 }
 
 export class DataviewSourceSuggest extends TextInputSuggest<string> {
-	getSuggestions(inputStr: string): string[] {
+	private suggestions: Set<string> = new Set();
+
+	constructor(app: App, inputEl: HTMLInputElement, options?: Partial<TextInputSuggestOptions>) {
+		super(app, inputEl, options);
+		this.initialize();
+	}
+
+	private async initialize() {
 		const abstractFiles = this.app.vault.getAllLoadedFiles();
-		const lowerCaseInputStr = inputStr.toLowerCase();
-
-		const suggestions: Set<string> = new Set();
-
-		// Extract the relevant part of the query
-		const tagMatch = lowerCaseInputStr.match(/#\S*$/);
-		const folderMatch = lowerCaseInputStr.match(/"\S*$/);
-		const searchStr = tagMatch
-			? tagMatch[0]
-			: folderMatch
-			? folderMatch[0].slice(1)
-			: lowerCaseInputStr;
 
 		abstractFiles.forEach((fileOrFolder: TAbstractFile) => {
-			if (
-				fileOrFolder instanceof TFolder &&
-				fileOrFolder.path.toLowerCase().contains(searchStr)
-			) {
-				suggestions.add(fileOrFolder.path);
+			if (fileOrFolder instanceof TFolder) {
+				this.suggestions.add(fileOrFolder.path);
 			} else if (fileOrFolder instanceof TFile) {
-				const metadata =
-					this.app.metadataCache.getFileCache(fileOrFolder);
+				const metadata = this.app.metadataCache.getFileCache(fileOrFolder);
 				if (metadata) {
 					getAllTags(metadata)?.forEach((tag) => {
-						if (tag.toLowerCase().contains(searchStr)) {
-							suggestions.add(tag);
-						}
+						this.suggestions.add(tag);
 					});
 				}
 			}
 		});
+	}
 
-		return Array.from(suggestions);
+	getSuggestions(inputStr: string): string[] {
+		const lowerCaseInputStr = inputStr.toLowerCase();
+		return Array.from(this.suggestions).filter(suggestion =>
+			suggestion.toLowerCase().includes(lowerCaseInputStr)
+		);
 	}
 
 	renderSuggestion(query: string, el: HTMLElement): void {

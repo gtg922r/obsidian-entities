@@ -37,9 +37,11 @@ describe("onTrigger tests", () => {
 	let mockFile: jest.Mocked<TFile>;
 	let registry: jest.Mocked<ProviderRegistry>;
 
-
 	beforeEach(() => {
-		registry = {} as unknown as jest.Mocked<ProviderRegistry>;
+		registry = {
+			getProviders: jest.fn(),
+			getProvidersForTrigger: jest.fn(),
+		} as unknown as jest.Mocked<ProviderRegistry>;
 		// eslint-disable-next-line @typescript-eslint/no-explicit-any
 		suggestor = new EntitiesSuggestor(mockPlugin, registry);
 
