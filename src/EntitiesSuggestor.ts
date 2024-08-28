@@ -290,7 +290,7 @@ export class EntitiesSuggestor extends EditorSuggest<EntitySuggestionItem> {
 				this.lastDismissedQuery = start;
 			}
 		}
-		console.log("close");
+
 		super.close();
 	}
 }
