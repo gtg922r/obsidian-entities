@@ -273,13 +273,12 @@ export class EntitiesSuggestor extends EditorSuggest<EntitySuggestionItem> {
 		};
 		const end = context.end;
 
-		editor.replaceRange(text, start, end);
-		const newCursor = end;
+               const startOffset = editor.posToOffset(start);
+               editor.replaceRange(text, start, end);
+               const newCursor = editor.offsetToPos(startOffset + text.length);
 
-		newCursor.ch = start.ch + text.length;
-
-		editor.setCursor(newCursor);
-		this.close();
+               editor.setCursor(newCursor);
+               this.close();
 	}
 
 	async close(): Promise<void> {

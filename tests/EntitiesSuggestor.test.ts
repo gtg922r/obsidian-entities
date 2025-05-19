@@ -8,7 +8,7 @@ import { TriggerCharacter } from "../src/entities.types";
 // Mocking the necessary Obsidian interfaces and classes inline
 jest.mock("obsidian", () => {
     return {
-        EditorSuggest: class {},
+        EditorSuggest: class { close() {} },
         Plugin: class {
             app: jest.MockedObject<App>;
             constructor(app: App) {
@@ -430,5 +430,34 @@ describe("getSuggestions tests", () => {
         });
         expect(mockEntityProvider.getEntityList).toHaveBeenCalledWith("note", TriggerCharacter.At);
         expect(mockEntityProvider.getTemplateCreationSuggestions).toHaveBeenCalledWith("note");
+    });
+});
+describe("replaceTextAtContext tests", () => {
+    test("cursor position accounts for multi-line insertions", () => {
+        const registry = {} as unknown as jest.Mocked<ProviderRegistry>;
+        const suggestor = new EntitiesSuggestor(mockPlugin, registry);
+        const mockEditor = {
+            replaceRange: jest.fn(),
+            setCursor: jest.fn(),
+            posToOffset: jest.fn().mockReturnValue(0),
+            offsetToPos: jest.fn().mockReturnValue({ line: 1, ch: 4 }),
+        } as unknown as jest.Mocked<Editor>;
+        const context = {
+            editor: mockEditor,
+            start: { line: 0, ch: 1 },
+            end: { line: 0, ch: 1 },
+            query: "@",
+        } as unknown as EditorSuggestContext;
+
+        (suggestor as any).replaceTextAtContext("a\nbc", context);
+
+        expect(mockEditor.posToOffset).toHaveBeenCalledWith({ line: 0, ch: 0 });
+        expect(mockEditor.replaceRange).toHaveBeenCalledWith(
+            "a\nbc",
+            { line: 0, ch: 0 },
+            { line: 0, ch: 1 }
+        );
+        expect(mockEditor.offsetToPos).toHaveBeenCalledWith(4);
+        expect(mockEditor.setCursor).toHaveBeenCalledWith({ line: 1, ch: 4 });
     });
 });
