@@ -164,17 +164,33 @@ describe("onTrigger tests", () => {
 		expect(result).toBeNull();
 	});
 
-	test("onTrigger should return null when @ is followed by spaces", () => {
-		mockEditor.getLine.mockImplementationOnce(() => "@   ");
-		const cursorPosition = { line: 0, ch: 4 };
-		const result = suggestor.onTrigger(
-			cursorPosition,
-			mockEditor,
-			mockFile
-		);
+        test("onTrigger should return null when @ is followed by spaces", () => {
+                mockEditor.getLine.mockImplementationOnce(() => "@   ");
+                const cursorPosition = { line: 0, ch: 4 };
+                const result = suggestor.onTrigger(
+                        cursorPosition,
+                        mockEditor,
+                        mockFile
+                );
 
-		expect(result).toBeNull();
-	});
+                expect(result).toBeNull();
+        });
+
+        test("onTrigger should handle a lone @ at the start of a line", () => {
+                mockEditor.getLine.mockImplementationOnce(() => "@");
+                const cursorPosition = { line: 0, ch: 1 };
+                const result = suggestor.onTrigger(
+                        cursorPosition,
+                        mockEditor as Editor,
+                        mockFile
+                );
+
+                expect(result).toEqual({
+                        start: { line: 0, ch: 1 },
+                        end: cursorPosition,
+                        query: "@",
+                });
+        });
 
 	test("onTrigger should return correct trigger info when @ is at the beginning of the line followed by text", () => {
 		mockEditor.getLine.mockImplementationOnce(() => "@example");

@@ -76,11 +76,16 @@ export class EntitiesSuggestor extends EditorSuggest<EntitySuggestionItem> {
 			.slice(0, cursor.ch);
 
 		// Match the last occurrence of the trigger character
-		const match = currentLineToCursor.match(/(.*)([@:/])($|(?:[^\s].*?$))/);
+                const match = currentLineToCursor.match(/(.*)([@:/])($|(?:[^\s].*?$))/);
 
-		if (match && match.index !== undefined) {
-			const start = match.index + match[1].length + 1; // Correctly adjust start to include trigger character
-			const query = match[2] + match[3]; // The trigger and the captured query part after the trigger
+                if (match && match.index !== undefined) {
+                        // Ensure empty strings are respected when selecting capture groups
+                        const beforeDelimiter = match[1] ?? "";
+                        const trigger = match[2] ?? "";
+                        const afterDelimiter = match[3] ?? "";
+
+                        const start = match.index + beforeDelimiter.length + 1; // Correctly adjust start to include trigger character
+                        const query = trigger + afterDelimiter; // The trigger and the captured query part after the trigger
 
 			// Check if the query starts with the last dismissed query
 			if (
