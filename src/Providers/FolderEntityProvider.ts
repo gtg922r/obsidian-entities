@@ -89,15 +89,25 @@ export class FolderEntityProvider extends EntityProvider<FolderProviderUserSetti
 			replacementText: `${file.basename}|${alias}`,
 		});
 
-		const aliasEntitiesSuggestions = filteredEntities?.flatMap((file) => {
-			const aliases = this.plugin.app.metadataCache.getFileCache(file)
-				?.frontmatter?.aliases as string | string[] | undefined;
-			if (typeof aliases === "string")
-				return [suggestionFromAlias(aliases, file)];
-			return aliases
-				? aliases.map((alias) => suggestionFromAlias(alias, file))
-				: [];
-		});
+                const aliasEntitiesSuggestions = filteredEntities?.flatMap((file) => {
+                        const frontmatter = this.plugin.app.metadataCache.getFileCache(file)?.frontmatter;
+                        if (!frontmatter) return [];
+
+                        const aliasList: string[] = [];
+
+                        const aliases = frontmatter.aliases as string | string[] | undefined;
+                        if (typeof aliases === "string") aliasList.push(aliases);
+                        else if (Array.isArray(aliases)) aliasList.push(...aliases);
+
+                        if (this.settings.propertyToCreateEntitiesFor) {
+                                const propVal = frontmatter[this.settings.propertyToCreateEntitiesFor];
+                                if (typeof propVal === "string") aliasList.push(propVal);
+                                else if (Array.isArray(propVal)) aliasList.push(...propVal.map((v) => String(v)));
+                                else if (propVal !== undefined) aliasList.push(String(propVal));
+                        }
+
+                        return aliasList.map((alias) => suggestionFromAlias(alias, file));
+                });
 
 		return aliasEntitiesSuggestions
 			? [...entitySuggestions, ...aliasEntitiesSuggestions]
@@ -418,16 +428,25 @@ export class FolderEntityProvider extends EntityProvider<FolderProviderUserSetti
 		onShouldSave: (newSettings: FolderProviderUserSettings) => void,
 		plugin: Plugin
 	): void {
-		new Setting(settingContainer)
-			.setName("Create Entities for Values of Note Property")
-			.setDesc(
-				sanitizeHTMLToDom(
-					"Whether to also create Entities for each value listed in the specified property of a Note in the folder.<br><br>For example, add entities based on 'username' of a note for a Person."
-				)
-			)
-			.addText((text) => {
-				text.setPlaceholder("Property Name").setValue("");
-			});
+                new Setting(settingContainer)
+                        .setName("Create Entities for Values of Note Property")
+                        .setDesc(
+                                sanitizeHTMLToDom(
+                                        "Whether to also create Entities for each value listed in the specified property of a Note in the folder.<br><br>For example, add entities based on 'username' of a note for a Person."
+                                )
+                        )
+                        .addText((text) => {
+                                text.setPlaceholder("Property Name")
+                                        .setValue(settings.propertyToCreateEntitiesFor ?? "");
+                                text.onChange((value) => {
+                                        settings.propertyToCreateEntitiesFor = value.trim() || undefined;
+                                        onShouldSave(settings);
+                                });
+
+                                new FrontmatterKeySuggest(plugin.app, text.inputEl, {
+                                        shouldCloseIfNoSuggestions: true,
+                                });
+                        });
 		new Setting(settingContainer)
 			.setName("Filter Entities by Matching Property")
 			.setDesc(

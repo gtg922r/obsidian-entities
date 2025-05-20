@@ -19,21 +19,23 @@ import { FrontmatterKeySuggest } from "src/ui/FrontmatterKeySuggest";
 const dataviewProviderTypeID = "dataview";
 
 export interface DataviewProviderUserSettings
-	extends EntityProviderUserSettings {
-	providerTypeID: string;
-	query: string;
-	shouldCreateEntitiesForAliases?: boolean | undefined;
-	entityFilters?: EntityFilter[];
+        extends EntityProviderUserSettings {
+        providerTypeID: string;
+        query: string;
+        propertyToCreateEntitiesFor?: string | undefined;
+        shouldCreateEntitiesForAliases?: boolean | undefined;
+        entityFilters?: EntityFilter[];
 }
 
 const defaultDataviewProviderUserSettings: DataviewProviderUserSettings = {
-	providerTypeID: dataviewProviderTypeID,
-	enabled: true,
-	icon: "box",
-	query: "",
-	entityCreationTemplates: [],
-	shouldCreateEntitiesForAliases: false,
-	entityFilters: [],
+        providerTypeID: dataviewProviderTypeID,
+        enabled: true,
+        icon: "box",
+        query: "",
+        propertyToCreateEntitiesFor: undefined,
+        entityCreationTemplates: [],
+        shouldCreateEntitiesForAliases: false,
+        entityFilters: [],
 };
 
 export class DataviewEntityProvider extends EntityProvider<DataviewProviderUserSettings> {
@@ -86,25 +88,36 @@ export class DataviewEntityProvider extends EntityProvider<DataviewProviderUserS
 
 		const filteredQueryResults = this.applyFilters(dvQueryReults);
 
-		const entitiesWithAliases = filteredQueryResults?.flatMap(
-			(project: { file: { name: string; aliases: string[] } }) => {
-				const baseEntity: EntitySuggestionItem = {
-					suggestionText: project.file.name,
-					icon: this.settings.icon ?? "box",
-				};
+                const entitiesWithAliases = filteredQueryResults?.flatMap(
+                        (page: { file: { name: string; aliases: string[] } }) => {
+                                const baseEntity: EntitySuggestionItem = {
+                                        suggestionText: page.file.name,
+                                        icon: this.settings.icon ?? "box",
+                                };
 
-				const projectEntities: EntitySuggestionItem[] = [
-					baseEntity,
-					...project.file.aliases.map((alias: string) => ({
-						suggestionText: alias,
-						icon: this.settings.icon ?? "box",
-						replacementText: `${project.file.name}|${alias}`,
-					})),
-				];
+                                const aliasList: string[] = [...page.file.aliases];
 
-				return projectEntities;
-			}
-		);
+                                if (this.settings.propertyToCreateEntitiesFor) {
+                                        const propVal = (page as Record<string, unknown>)[
+                                                this.settings.propertyToCreateEntitiesFor
+                                        ];
+                                        if (typeof propVal === "string") aliasList.push(propVal);
+                                        else if (Array.isArray(propVal)) aliasList.push(...propVal.map((v) => String(v)));
+                                        else if (propVal !== undefined) aliasList.push(String(propVal));
+                                }
+
+                                const projectEntities: EntitySuggestionItem[] = [
+                                        baseEntity,
+                                        ...aliasList.map((alias: string) => ({
+                                                suggestionText: alias,
+                                                icon: this.settings.icon ?? "box",
+                                                replacementText: `${page.file.name}|${alias}`,
+                                        })),
+                                ];
+
+                                return projectEntities;
+                        }
+                );
 
 		return entitiesWithAliases || [];
 	}
@@ -256,20 +269,38 @@ export class DataviewEntityProvider extends EntityProvider<DataviewProviderUserS
 			plugin
 		);
 
-		new Setting(settingContainer)
-			.setName("Create Entities for Aliases")
-			.setDesc(
-				"Whether to also create Entities for each alias specified for a Note in the folder"
-			)
-			.addToggle((toggle) => {
-				toggle.setValue(
-					settings.shouldCreateEntitiesForAliases ?? false
-				);
-				toggle.onChange((value) => {
-					settings.shouldCreateEntitiesForAliases = value;
-					onShouldSave(settings);
-				});
-			});
+                new Setting(settingContainer)
+                        .setName("Create Entities for Aliases")
+                        .setDesc(
+                                "Whether to also create Entities for each alias specified for a Note in the folder"
+                        )
+                        .addToggle((toggle) => {
+                                toggle.setValue(
+                                        settings.shouldCreateEntitiesForAliases ?? false
+                                );
+                                toggle.onChange((value) => {
+                                        settings.shouldCreateEntitiesForAliases = value;
+                                        onShouldSave(settings);
+                                });
+                        });
+
+                new Setting(settingContainer)
+                        .setName("Property Aliases")
+                        .setDesc(
+                                "Frontmatter property whose values should be added as aliases"
+                        )
+                        .addText((text) => {
+                                text.setPlaceholder("Property Name")
+                                        .setValue(settings.propertyToCreateEntitiesFor ?? "");
+                                text.onChange((value) => {
+                                        settings.propertyToCreateEntitiesFor = value.trim() || undefined;
+                                        onShouldSave(settings);
+                                });
+
+                                new FrontmatterKeySuggest(plugin.app, text.inputEl, {
+                                        shouldCloseIfNoSuggestions: true,
+                                });
+                        });
 
 		const entityTemplateStatusFromSetting = (
 			entityCreationTemplates: entityFromTemplateSettings[]
