@@ -16,6 +16,7 @@ For example, perhaps you have a folder called "People". Entities allows you trig
 - Integration with Dataview for dynamic entity suggestions.
 - Template-based entity creation and insertion.
 - Customizable settings for each provider.
+- Use frontmatter properties as additional aliases when searching.
 
 ## Installation
 
