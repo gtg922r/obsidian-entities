@@ -67,13 +67,13 @@ export abstract class EntityProvider<T extends EntityProviderUserSettings> {
 			icon: "plus-circle",
 			action: async () => {
 				console.log(`New ${template.entityName}: ${query}`);
-				await createNewNoteFromTemplate(
-					this.plugin,
-					template.templatePath,
-					"TODO FIX FOLDER",
-					query,
-					false
-				);
+                                await createNewNoteFromTemplate(
+                                        this.plugin,
+                                        template.templatePath,
+                                        this.plugin.app.vault.getRoot(),
+                                        query,
+                                        false
+                                );
 				await new Promise(resolve => setTimeout(resolve, 20));
 				return `[[${query}]]`;
 			},

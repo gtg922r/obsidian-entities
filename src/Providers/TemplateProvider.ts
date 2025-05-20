@@ -213,7 +213,7 @@ export class TemplateEntityProvider extends EntityProvider<TemplateProviderUserS
             createNewNoteFromTemplate(
                 this.plugin,
                 file,
-                "", // Assuming FOLDER_SETTING is managed elsewhere or not needed
+                this.plugin.app.vault.getRoot(),
                 NEW_TEMPLATE_NAME,
                 false // Assuming OPEN_NEW_NOTE is managed elsewhere or not needed
             );

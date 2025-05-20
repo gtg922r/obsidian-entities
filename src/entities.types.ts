@@ -1,4 +1,4 @@
-import { App, Plugin, TFile } from "obsidian";
+import { App, Plugin, TFile, TFolder } from "obsidian";
 import { EntityProviderUserSettings } from "./Providers/EntityProvider";
 
 export enum TriggerCharacter {
@@ -49,17 +49,17 @@ export interface EntitiesSettings {
 	providerSettings: EntityProviderUserSettings[];
 }
 export interface TemplaterPlugin {
-	templater?: {
-		create_new_note_from_template?: (
-			file: TFile | string,
-			folderSetting: string,
-			newTemplateName: string,
-			openNewNote: boolean
-		) => Promise<TFile | undefined>;
-		append_template_to_active_file?: (
-			template_file: TFile
-		) => Promise<void>;
-	};
+        templater?: {
+                create_new_note_from_template?: (
+                        file: TFile | string,
+                        folder: TFolder,
+                        newTemplateName: string,
+                        openNewNote: boolean
+                ) => Promise<TFile | undefined>;
+                append_template_to_active_file?: (
+                        template_file: TFile
+                ) => Promise<void>;
+        };
 }
 
 export const DEFAULT_SETTINGS: EntitiesSettings = {
