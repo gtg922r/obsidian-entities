@@ -133,13 +133,13 @@ export class MetadataMenuProvider extends EntityProvider<MetadataMenuProviderUse
 				suggestionText: `New ${fileClassName}: ${query}`,
 				icon: icon,
 				action: async () => {
-                                        await createNewNoteFromTemplate(
-                                                this.plugin,
-                                                template,
-                                                this.plugin.app.vault.getRoot(),
-                                                query,
-                                                false
-                                        );
+					await createNewNoteFromTemplate(
+						this.plugin,
+						template,
+						this.plugin.app.vault.getRoot(),
+						query,
+						false
+					);
 					await new Promise((resolve) => setTimeout(resolve, 20));
 					return `[[${query}]]`;
 				},

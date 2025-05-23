@@ -2,9 +2,9 @@ import { App, Plugin, TFile, TFolder } from "obsidian";
 import { EntityProviderUserSettings } from "./Providers/EntityProvider";
 
 export enum TriggerCharacter {
-	At = "@", 		// `@` for Entities
-	Colon = ":",    // `:` for Symbols
-	Slash = "/",    // `/` for Commands
+	At = "@", // `@` for Entities
+	Colon = ":", // `:` for Symbols
+	Slash = "/", // `/` for Commands
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -14,7 +14,7 @@ type DerivedFrom<T, Arguments extends unknown[] = any[]> = {
 type PropertyKeys<T> = {
 	// eslint-disable-next-line @typescript-eslint/no-explicit-any
 	[K in keyof T]: T[K] extends (...args: any[]) => any ? never : K;
-  }[keyof T];
+}[keyof T];
 type MethodKeys<T> = {
 	// eslint-disable-next-line @typescript-eslint/no-explicit-any
 	[K in keyof T]: T[K] extends (...args: any[]) => any ? K : never;
@@ -43,23 +43,23 @@ export interface EntityFilter {
 
 export interface ProviderTemplateCreationSettings {
 	newEntityFromTemplates?: entityFromTemplateSettings[];
-} 
+}
 
 export interface EntitiesSettings {
 	providerSettings: EntityProviderUserSettings[];
 }
 export interface TemplaterPlugin {
-        templater?: {
-                create_new_note_from_template?: (
-                        file: TFile | string,
-                        folder: TFolder,
-                        newTemplateName: string,
-                        openNewNote: boolean
-                ) => Promise<TFile | undefined>;
-                append_template_to_active_file?: (
-                        template_file: TFile
-                ) => Promise<void>;
-        };
+	templater?: {
+		create_new_note_from_template?: (
+			file: TFile | string,
+			folder: TFolder,
+			newTemplateName: string,
+			openNewNote: boolean
+		) => Promise<TFile | undefined>;
+		append_template_to_active_file?: (
+			template_file: TFile
+		) => Promise<void>;
+	};
 }
 
 export const DEFAULT_SETTINGS: EntitiesSettings = {
@@ -71,5 +71,5 @@ export interface AppWithPlugins extends App {
 		| undefined
 		| {
 				getPlugin(pluginName: string): Plugin | undefined;
-          };
+		};
 }

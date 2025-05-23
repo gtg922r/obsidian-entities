@@ -16,9 +16,9 @@ export interface EntityProviderUserSettings extends EntityProviderID {
 }
 
 export enum RefreshBehavior {
-  ShouldRefresh = "shouldRefresh",
-  Default = "default",
-  Never = "never", // New refresh behavior
+	ShouldRefresh = "shouldRefresh",
+	Default = "default",
+	Never = "never", // New refresh behavior
 }
 
 /**
@@ -30,7 +30,10 @@ export abstract class EntityProvider<T extends EntityProviderUserSettings> {
 	plugin: Plugin;
 
 	abstract getDefaultSettings(): T;
-	abstract getEntityList(query: string, trigger: TriggerCharacter): EntitySuggestionItem[];
+	abstract getEntityList(
+		query: string,
+		trigger: TriggerCharacter
+	): EntitySuggestionItem[];
 
 	// New method to determine refresh behavior
 	getRefreshBehavior(): RefreshBehavior {
@@ -67,14 +70,14 @@ export abstract class EntityProvider<T extends EntityProviderUserSettings> {
 			icon: "plus-circle",
 			action: async () => {
 				console.log(`New ${template.entityName}: ${query}`);
-                                await createNewNoteFromTemplate(
-                                        this.plugin,
-                                        template.templatePath,
-                                        this.plugin.app.vault.getRoot(),
-                                        query,
-                                        false
-                                );
-				await new Promise(resolve => setTimeout(resolve, 20));
+				await createNewNoteFromTemplate(
+					this.plugin,
+					template.templatePath,
+					this.plugin.app.vault.getRoot(),
+					query,
+					false
+				);
+				await new Promise((resolve) => setTimeout(resolve, 20));
 				return `[[${query}]]`;
 			},
 			match: { score: -10, matches: [] } as SearchResult,
