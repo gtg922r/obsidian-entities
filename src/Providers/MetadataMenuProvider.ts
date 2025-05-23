@@ -136,7 +136,7 @@ export class MetadataMenuProvider extends EntityProvider<MetadataMenuProviderUse
 					await createNewNoteFromTemplate(
 						this.plugin,
 						template,
-						"", // TODO THINK ABOUT FOLDER
+						this.plugin.app.vault.getRoot(),
 						query,
 						false
 					);

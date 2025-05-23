@@ -16,9 +16,9 @@ export interface EntityProviderUserSettings extends EntityProviderID {
 }
 
 export enum RefreshBehavior {
-  ShouldRefresh = "shouldRefresh",
-  Default = "default",
-  Never = "never", // New refresh behavior
+	ShouldRefresh = "shouldRefresh",
+	Default = "default",
+	Never = "never", // New refresh behavior
 }
 
 /**
@@ -30,7 +30,10 @@ export abstract class EntityProvider<T extends EntityProviderUserSettings> {
 	plugin: Plugin;
 
 	abstract getDefaultSettings(): T;
-	abstract getEntityList(query: string, trigger: TriggerCharacter): EntitySuggestionItem[];
+	abstract getEntityList(
+		query: string,
+		trigger: TriggerCharacter
+	): EntitySuggestionItem[];
 
 	// New method to determine refresh behavior
 	getRefreshBehavior(): RefreshBehavior {
@@ -70,11 +73,11 @@ export abstract class EntityProvider<T extends EntityProviderUserSettings> {
 				await createNewNoteFromTemplate(
 					this.plugin,
 					template.templatePath,
-					"TODO FIX FOLDER",
+					this.plugin.app.vault.getRoot(),
 					query,
 					false
 				);
-				await new Promise(resolve => setTimeout(resolve, 20));
+				await new Promise((resolve) => setTimeout(resolve, 20));
 				return `[[${query}]]`;
 			},
 			match: { score: -10, matches: [] } as SearchResult,
