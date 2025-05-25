@@ -5,7 +5,7 @@ import { EntitiesModalInput, IconPickerModal } from "src/userComponents";
 import {
 	createNewNoteFromTemplate,
 	insertTemplateUsingTemplater,
-} from "src/entititiesUtilities";
+} from "src/entitiesUtilities";
 import { FolderSuggest } from "src/ui/file-suggest";
 import { TriggerCharacter } from "src/entities.types";
 

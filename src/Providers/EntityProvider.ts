@@ -1,6 +1,6 @@
 import { EntitySuggestionItem } from "src/EntitiesSuggestor";
 import { entityFromTemplateSettings } from "../entities.types";
-import { createNewNoteFromTemplate } from "../entititiesUtilities";
+import { createNewNoteFromTemplate } from "../entitiesUtilities";
 import { Plugin, SearchResult } from "obsidian";
 import { TriggerCharacter } from "../entities.types";
 

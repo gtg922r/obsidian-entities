@@ -12,7 +12,7 @@ This document explains the overall layout and flow of the **Entities** Obsidian 
 │   ├── EntitiesSuggestor.ts
 │   ├── EntitiesSettings.ts
 │   ├── entities.types.ts
-│   ├── entititiesUtilities.ts
+│   ├── entitiesUtilities.ts
 │   ├── userComponents.ts
 │   └── main.ts         # Plugin entry point
 ├── tests/              # Jest unit tests
@@ -57,7 +57,7 @@ extends the `EntityProvider` base class and registers itself through
    entities. Providers declare which trigger characters they support.
 5. **Utilities and UI Components** – Helper modules under `src/ui/` and
    `userComponents.ts` supply reusable UI pieces such as suggestion modals and
-   file/folder choosers. `entititiesUtilities.ts` wraps Templater functions for
+   file/folder choosers. `entitiesUtilities.ts` wraps Templater functions for
    template insertion and note creation.
 
 ## Major Interfaces

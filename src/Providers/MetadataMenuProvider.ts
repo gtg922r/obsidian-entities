@@ -2,7 +2,7 @@ import { ExtraButtonComponent, Plugin, SearchResult, Setting, TFile } from "obsi
 import { EntitySuggestionItem } from "src/EntitiesSuggestor";
 import { EntityProvider, EntityProviderUserSettings } from "./EntityProvider";
 import { AppWithPlugins } from "src/entities.types";
-import { createNewNoteFromTemplate } from "src/entititiesUtilities";
+import { createNewNoteFromTemplate } from "src/entitiesUtilities";
 
 const newProviderTypeID = "metadata-menu";
 
