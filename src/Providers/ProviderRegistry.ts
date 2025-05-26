@@ -64,7 +64,6 @@ class ProviderRegistry {
 		this.providerClasses.set(
 			providerClass.providerTypeID,
 			providerClass
-			// TODO: ProviderClass<EntityProviderUserSettings> also seemed to be working
 		);
 		console.log(`Entities:\t └── "${providerClass.providerTypeID}" Provider Type Registered.`);
 		return this;
