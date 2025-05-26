@@ -56,11 +56,7 @@ export class TemplateEntityProvider extends EntityProvider<TemplateProviderUserS
         this.files = this.getTemplateFiles(this.settings.path);
     }
 
-    private getTemplateFiles(path: string | string[]): TFile[] {
-                // Add support for multiple paths
-                // Add support for subfolders
-                // Add a recurring check for new files in the template folder (or callback)
-        
+    private getTemplateFiles(path: string | string[]): TFile[] {        
 		const templateFolders = Array.isArray(path) ? path : [path];
         const folders: TFolder[] = templateFolders
             .map((folder) => this.plugin.app.vault.getFolderByPath(folder))
