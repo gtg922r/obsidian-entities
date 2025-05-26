@@ -103,7 +103,6 @@ export class MetadataMenuProvider extends EntityProvider<MetadataMenuProviderUse
 		mdmPathsAndFileClasses.forEach(([path, fileClass]) => {			
 			const fileCache = this.plugin.app.metadataCache.getCache(path);
 			if (fileCache && fileCache.frontmatter) {
-				// TODO: make newNoteTemplate field settable in the settings
 				const newNoteTemplate = Array.isArray(fileCache.frontmatter.newNoteTemplate)
 					? fileCache.frontmatter.newNoteTemplate[0]
 					: fileCache.frontmatter.newNoteTemplate;
@@ -121,8 +120,6 @@ export class MetadataMenuProvider extends EntityProvider<MetadataMenuProviderUse
 			}
 		});
 
-		// TODO add support for both Template and Templater
-		return Array.from(fileClassTemplates).map(([fileClassName, { template, icon }]) => {
 			const fileClass = this.mdmPlugin?.fieldIndex?.fileClassesName.get(fileClassName);
 			if (!fileClass) {
 				throw new Error(
@@ -136,7 +133,7 @@ export class MetadataMenuProvider extends EntityProvider<MetadataMenuProviderUse
 					await createNewNoteFromTemplate(
 						this.plugin,
 						template,
-						"", // TODO THINK ABOUT FOLDER
+						"", 
 						query,
 						false
 					);
@@ -203,10 +200,6 @@ export class MetadataMenuProvider extends EntityProvider<MetadataMenuProviderUse
 	// 	plugin: Plugin
 	// ): void {
 	// 	// Implement logic to build simple settings UI
-	// 	// TODO check for Metadata Menu plugin and Templater plugin
-	// 	// TODO add support for both Template and Templater
-	// }
-
 	// static buildAdvancedSettings?(
 	// 	settingContainer: HTMLElement,
 	// 	settings: MetadataMenuProviderUserSettings,
