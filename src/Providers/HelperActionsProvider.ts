@@ -115,11 +115,10 @@ export class HelperEntityProvider extends EntityProvider<HelperProviderUserSetti
 		context: EditorSuggestContext
 	) {
 		const editor = context.editor;
-		const startPos = {
-			...context.start,
-			// TODO: -2 is a hack to account for the space between the checkbox and the text
-			ch: Math.max(context.start.ch - 1, 0), // Ensure ch is not negative
-		};
+                const startPos = {
+                        ...context.start,
+                        ch: Math.max(context.start.ch - 1, 0), // offset accounts for space between checkbox and text
+                };
 		editor.replaceRange("", startPos, context.end);
 
 		const lineStart = { line: context.start.line, ch: 0 };
