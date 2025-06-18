@@ -11,7 +11,7 @@
 **Entities** is an advanced autocomplete plugin for [Obsidian](https://obsidian.md) that provides context-aware suggestions for notes, templates and helper actions.
 
 <p align="center">
-  <img width="400" src="https://raw.githubusercontent.com/gtg922r/obsidian-entities/refs/heads/master/.github/entities-screenshot.png">
+  <img width="700" src="https://raw.githubusercontent.com/gtg922r/obsidian-entities/refs/heads/master/.github/entities-screenshot.png">
 </p>
 
 ## Features
