@@ -1,69 +1,66 @@
-# Obsidian Entities Plugin
+# Entities
+
+![GitHub release](https://img.shields.io/github/v/release/gtg922r/obsidian-entities?label=Release)
+![CI](https://github.com/gtg922r/obsidian-entities/actions/workflows/release.yml/badge.svg)
+![License](https://img.shields.io/github/license/gtg922r/obsidian-entities)
 
 > [!IMPORTANT]
 > This plugin is in very early development and is not intended for public usage.
 > Note that at this time, all rights are reserved.
 
-## Overview
+**Entities** is an advanced autocomplete plugin for [Obsidian](https://obsidian.md) that provides context-aware suggestions for notes, templates and helper actions.
 
-The Obsidian Entities Plugin enhances your Obsidian experience by adding autocomplete functionality for "Entities" such as files, templates, and more. It supports various providers like folders, templates, and Dataview queries.
-
-For example, perhaps you have a folder called "People". Entities allows you trigger autocomplete of all your "People" notes, once you type "@". 
+![screenshot placeholder](https://github.com/gtg922r/obsidian-entities/raw/main/.github/entities-screenshot.png)
 
 ## Features
 
-- Autocomplete for entities from specified folders.
-- Integration with Dataview for dynamic entity suggestions.
-- Template-based entity creation and insertion.
-- Customizable settings for each provider.
+- ✨ Autocomplete triggered by `@`, `:` or `/`
+- 📦 Multiple pluggable providers
+- 🤝 Works with popular Obsidian plugins
+- 🎛 Customizable provider settings
+- 📱 Desktop and mobile support
+
+## Entity Providers
+
+Each provider offers suggestions from a different source or performs actions:
+
+- 📁 **Folder** – notes from a specific folder
+- 📊 **Dataview** – results from a Dataview query
+- 📄 **Template** – create or insert using template files
+- 📅 **Date** – natural language date completion (requires Natural Language Dates)
+- 🗂️ **Metadata Menu** – create notes from Metadata Menu file class templates
+- ⚡ **Helper Actions** – quick checkboxes and utilities triggered by `/`
+- 😀 **Character** – emoji and Font Awesome look‑ups triggered by `:`
+
+See [ARCHITECTURE.md](ARCHITECTURE.md) for implementation details.
 
 ## Installation
 
-1. Download the latest release from the [Releases](https://github.com/gtg922r/obsidian-entities/releases) page.
-2. Extract the contents into your Obsidian plugins folder.
-3. Enable the plugin from the Obsidian settings.
+1. Download the latest release from the [Releases page](https://github.com/gtg922r/obsidian-entities/releases).
+2. Extract the folder into your `.obsidian/plugins/` directory.
+3. Enable **Entities** in Obsidian’s *Community Plugins* settings.
 
-## Usage
-
-### Adding a New Provider
-
-1. Go to the plugin settings.
-2. Click on "Add New Provider".
-3. Select the provider type and configure its settings.
-
-### Reloading Providers
-
-For debugging purposes, you can manually reload all entity providers from the settings.
-
-## Development
-
-### Building the Plugin
-
-To build the plugin, run the following commands:
+To build from source:
 
 ```bash
 npm install
 npm run build
 ```
 
-### Running Tests
+## Usage
 
-To run the tests, use:
+Open **Settings → Entities** to add providers and configure their options. Start typing `@`, `:` or `/` to see the autocomplete menu.
+
+## Development
+
+Run tests with:
 
 ```bash
 npm test
 ```
 
-## Contributing
-
-Contributions are welcome! Please fork the repository and submit a pull request.
+Contributions are welcome via pull requests.
 
 ## License
 
-This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.
-
-## Contact
-
-Author: RyanC  
-GitHub: [gtg922r](https://github.com/gtg922r)
-```
+Released under the MIT License.
