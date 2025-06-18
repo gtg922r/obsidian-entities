@@ -1,8 +1,10 @@
 # Entities
 
-![GitHub release](https://img.shields.io/github/v/release/gtg922r/obsidian-entities?label=Release)
-![CI](https://github.com/gtg922r/obsidian-entities/actions/workflows/release.yml/badge.svg)
-![License](https://img.shields.io/github/license/gtg922r/obsidian-entities)
+<p align="center">
+<img src="https://img.shields.io/github/v/release/gtg922r/obsidian-entities?label=Release">
+<img src="https://github.com/gtg922r/obsidian-entities/actions/workflows/release.yml/badge.svg">
+<img src="https://img.shields.io/github/license/gtg922r/obsidian-entities">
+</p>
 
 > [!IMPORTANT]
 > This plugin is in very early development and is not intended for public usage.
