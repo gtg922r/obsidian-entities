@@ -14,14 +14,18 @@ const helperProviderTypeID = "helper";
 export interface HelperProviderUserSettings extends EntityProviderUserSettings {
 	providerTypeID: string;
 	addCreatedTag: boolean; // New setting for adding the created tag
+	checkboxIcon: string; // Icon for checkbox helpers
+	calloutIcon: string; // Icon for callout helpers
 }
 
 const defaultHelperProviderUserSettings: HelperProviderUserSettings = {
 	providerTypeID: helperProviderTypeID,
 	enabled: true,
-	icon: "wand",
+	icon: "", // Not used - we use checkboxIcon and calloutIcon instead
 	entityCreationTemplates: [],
 	addCreatedTag: true, // New setting for adding the created tag
+	checkboxIcon: "square-asterisk", // Default icon for checkbox helpers
+	calloutIcon: "square-chevron-right", // Default icon for callout helpers
 };
 
 const checkboxTypes = [
@@ -125,7 +129,7 @@ export class HelperEntityProvider extends EntityProvider<HelperProviderUserSetti
                                 const [checkboxType, checkboxContent] = Object.entries(type)[0];
                                 return {
                                         suggestionText: `Checkbox: ${checkboxType.charAt(0).toUpperCase() + checkboxType.slice(1)}`,
-                                        icon: this.settings.icon ?? "wand",
+                                        icon: this.settings.checkboxIcon ?? "square-asterisk",
                                         action: (item, context) => {
                                                 if (context) {
                                                         this.checkboxUtilityFunction(checkboxContent, context);
@@ -140,7 +144,7 @@ export class HelperEntityProvider extends EntityProvider<HelperProviderUserSetti
                         const calloutSuggestions = calloutTypes.map(type => {
                                 return {
                                         suggestionText: `Callout: ${type.charAt(0).toUpperCase() + type.slice(1)}`,
-                                        icon: this.settings.icon ?? "wand",
+                                        icon: this.settings.calloutIcon ?? "square-chevron-right",
                                         action: (item, context) => {
                                                 if (context) {
                                                         this.calloutUtilityFunction(type, context);
@@ -207,7 +211,7 @@ export class HelperEntityProvider extends EntityProvider<HelperProviderUserSetti
                 editor.replaceRange(replacementText, lineStart, lineEnd);
                 editor.setCursor({
                         line: lineStart.line + 1,
-                        ch: currentLineText.length,
+                        ch: currentLineText.length + 2, // +2 to account for the "> " prefix
                 });
         }
 
@@ -227,17 +231,35 @@ export class HelperEntityProvider extends EntityProvider<HelperProviderUserSetti
 		plugin: Plugin
 	): void {
 		new Setting(settingContainer)
-			.setName("Icon")
-			.setDesc("Icon for the entities returned by this provider")
+			.setName("Checkbox Icon")
+			.setDesc("Icon for the checkbox helper entities")
 			.addButton((button) =>
 				button
-					.setIcon(settings.icon ?? "box-select")
+					.setIcon(settings.checkboxIcon ?? "square-asterisk")
 					.setDisabled(false)
 					.onClick(() => {
 						const iconPickerModal = new IconPickerModal(plugin.app);
 						iconPickerModal.open();
 						iconPickerModal.getInput().then((iconName) => {
-							settings.icon = iconName;
+							settings.checkboxIcon = iconName;
+							onShouldSave(settings);
+							button.setIcon(iconName);
+						});
+					})
+			);
+
+		new Setting(settingContainer)
+			.setName("Callout Icon")
+			.setDesc("Icon for the callout helper entities")
+			.addButton((button) =>
+				button
+					.setIcon(settings.calloutIcon ?? "square-chevron-right")
+					.setDisabled(false)
+					.onClick(() => {
+						const iconPickerModal = new IconPickerModal(plugin.app);
+						iconPickerModal.open();
+						iconPickerModal.getInput().then((iconName) => {
+							settings.calloutIcon = iconName;
 							onShouldSave(settings);
 							button.setIcon(iconName);
 						});
