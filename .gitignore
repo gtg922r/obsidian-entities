@@ -22,3 +22,6 @@ data.json
 .DS_Store
 scripts/fontAwesomeDictionary.json
 scripts/icons.json
+
+# Plugin release zips
+*.zip

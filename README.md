@@ -57,6 +57,8 @@ Open **Settings → Entities** to add providers and configure their options. Sta
 
 ## Development
 
+See [DEVELOPMENT.md](DEVELOPMENT.md) for the full contributor guide.
+
 Run tests with:
 
 ```bash
