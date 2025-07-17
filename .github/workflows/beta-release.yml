@@ -1,0 +1,105 @@
+name: Beta Release
+
+on:
+  push:
+    tags:
+      - '*-preview.*'
+      - '*-beta.*'
+      - '*-alpha.*'
+  workflow_dispatch:
+    inputs:
+      version_suffix:
+        description: 'Version suffix (e.g., preview.1, beta.1)'
+        required: true
+        default: 'preview.1'
+
+env:
+  PLUGIN_NAME: entities
+
+permissions:
+  contents: write
+
+jobs:
+  beta-release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Get version info
+        id: version_info
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            # Manual trigger - create version from current package.json + suffix
+            CURRENT_VERSION=$(node -p "require('./package.json').version")
+            BETA_VERSION="${CURRENT_VERSION}-${{ github.event.inputs.version_suffix }}"
+            echo "version=${BETA_VERSION}" >> $GITHUB_OUTPUT
+            echo "tag_name=${BETA_VERSION}" >> $GITHUB_OUTPUT
+          else
+            # Tag trigger - extract version from tag
+            TAG_NAME=${GITHUB_REF#refs/tags/}
+            echo "version=${TAG_NAME}" >> $GITHUB_OUTPUT
+            echo "tag_name=${TAG_NAME}" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Update manifest for beta
+        run: |
+          node -e "
+            const fs = require('fs');
+            const manifest = JSON.parse(fs.readFileSync('manifest.json', 'utf8'));
+            manifest.version = '${{ steps.version_info.outputs.version }}';
+            fs.writeFileSync('manifest.json', JSON.stringify(manifest, null, '\t'));
+          "
+
+      - name: Build plugin
+        run: npm run build
+
+      - name: Create plugin directory and zip
+        run: |
+          mkdir ${{ env.PLUGIN_NAME }}
+          cp main.js manifest.json styles.css ${{ env.PLUGIN_NAME }}/
+          zip -r ${{ env.PLUGIN_NAME }}-${{ steps.version_info.outputs.version }}.zip ${{ env.PLUGIN_NAME }}
+
+      - name: Create Beta Release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # Create or update release
+          gh release create ${{ steps.version_info.outputs.tag_name }} \
+            --title "Beta Release ${{ steps.version_info.outputs.version }}" \
+            --notes "⚠️ **Beta Release for BRAT Testing**
+
+          This is a pre-release version intended for beta testing with [Obsidian BRAT](https://github.com/TfTHacker/obsidian42-brat).
+
+          ## Installation for Beta Testing
+          1. Install the BRAT plugin in Obsidian
+          2. Add this repository: \`gtg922r/obsidian-entities\`
+          3. BRAT will automatically install this beta version
+
+          ## Important Notes
+          - This version may contain bugs or incomplete features
+          - Obsidian will not automatically update from this beta to the final release
+          - Use BRAT to upgrade to newer versions
+          - Backup your data before testing
+
+          ## Feedback
+          Please report any issues or feedback on the GitHub repository." \
+            --prerelease \
+            main.js \
+            manifest.json \
+            styles.css \
+            ${{ env.PLUGIN_NAME }}-${{ steps.version_info.outputs.version }}.zip || \
+          gh release upload ${{ steps.version_info.outputs.tag_name }} \
+            main.js \
+            manifest.json \
+            styles.css \
+            ${{ env.PLUGIN_NAME }}-${{ steps.version_info.outputs.version }}.zip --clobber
