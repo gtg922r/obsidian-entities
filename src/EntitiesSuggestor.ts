@@ -75,7 +75,7 @@ export class EntitiesSuggestor extends EditorSuggest<EntitySuggestionItem> {
 			.getLine(currentLine)
 			.slice(0, cursor.ch);
 
-		// Match the last occurrence of the trigger character
+                // Match the last occurrence of the trigger character
                 const match = currentLineToCursor.match(/(.*)([@:/])($|(?:[^\s].*?$))/);
 
                 if (match && match.index !== undefined) {
@@ -83,6 +83,11 @@ export class EntitiesSuggestor extends EditorSuggest<EntitySuggestionItem> {
                         const beforeDelimiter = match[1] ?? "";
                         const trigger = match[2] ?? "";
                         const afterDelimiter = match[3] ?? "";
+
+                        // require at least one character after ':' before triggering
+                        if (trigger === ":" && afterDelimiter.length === 0) {
+                                return null;
+                        }
 
                         const start = match.index + beforeDelimiter.length + 1; // Correctly adjust start to include trigger character
                         const query = trigger + afterDelimiter; // The trigger and the captured query part after the trigger
