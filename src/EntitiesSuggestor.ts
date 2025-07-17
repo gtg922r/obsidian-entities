@@ -135,7 +135,6 @@ export class EntitiesSuggestor extends EditorSuggest<EntitySuggestionItem> {
 				const providerId = provider.constructor.name;
 				const refreshBehavior = provider.getRefreshBehavior();
 				const lastRefresh = this.lastRefreshTime.get(providerId) || 0;
-				//TODO: Support multiple trigger types from a provider with suggestion cacheing
 				let providerSuggestions: EntitySuggestionItem[];
 
 				if (

@@ -103,10 +103,9 @@ export class MetadataMenuProvider extends EntityProvider<MetadataMenuProviderUse
 		mdmPathsAndFileClasses.forEach(([path, fileClass]) => {			
 			const fileCache = this.plugin.app.metadataCache.getCache(path);
 			if (fileCache && fileCache.frontmatter) {
-				// TODO: make newNoteTemplate field settable in the settings
-				const newNoteTemplate = Array.isArray(fileCache.frontmatter.newNoteTemplate)
-					? fileCache.frontmatter.newNoteTemplate[0]
-					: fileCache.frontmatter.newNoteTemplate;
+                                const newNoteTemplate = Array.isArray(fileCache.frontmatter.newNoteTemplate)
+                                        ? fileCache.frontmatter.newNoteTemplate[0]
+                                        : fileCache.frontmatter.newNoteTemplate;
 				const strippedFileName = newNoteTemplate?.replace(/^\[\[|\]\]$/g, '');
 
 				// Extract newEntityIcon from frontmatter
@@ -121,8 +120,7 @@ export class MetadataMenuProvider extends EntityProvider<MetadataMenuProviderUse
 			}
 		});
 
-		// TODO add support for both Template and Templater
-		return Array.from(fileClassTemplates).map(([fileClassName, { template, icon }]) => {
+                return Array.from(fileClassTemplates).map(([fileClassName, { template, icon }]) => {
 			const fileClass = this.mdmPlugin?.fieldIndex?.fileClassesName.get(fileClassName);
 			if (!fileClass) {
 				throw new Error(
@@ -136,7 +134,7 @@ export class MetadataMenuProvider extends EntityProvider<MetadataMenuProviderUse
 					await createNewNoteFromTemplate(
 						this.plugin,
 						template,
-						"", // TODO THINK ABOUT FOLDER
+                                                "",
 						query,
 						false
 					);
@@ -197,14 +195,12 @@ export class MetadataMenuProvider extends EntityProvider<MetadataMenuProviderUse
 	}
 
 	// static buildSimpleSettings?(
-	// 	settingContainer: HTMLElement,
-	// 	settings: MetadataMenuProviderUserSettings,
-	// 	onShouldSave: (newSettings: MetadataMenuProviderUserSettings) => void,
-	// 	plugin: Plugin
+	//      settingContainer: HTMLElement,
+	//      settings: MetadataMenuProviderUserSettings,
+	//      onShouldSave: (newSettings: MetadataMenuProviderUserSettings) => void,
+	//      plugin: Plugin
 	// ): void {
-	// 	// Implement logic to build simple settings UI
-	// 	// TODO check for Metadata Menu plugin and Templater plugin
-	// 	// TODO add support for both Template and Templater
+	//      // Implement logic to build simple settings UI
 	// }
 
 	// static buildAdvancedSettings?(
