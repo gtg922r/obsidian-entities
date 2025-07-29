@@ -33,6 +33,7 @@ export type entityFromTemplateSettings = {
 	engine: "disabled" | "core" | "templater";
 	templatePath: string;
 	entityName: string;
+	folderPath?: string;
 };
 
 export interface EntityFilter {
