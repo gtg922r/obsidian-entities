@@ -70,7 +70,7 @@ export abstract class EntityProvider<T extends EntityProviderUserSettings> {
 				await createNewNoteFromTemplate(
 					this.plugin,
 					template.templatePath,
-					"TODO FIX FOLDER",
+					template.folderPath || "",
 					query,
 					false
 				);

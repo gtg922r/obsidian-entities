@@ -8,7 +8,7 @@ import {
 	getIcon,
 } from "obsidian";
 import { entityFromTemplateSettings } from "./entities.types";
-import { FileSuggest } from "./ui/file-suggest";
+import { FileSuggest, FolderSuggest } from "./ui/file-suggest";
 
 
 import { Notice, setIcon } from "obsidian";
@@ -145,6 +145,7 @@ export class TemplateDetailsModal extends Modal {
 		let engineDropdown: DropdownComponent;
 		let templatePathInput: TextComponent;
 		let entityNameInput: TextComponent;
+		let folderPathInput: TextComponent;
 
 		// Engine Dropdown Setting
 		new Setting(contentEl)
@@ -161,6 +162,7 @@ export class TemplateDetailsModal extends Modal {
 					.onChange((value) => {
 						templatePathInput.setDisabled(value === "disabled");
 						entityNameInput.setDisabled(value === "disabled");
+						folderPathInput.setDisabled(value === "disabled");
 					});
 				engineDropdown = dropdown;
 			});
@@ -190,6 +192,19 @@ export class TemplateDetailsModal extends Modal {
 				text.setDisabled(engineDropdown.getValue() === "disabled");
 			});
 
+		// Folder Path Input Setting
+		new Setting(contentEl)
+			.setName("Folder for New Note")
+			.setDesc("Optional folder path where new notes will be created (leave empty for vault root)")
+			.addText((text) => {
+				text.setPlaceholder("Folder Path (optional)").setValue(
+					this.initialSettings?.folderPath || ""
+				);
+				folderPathInput = text;
+				text.setDisabled(engineDropdown.getValue() === "disabled");
+				new FolderSuggest(this.app, text.inputEl);
+			});
+
 		// Save Button
 		new Setting(contentEl)
 			.addButton((button) =>
@@ -201,6 +216,7 @@ export class TemplateDetailsModal extends Modal {
 							| "templater",
 						templatePath: templatePathInput.getValue(),
 						entityName: entityNameInput.getValue(),
+						folderPath: folderPathInput.getValue() || undefined,
 					};
 					this.close();
 					this.resolve(templateDetails);
