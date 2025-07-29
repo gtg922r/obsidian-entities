@@ -33,6 +33,7 @@ export type entityFromTemplateSettings = {
 	engine: "disabled" | "core" | "templater";
 	templatePath: string;
 	entityName: string;
+	folderPath?: string; // Optional folder to create the new note in
 };
 
 export interface EntityFilter {
