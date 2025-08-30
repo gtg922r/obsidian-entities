@@ -8,10 +8,12 @@ See: https://keepachangelog.com/en/1.1.0/
 
 ## [Unreleased]
 
-- Added
-- Changed
-- Deprecated
-- Removed
-- Fixed
-- Security
+### Added
+- Release workflow with automatic versioning, building, testing, and tagging
+
+### Changed
+### Deprecated
+### Removed
+### Fixed
+### Security
 
