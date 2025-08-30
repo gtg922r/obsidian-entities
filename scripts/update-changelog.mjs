@@ -163,7 +163,7 @@ function updateChangelog() {
         ""
     ].join("\n");
 
-    const newUnreleasedSection = "## [Unreleased]\n\n" + UNRELEASED_TEMPLATE;
+    const newUnreleasedSection = "## [Unreleased]\n\n" + UNRELEASED_TEMPLATE + "\n";
 	changelog = prefix + newUnreleasedSection + newVersionSection + suffix;
 
 	// Helper: remove duplicate Unreleased heading lines, keep the first
