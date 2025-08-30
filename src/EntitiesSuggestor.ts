@@ -15,6 +15,9 @@ import ProviderRegistry from "./Providers/ProviderRegistry";
 import { RefreshBehavior } from "./Providers/EntityProvider";
 import { TriggerCharacter } from "./entities.types";
 
+// Pre-compiled whitespace matcher to avoid recreating a RegExp per character
+const WHITESPACE_RE = /\s/;
+
 export interface EntitySuggestionItem {
 	suggestionText: string;
 	replacementText?: string;
@@ -71,46 +74,70 @@ export class EntitiesSuggestor extends EditorSuggest<EntitySuggestionItem> {
 		file: TFile
 	): EditorSuggestTriggerInfo | null {
 		const currentLine = cursor.line;
-		const currentLineToCursor = editor
-			.getLine(currentLine)
-			.slice(0, cursor.ch);
+		const currentLineToCursor = editor.getLine(currentLine).slice(0, cursor.ch);
 
-                // Match the last occurrence of the trigger character
-                const match = currentLineToCursor.match(/(.*)([@:/])($|(?:[^\s].*?$))/);
-
-                if (match && match.index !== undefined) {
-                        // Ensure empty strings are respected when selecting capture groups
-                        const beforeDelimiter = match[1] ?? "";
-                        const trigger = match[2] ?? "";
-                        const afterDelimiter = match[3] ?? "";
-
-                        // require at least one character after ':' before triggering
-                        if (trigger === ":" && afterDelimiter.length === 0) {
-                                return null;
-                        }
-
-                        const start = match.index + beforeDelimiter.length + 1; // Correctly adjust start to include trigger character
-                        const query = trigger + afterDelimiter; // The trigger and the captured query part after the trigger
-
-			// Check if the query starts with the last dismissed query
-			if (
-				this.lastDismissedQuery &&
-				this.lastDismissedQuery.line === cursor.line &&
-				this.lastDismissedQuery.ch === start
-			) {
-				return null;
-			} else {
-				this.lastDismissedQuery = null;
+		// Returns true if any non-whitespace character exists after `idx` before the cursor,
+		// or if `idx` is the last character (lone trigger at EOL allowed). This prevents
+		// opening suggestions for spans like "@   " while still allowing "@" at EOL and
+		// multi-word phrases like "@bob ho".
+		// Defined inline for locality; recreated per keystroke but trivial cost.
+		const hasNonWhitespaceAfter = (idx: number): boolean => {
+			if (idx < 0) return false; // invalid index
+			if (idx + 1 >= currentLineToCursor.length) return true; // trigger at EOL
+			for (let i = idx + 1; i < currentLineToCursor.length; i++) {
+				const ch = currentLineToCursor.charAt(i);
+				if (!WHITESPACE_RE.test(ch)) return true; // early-exit on first non-space
 			}
+			return false; // only spaces remain
+		};
 
-			return {
-				start: { line: currentLine, ch: start },
-				query,
-				end: cursor,
-			};
+		// Phrase-scoped '@': prefer any valid '@' anywhere before cursor
+		const lastAt = currentLineToCursor.lastIndexOf("@");
+		const atValid = lastAt >= 0 && hasNonWhitespaceAfter(lastAt);
+
+		// Token start detection for ':' and '/'
+		let tokenStart = currentLineToCursor.length - 1;
+		while (tokenStart >= 0 && !/\s/.test(currentLineToCursor.charAt(tokenStart))) tokenStart--;
+		tokenStart += 1;
+		const tokenStartChar = currentLineToCursor.charAt(tokenStart) ?? "";
+		const colonValid = tokenStartChar === ":" && hasNonWhitespaceAfter(tokenStart);
+		const slashValid = tokenStartChar === "/" && hasNonWhitespaceAfter(tokenStart);
+
+		let triggerIndex = -1;
+		let triggerChar: string | null = null;
+		if (atValid) {
+			triggerIndex = lastAt;
+			triggerChar = "@";
+		} else if (colonValid) {
+			triggerIndex = tokenStart;
+			triggerChar = ":";
+		} else if (slashValid) {
+			triggerIndex = tokenStart;
+			triggerChar = "/";
 		}
 
-		return null;
+		if (triggerIndex === -1 || !triggerChar) {
+			return null;
+		}
+
+		const start = triggerIndex + 1;
+		const query = currentLineToCursor.slice(triggerIndex);
+
+		// Respect last dismissed query span
+		if (
+			this.lastDismissedQuery &&
+			this.lastDismissedQuery.line === cursor.line &&
+			this.lastDismissedQuery.ch === start
+		) {
+			return null;
+		}
+		this.lastDismissedQuery = null;
+
+		return {
+			start: { line: currentLine, ch: start },
+			query,
+			end: cursor,
+		};
 	}
 
 	private providerSuggestions: Map<string, EntitySuggestionItem[]> =
