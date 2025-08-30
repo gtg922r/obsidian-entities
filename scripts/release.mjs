@@ -80,11 +80,12 @@ try {
 			? `Bumping version (${type}) without git tag/commit and updating changelog`
 			: `Bumping version (${type}) and updating changelog`
 	);
+	// In dry-run, run lifecycle scripts (to update CHANGELOG, etc.) but avoid tagging/committing
 	const versionCmd = `npm version ${type} -m "chore(release): %s"` + (dryRun ? " --no-git-tag-version" : "");
 	run(versionCmd);
 	ok(
 		dryRun
-			? "Version bumped locally; no tag/commit created"
+			? "Version + lifecycle ran; files updated, no tag/commit"
 			: "Version bumped, changelog updated, tag created"
 	);
 

@@ -71,8 +71,19 @@ function updateChangelog() {
 	// Capture Unreleased content
 	const unreleasedSectionRegex = /(## \[Unreleased\]\s*)([\s\S]*?)(?=^##\s\[|^##\s[^\[]|\Z)/m;
 	const unreleasedMatch = changelog.match(unreleasedSectionRegex);
-	let unreleasedContent = unreleasedMatch ? unreleasedMatch[2].trim() : "";
-	if (!unreleasedContent) {
+	let unreleasedContent = unreleasedMatch ? unreleasedMatch[2] : "";
+
+	// Determine if there's meaningful content (ignore empty lines and category headings like "### Added")
+	const lines = unreleasedContent.split(/\r?\n/);
+	const hasMeaningful = lines.some((line) => {
+		const t = line.trim();
+		if (!t) return false; // skip blank
+		if (t.startsWith("### ")) return false; // skip category headings
+		return true; // any other text counts as content
+	});
+
+	unreleasedContent = unreleasedContent.trim();
+	if (!hasMeaningful) {
 		unreleasedContent = "- No notable changes.";
 		logWarn("No content found under Unreleased. Using placeholder.");
 	}
@@ -124,4 +135,3 @@ function updateChangelog() {
 }
 
 updateChangelog();
-
