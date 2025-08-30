@@ -42,11 +42,11 @@ function getToday() {
 }
 
 function ensureInitialChangelog() {
-	if (!existsSync("CHANGELOG.md")) {
-		const initial = `# Changelog\n\nAll notable changes to this project will be documented in this file.\n\nThe format is based on Keep a Changelog, and this project adheres to Semantic Versioning.\n\nSee: https://keepachangelog.com/en/1.1.0/\n\n## [Unreleased]\n\n- Added\n- Changed\n- Deprecated\n- Removed\n- Fixed\n- Security\n`;
-		writeFileSync("CHANGELOG.md", initial);
-		logInfo("Initialized CHANGELOG.md with Keep a Changelog structure");
-	}
+    if (!existsSync("CHANGELOG.md")) {
+        const initial = `# Changelog\n\nAll notable changes to this project will be documented in this file.\n\nThe format is based on Keep a Changelog, and this project adheres to Semantic Versioning.\n\nSee: https://keepachangelog.com/en/1.1.0/\n\n## [Unreleased]\n\n### Added\n### Fixed\n### Changed\n### Deprecated\n### Removed\n### Security\n`;
+        writeFileSync("CHANGELOG.md", initial);
+        logInfo("Initialized CHANGELOG.md with Keep a Changelog structure");
+    }
 }
 
 function extractLatestReleasedVersion(changelog) {
@@ -63,8 +63,17 @@ function updateChangelog() {
 	const currentVersion = pkg.version;
 	const today = getToday();
 
+	// Pre-clean: remove any existing sections for the current version to avoid duplicates on re-runs
+	function escapeRegExp(s) { return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"); }
+	const currentVersionSectionRegexGlobal = new RegExp(
+		`(^## \\[${escapeRegExp(currentVersion)}\\]\\s*)([\\s\\S]*?)(?=^##\\s\\[|^##\\s[^\\[]|\\\Z)`,
+		"gm"
+	);
+	changelog = changelog.replace(currentVersionSectionRegexGlobal, "");
+
 	// Find and combine all Unreleased sections, collapsing duplicates
-	const unreleasedSectionRegexGlobal = /(^## \[Unreleased\]\s*)([\s\S]*?)(?=^##\s\[|^##\s[^\[]|\Z)/gm;
+	// Treat the link references block (lines starting with "[") as a boundary too
+	const unreleasedSectionRegexGlobal = /(^## \[Unreleased\]\s*)([\s\S]*?)(?=^##\s\[|^##\s[^\[]|^\[|\Z)/gm;
 	let match;
 	const segments = [];
 	while ((match = unreleasedSectionRegexGlobal.exec(changelog)) !== null) {
@@ -83,8 +92,45 @@ function updateChangelog() {
 	// Aggregate content from all Unreleased sections
 	const aggregatedContent = segments.map((s) => s.content).join("\n");
 
-	// Determine if there's meaningful content (ignore blanks and category headings like "### Added")
-	const unreleasedLines = aggregatedContent.split(/\r?\n/);
+	// Filter out empty category headings (e.g., "### Added") that have no content beneath
+	function filterEmptyHeadings(content) {
+		const lines = content.split(/\r?\n/);
+		const out = [];
+		let i = 0;
+		while (i < lines.length) {
+			const line = lines[i];
+			const isHeading = /^###\s+/.test(line);
+			if (!isHeading) {
+				// Non-heading line: keep as-is
+				out.push(line);
+				i++;
+				continue;
+			}
+
+			// Collect block under this heading until next heading or end
+			const headingLine = line;
+			i++;
+			const block = [];
+			while (i < lines.length && !/^###\s+/.test(lines[i])) {
+				block.push(lines[i]);
+				i++;
+			}
+
+			// Determine if block has meaningful content (ignore blank lines)
+			const hasContent = block.some((l) => l.trim().length > 0);
+			if (hasContent) {
+				out.push(headingLine, ...block);
+			}
+			// If no content, drop heading and its blank block entirely
+		}
+		// Trim trailing blank lines for cleanliness but preserve internal formatting
+		return out.join("\n").replace(/\s+$/s, "");
+	}
+
+	const filteredAggregated = filterEmptyHeadings(aggregatedContent);
+
+	// Determine if there's meaningful content after filtering (ignore blanks and category headings)
+	const unreleasedLines = filteredAggregated.split(/\r?\n/);
 	const hasMeaningful = unreleasedLines.some((line) => {
 		const t = line.trim();
 		if (!t) return false;
@@ -92,7 +138,7 @@ function updateChangelog() {
 		return true;
 	});
 
-	let unreleasedContent = aggregatedContent.trim();
+	let unreleasedContent = filteredAggregated.trim();
 	if (!hasMeaningful) {
 		unreleasedContent = "- No notable changes.";
 		logWarn("No content found under Unreleased. Using placeholder.");
@@ -107,16 +153,44 @@ function updateChangelog() {
 	const afterLastIndex = last.index + last.full.length;
 	const prefix = changelog.slice(0, firstIndex);
 	let suffix = changelog.slice(afterLastIndex);
+    const UNRELEASED_TEMPLATE = [
+        "### Added",
+        "### Fixed",
+        "### Changed",
+        "### Deprecated",
+        "### Removed",
+        "### Security",
+        ""
+    ].join("\n");
 
-	// Remove any existing sections for the current version to avoid duplicates
-	function escapeRegExp(s) { return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"); }
-	const currentVersionSectionRegex = new RegExp(
-		`(^## \\[${escapeRegExp(currentVersion)}\\]\\s*)([\\s\\S]*?)(?=^##\\s\\[|^##\\s[^\\[]|\\\Z)`,
-		"gm"
-	);
-	suffix = suffix.replace(currentVersionSectionRegex, "");
-	const newUnreleasedSection = "## [Unreleased]\n\n";
+    const newUnreleasedSection = "## [Unreleased]\n\n" + UNRELEASED_TEMPLATE;
 	changelog = prefix + newUnreleasedSection + newVersionSection + suffix;
+
+	// Helper: remove duplicate Unreleased heading lines, keep the first
+	function dedupeUnreleasedHeadings(str) {
+		const lines2 = str.split(/\r?\n/);
+		let seenUnreleased = false;
+		const out = [];
+		for (const ln of lines2) {
+			if (/^## \[Unreleased\]\s*$/.test(ln)) {
+				if (seenUnreleased) continue;
+				seenUnreleased = true;
+			}
+			out.push(ln);
+		}
+		return out.join("\n");
+	}
+
+	// Apply heading dedupe early so both branches (with/without repo URL) get it
+	changelog = dedupeUnreleasedHeadings(changelog);
+
+	// Safety: ensure exactly one Unreleased section remains
+	let first = true;
+	const unreleasedSectionRegexGlobalOnce = new RegExp(unreleasedSectionRegexGlobal.source, "gm");
+	changelog = changelog.replace(unreleasedSectionRegexGlobalOnce, (full) => {
+		if (first) { first = false; return full; }
+		return "";
+	});
 
 	// Update link references
 	const repoUrl = getRepoUrl();
@@ -146,6 +220,9 @@ function updateChangelog() {
 	// Ensure a blank line before link refs block
 	let updated = filtered.join("\n").replace(/\n*$/, "\n\n");
 	updated += `${unreleasedLink}\n${currentVersionLink}\n`;
+
+	// Final cleanup: guarantee exactly one Unreleased heading line
+	updated = dedupeUnreleasedHeadings(updated);
 
 	writeFileSync(changelogPath, updated);
 	logSuccess(`Updated CHANGELOG.md for ${currentVersion}`);

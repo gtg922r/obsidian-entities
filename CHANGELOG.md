@@ -11,9 +11,11 @@ See: https://keepachangelog.com/en/1.1.0/
 ### Added
 - Release workflow with automatic versioning, building, testing, and tagging
 
+### Fixed
 ### Changed
 ### Deprecated
 ### Removed
-### Fixed
 ### Security
+
+
 
