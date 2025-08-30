@@ -74,8 +74,8 @@ function updateChangelog() {
 	let unreleasedContent = unreleasedMatch ? unreleasedMatch[2] : "";
 
 	// Determine if there's meaningful content (ignore empty lines and category headings like "### Added")
-	const lines = unreleasedContent.split(/\r?\n/);
-	const hasMeaningful = lines.some((line) => {
+	const unreleasedLines = unreleasedContent.split(/\r?\n/);
+	const hasMeaningful = unreleasedLines.some((line) => {
 		const t = line.trim();
 		if (!t) return false; // skip blank
 		if (t.startsWith("### ")) return false; // skip category headings
