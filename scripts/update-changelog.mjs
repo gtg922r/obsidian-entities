@@ -63,26 +63,36 @@ function updateChangelog() {
 	const currentVersion = pkg.version;
 	const today = getToday();
 
-	// Ensure Unreleased section exists
-	if (!/^## \[Unreleased\]/m.test(changelog)) {
-		changelog = changelog.trim() + "\n\n## [Unreleased]\n\n";
+	// Find and combine all Unreleased sections, collapsing duplicates
+	const unreleasedSectionRegexGlobal = /(^## \[Unreleased\]\s*)([\s\S]*?)(?=^##\s\[|^##\s[^\[]|\Z)/gm;
+	let match;
+	const segments = [];
+	while ((match = unreleasedSectionRegexGlobal.exec(changelog)) !== null) {
+		segments.push({ index: match.index, full: match[0], content: match[2] });
 	}
 
-	// Capture Unreleased content
-	const unreleasedSectionRegex = /(## \[Unreleased\]\s*)([\s\S]*?)(?=^##\s\[|^##\s[^\[]|\Z)/m;
-	const unreleasedMatch = changelog.match(unreleasedSectionRegex);
-	let unreleasedContent = unreleasedMatch ? unreleasedMatch[2] : "";
+	if (segments.length === 0) {
+		// Append a fresh Unreleased section if missing entirely
+		changelog = changelog.trimEnd() + "\n\n## [Unreleased]\n\n";
+		// Re-run to pick up the freshly added section
+		while ((match = unreleasedSectionRegexGlobal.exec(changelog)) !== null) {
+			segments.push({ index: match.index, full: match[0], content: match[2] });
+		}
+	}
 
-	// Determine if there's meaningful content (ignore empty lines and category headings like "### Added")
-	const unreleasedLines = unreleasedContent.split(/\r?\n/);
+	// Aggregate content from all Unreleased sections
+	const aggregatedContent = segments.map((s) => s.content).join("\n");
+
+	// Determine if there's meaningful content (ignore blanks and category headings like "### Added")
+	const unreleasedLines = aggregatedContent.split(/\r?\n/);
 	const hasMeaningful = unreleasedLines.some((line) => {
 		const t = line.trim();
-		if (!t) return false; // skip blank
-		if (t.startsWith("### ")) return false; // skip category headings
-		return true; // any other text counts as content
+		if (!t) return false;
+		if (t.startsWith("### ")) return false;
+		return true;
 	});
 
-	unreleasedContent = unreleasedContent.trim();
+	let unreleasedContent = aggregatedContent.trim();
 	if (!hasMeaningful) {
 		unreleasedContent = "- No notable changes.";
 		logWarn("No content found under Unreleased. Using placeholder.");
@@ -91,15 +101,22 @@ function updateChangelog() {
 	// Build new version section
 	const newVersionSection = `## [${currentVersion}] - ${today}\n${unreleasedContent}\n\n`;
 
-	// Replace Unreleased section with empty template and insert new version below it
+	// Replace ALL Unreleased sections with a single empty template and insert new version below first occurrence
+	const firstIndex = segments[0].index;
+	const last = segments[segments.length - 1];
+	const afterLastIndex = last.index + last.full.length;
+	const prefix = changelog.slice(0, firstIndex);
+	let suffix = changelog.slice(afterLastIndex);
+
+	// Remove any existing sections for the current version to avoid duplicates
+	function escapeRegExp(s) { return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"); }
+	const currentVersionSectionRegex = new RegExp(
+		`(^## \\[${escapeRegExp(currentVersion)}\\]\\s*)([\\s\\S]*?)(?=^##\\s\\[|^##\\s[^\\[]|\\\Z)`,
+		"gm"
+	);
+	suffix = suffix.replace(currentVersionSectionRegex, "");
 	const newUnreleasedSection = "## [Unreleased]\n\n";
-	if (unreleasedMatch) {
-		const prefix = changelog.slice(0, unreleasedMatch.index);
-		const suffix = changelog.slice(unreleasedMatch.index + unreleasedMatch[0].length);
-		changelog = prefix + newUnreleasedSection + newVersionSection + suffix;
-	} else {
-		changelog = changelog + "\n" + newUnreleasedSection + newVersionSection;
-	}
+	changelog = prefix + newUnreleasedSection + newVersionSection + suffix;
 
 	// Update link references
 	const repoUrl = getRepoUrl();
