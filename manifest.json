@@ -1,7 +1,7 @@
 {
 	"id": "entities",
 	"name": "Entities",
-	"version": "0.3.8",
+	"version": "0.3.9",
 	"minAppVersion": "1.5.7",
 	"description": "Adds autocomplete of \"Entities\" like files or templates in a specific folder or a from a dataview query.",
 	"author": "RyanC",
