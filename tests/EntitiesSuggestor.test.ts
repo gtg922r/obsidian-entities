@@ -54,6 +54,54 @@ describe("onTrigger tests", () => {
 		mockFile = {} as unknown as TFile;
 	});
 
+	test("onTrigger should prioritize @ over / in '@8/17'", () => {
+		mockEditor.getLine.mockImplementationOnce(() => "@8/17");
+		const cursorPosition = { line: 0, ch: 5 };
+		const result = suggestor.onTrigger(
+			cursorPosition,
+			mockEditor as Editor,
+			mockFile
+		);
+
+		expect(result).toEqual({
+			start: { line: 0, ch: 1 },
+			end: cursorPosition,
+			query: "@8/17",
+		});
+	});
+
+	test("onTrigger should include spaces after @ for multi-word queries", () => {
+		mockEditor.getLine.mockImplementationOnce(() => "@bob ho");
+		const cursorPosition = { line: 0, ch: 7 };
+		const result = suggestor.onTrigger(
+			cursorPosition,
+			mockEditor as Editor,
+			mockFile
+		);
+
+		expect(result).toEqual({
+			start: { line: 0, ch: 1 },
+			end: cursorPosition,
+			query: "@bob ho",
+		});
+	});
+
+	test("onTrigger should prefer earlier @ over / at token start on same line", () => {
+		mockEditor.getLine.mockImplementationOnce(() => "@note /open");
+		const cursorPosition = { line: 0, ch: 11 };
+		const result = suggestor.onTrigger(
+			cursorPosition,
+			mockEditor as Editor,
+			mockFile
+		);
+
+		expect(result).toEqual({
+			start: { line: 0, ch: 1 },
+			end: cursorPosition,
+			query: "@note /open",
+		});
+	});
+
 	test("onTrigger should return null when @ is not present", () => {
 		mockEditor.getLine?.mockImplementationOnce(
 			() => "no special character"
