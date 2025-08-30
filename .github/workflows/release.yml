@@ -1,46 +1,71 @@
-name: Build obsidian plugin
+name: Build and Release Obsidian Plugin
 
 on:
   push:
-    # Sequence of patterns matched against refs/tags
     tags:
-      - "*" # Push events to matching any tag format, i.e. 1.0, 20.15.10
+      - "v*" # Push events to matching v*, i.e. v1.0, v20.15.10
 
 env:
-  PLUGIN_NAME: entities # Change this to the name of your plugin-id folder
+  PLUGIN_NAME: entities
 
 jobs:
-  build:
+  build-and-release:
     runs-on: ubuntu-latest
-
+    
     steps:
-      - uses: actions/checkout@v2
-      - name: Use Node.js
-        uses: actions/setup-node@v1
+      - name: Checkout code
+        uses: actions/checkout@v4
         with:
-          node-version: "16.x" # You might need to adjust this value to your own version
-      - name: Build
+          fetch-depth: 0  # Fetch full history for changelog
+          
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "18.x"
+          cache: 'npm'
+          
+      - name: Install dependencies
+        run: npm ci
+        
+      - name: Run tests
+        run: npm test
+        
+      - name: Build plugin
         id: build
         run: |
-          npm install
-          npm run build --if-present
+          npm run build
           mkdir ${{ env.PLUGIN_NAME }}
           cp main.js manifest.json styles.css ${{ env.PLUGIN_NAME }}
           zip -r ${{ env.PLUGIN_NAME }}.zip ${{ env.PLUGIN_NAME }}
-          ls
-          echo "::set-output name=tag_name::$(git tag --sort version:refname | tail -n 1)"
+          echo "tag_name=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+          
+      - name: Extract changelog
+        id: changelog
+        run: |
+          VERSION=${GITHUB_REF#refs/tags/v}
+          CHANGELOG_CONTENT=$(node scripts/changelog-helper.mjs extract $VERSION)
+          echo "content<<EOF" >> $GITHUB_OUTPUT
+          echo "$CHANGELOG_CONTENT" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+          
       - name: Create Release
         id: create_release
         uses: actions/create-release@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          VERSION: ${{ github.ref }}
         with:
-          tag_name: ${{ github.ref }}
-          release_name: ${{ github.ref }}
-          draft: true
-          body: "# Entities ${{ github.ref_name }}\n-"
-          prerelease: true
+          tag_name: ${{ steps.build.outputs.tag_name }}
+          release_name: "Entities ${{ steps.build.outputs.tag_name }}"
+          body: |
+            # Entities ${{ steps.build.outputs.tag_name }}
+            
+            ${{ steps.changelog.outputs.content }}
+            
+            ## Installation
+            
+            Download and install from the Community Plugins section in Obsidian, or manually download the files below and place them in your vault's `.obsidian/plugins/entities/` folder.
+          draft: false
+          prerelease: false
       - name: Upload zip file
         id: upload-zip
         uses: actions/upload-release-asset@v1

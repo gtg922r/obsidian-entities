@@ -63,6 +63,27 @@ Run tests with:
 npm test
 ```
 
+## Release Process
+
+This project follows [Keep a Changelog](https://keepachangelog.com/) and [Semantic Versioning](https://semver.org/). To create a new release:
+
+1. Update `CHANGELOG.md` with your changes in the `[Unreleased]` section
+2. Run the appropriate release command:
+   ```bash
+   npm run release:patch  # Bug fixes
+   npm run release:minor  # New features  
+   npm run release:major  # Breaking changes
+   ```
+
+The release script will automatically:
+- Validate tests and build
+- Update all version files
+- Create git commit and tag
+- Push to GitHub
+- Trigger automated release creation
+
+For more details, see [RELEASE.md](./RELEASE.md).
+
 Contributions are welcome via pull requests.
 
 ## License

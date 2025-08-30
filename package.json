@@ -7,7 +7,14 @@
 		"dev": "node esbuild.config.mjs",
 		"build": "tsc -noEmit -skipLibCheck && node esbuild.config.mjs production",
 		"version": "node version-bump.mjs && git add manifest.json versions.json package.json",
-		"test": "jest"
+		"test": "jest",
+		"release:major": "node scripts/release.mjs major",
+		"release:minor": "node scripts/release.mjs minor",
+		"release:patch": "node scripts/release.mjs patch",
+		"changelog:validate": "node scripts/changelog-helper.mjs validate",
+		"changelog:extract": "node scripts/changelog-helper.mjs extract",
+		"pre-commit": "node scripts/pre-commit-check.mjs",
+		"release:demo": "node scripts/demo-release.mjs"
 	},
 	"keywords": [],
 	"author": "",

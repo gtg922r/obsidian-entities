@@ -1,11 +1,9 @@
 import {
 	Plugin,
 	Setting,
-	TFile,
 } from "obsidian";
 import { EntitySuggestionItem } from "src/EntitiesSuggestor";
 import { EntityProvider, EntityProviderUserSettings } from "./EntityProvider";
-import { entityFromTemplateSettings } from "src/entities.types";
 
 const newProviderTypeID = "newProvider";
 
