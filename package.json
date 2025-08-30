@@ -6,7 +6,7 @@
 	"scripts": {
 		"dev": "node esbuild.config.mjs",
 		"build": "tsc -noEmit -skipLibCheck && node esbuild.config.mjs production",
-		"version": "node version-bump.mjs && node scripts/update-changelog.mjs && git add manifest.json versions.json package.json CHANGELOG.md",
+		"version": "node version-bump.mjs && node scripts/update-changelog.mjs && git add manifest.json versions.json package.json package-lock.json CHANGELOG.md",
 		"test": "jest",
 		"release:check": "npm test && npm run build",
 		"release:patch": "node scripts/release.mjs patch",
