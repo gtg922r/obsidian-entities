@@ -3,14 +3,22 @@ import { execSync } from "child_process";
 
 const COLORS = {
 	reset: "\x1b[0m",
+	bold: "\x1b[1m",
 	cyan: "\x1b[36m",
 	green: "\x1b[32m",
 	yellow: "\x1b[33m",
 	red: "\x1b[31m",
+	dim: "\x1b[90m",
 };
 
 function log(step, message) {
-	process.stdout.write(`${COLORS.cyan}${step}${COLORS.reset} ${message}\n`);
+	const cols = Math.min(process.stdout.columns || 80, 100);
+	const line = "".padEnd(cols, "─");
+	process.stdout.write(
+		`\n${COLORS.cyan}${line}\n` +
+		`${COLORS.bold}▶ ${step}${COLORS.reset} ${COLORS.bold}${message}${COLORS.reset}\n` +
+		`${COLORS.cyan}${line}${COLORS.reset}\n`
+	);
 }
 
 function ok(message) {
@@ -27,12 +35,14 @@ function fail(message) {
 }
 
 function run(cmd, opts = {}) {
+	process.stdout.write(`${COLORS.dim}$ ${cmd}${COLORS.reset}\n`);
 	return execSync(cmd, { stdio: "inherit", ...opts });
 }
 
 // Parse CLI args: first non-flag is the release type; support --dry-run
 const args = process.argv.slice(2);
 const dryRun = args.includes("--dry-run") || args.includes("-n");
+const showTestLogs = args.includes("--show-test-logs");
 const type = args.find((a) => ["patch", "minor", "major"].includes(a));
 if (!type) {
 	fail("Usage: node scripts/release.mjs <patch|minor|major> [--dry-run|-n]");
@@ -57,7 +67,7 @@ try {
 	ok("Dependencies installed");
 
 	log("Step 4:", "Running tests");
-	run("npm test");
+	run(showTestLogs ? "npm test --silent=false --verbose --runInBand" : "npm test");
 	ok("Tests passed");
 
 	log("Step 5:", "Building project");
