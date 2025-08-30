@@ -30,9 +30,12 @@ function run(cmd, opts = {}) {
 	return execSync(cmd, { stdio: "inherit", ...opts });
 }
 
-const type = process.argv[2];
-if (!type || !["patch", "minor", "major"].includes(type)) {
-	fail("Usage: node scripts/release.mjs <patch|minor|major>");
+// Parse CLI args: first non-flag is the release type; support --dry-run
+const args = process.argv.slice(2);
+const dryRun = args.includes("--dry-run") || args.includes("-n");
+const type = args.find((a) => ["patch", "minor", "major"].includes(a));
+if (!type) {
+	fail("Usage: node scripts/release.mjs <patch|minor|major> [--dry-run|-n]");
 }
 
 try {
@@ -61,16 +64,34 @@ try {
 	run("npm run build");
 	ok("Build succeeded");
 
-	log("Step 6:", `Bumping version (${type}) and updating changelog`);
-	run(`npm version ${type} -m "chore(release): %s"`);
-	ok("Version bumped, changelog updated, tag created");
+	log(
+		"Step 6:",
+		dryRun
+			? `Bumping version (${type}) without git tag/commit and updating changelog`
+			: `Bumping version (${type}) and updating changelog`
+	);
+	const versionCmd = `npm version ${type} -m "chore(release): %s"` + (dryRun ? " --no-git-tag-version" : "");
+	run(versionCmd);
+	ok(
+		dryRun
+			? "Version bumped locally; no tag/commit created"
+			: "Version bumped, changelog updated, tag created"
+	);
 
-	log("Step 7:", "Pushing commit and tags");
-	run("git push");
-	run("git push --tags");
-	ok("Pushed to origin. GitHub Actions will build and publish the release.");
+	log(
+		"Step 7:",
+		dryRun ? "Dry-run: would push commit and tags" : "Pushing commit and tags"
+	);
+	if (dryRun) {
+		run("git push --dry-run");
+		run("git push --tags --dry-run");
+		ok("Dry-run complete. No changes pushed.");
+	} else {
+		run("git push");
+		run("git push --tags");
+		ok("Pushed to origin. GitHub Actions will build and publish the release.");
+	}
 
 } catch (err) {
 	fail(err.message || String(err));
 }
-
