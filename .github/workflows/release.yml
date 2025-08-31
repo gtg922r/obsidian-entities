@@ -40,6 +40,14 @@ jobs:
         with:
           version: ${{ steps.tag.outputs.version }}
           path: ./CHANGELOG.md
+      - name: Prepare release body
+        id: release_notes
+        env:
+          CHANGELOG_LOG: ${{ steps.changelog.outputs.log }}
+        run: |
+          echo "body<<EOF" >> $GITHUB_OUTPUT
+          echo "$CHANGELOG_LOG" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
       - name: Create Release
         id: create_release
         uses: actions/create-release@v1
@@ -50,7 +58,7 @@ jobs:
           tag_name: ${{ github.ref_name }}
           release_name: ${{ github.ref_name }}
           draft: false
-          body: ${{ steps.changelog.outputs.log }}
+          body: ${{ steps.release_notes.outputs.body }}
           prerelease: true
       - name: Upload zip file
         id: upload-zip
