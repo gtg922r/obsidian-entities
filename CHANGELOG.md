@@ -9,13 +9,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 ### Fixed
+- Github Actions not releasing correctly
+- Github releases set as pre-release by default
+
 ### Changed
 ### Deprecated
 ### Removed
 ### Security
 
 ## [0.4.0] - 2025-08-31
-- No notable changes.
+
+### Added
+- Automated release workflows
 
 ## [0.3.9] - 2025-08-30
 
