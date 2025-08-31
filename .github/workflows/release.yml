@@ -1,4 +1,4 @@
-name: Build obsidian plugin
+name: Release Obsidian plugin
 
 on:
   push:
@@ -14,11 +14,11 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v4
       - name: Use Node.js
-        uses: actions/setup-node@v1
+        uses: actions/setup-node@v4
         with:
-          node-version: "16.x" # You might need to adjust this value to your own version
+          node-version: "18.x" # You might need to adjust this value to your own version
       - name: Build
         id: build
         run: |
@@ -28,7 +28,26 @@ jobs:
           cp main.js manifest.json styles.css ${{ env.PLUGIN_NAME }}
           zip -r ${{ env.PLUGIN_NAME }}.zip ${{ env.PLUGIN_NAME }}
           ls
-          echo "::set-output name=tag_name::$(git tag --sort version:refname | tail -n 1)"
+          echo "tag_name=$(git tag --sort version:refname | tail -n 1)" >> "$GITHUB_OUTPUT"
+      - name: Strip tag prefix
+        id: tag
+        run: |
+          VERSION_NO_V="${GITHUB_REF_NAME#v}"
+          echo "version=${VERSION_NO_V}" >> $GITHUB_OUTPUT
+      - name: Read changelog for release notes
+        id: changelog
+        uses: mindsers/changelog-reader-action@v2
+        with:
+          version: ${{ steps.tag.outputs.version }}
+          path: ./CHANGELOG.md
+      - name: Prepare release body
+        id: release_notes
+        env:
+          CHANGELOG_LOG: ${{ steps.changelog.outputs.log }}
+        run: |
+          echo "body<<EOF" >> $GITHUB_OUTPUT
+          echo "$CHANGELOG_LOG" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
       - name: Create Release
         id: create_release
         uses: actions/create-release@v1
@@ -36,10 +55,10 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           VERSION: ${{ github.ref }}
         with:
-          tag_name: ${{ github.ref }}
-          release_name: ${{ github.ref }}
-          draft: true
-          body: "# Entities ${{ github.ref_name }}\n-"
+          tag_name: ${{ github.ref_name }}
+          release_name: ${{ github.ref_name }}
+          draft: false
+          body: ${{ steps.release_notes.outputs.body }}
           prerelease: true
       - name: Upload zip file
         id: upload-zip
@@ -81,4 +100,3 @@ jobs:
           asset_path: ./styles.css
           asset_name: styles.css
           asset_content_type: text/css          
-
