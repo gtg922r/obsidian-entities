@@ -14,6 +14,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Removed
 ### Security
 
+## [0.4.0] - 2025-08-31
+- No notable changes.
+
 ## [0.3.9] - 2025-08-30
 
 ### Added
@@ -231,7 +234,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - Initial suggestor prototype, providers (Dataview, NLDates), and test infrastructure.
 
-[Unreleased]: https://github.com/gtg922r/obsidian-entities/compare/0.3.9...HEAD
 [0.3.9]: https://github.com/gtg922r/obsidian-entities/compare/0.3.8...0.3.9
 [0.3.8]: https://github.com/gtg922r/obsidian-entities/compare/0.3.7...0.3.8
 [0.3.7]: https://github.com/gtg922r/obsidian-entities/compare/0.3.6...0.3.7
@@ -266,3 +268,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 [0.1.2]: https://github.com/gtg922r/obsidian-entities/compare/0.1.1...0.1.2
 [0.1.1]: https://github.com/gtg922r/obsidian-entities/compare/0.1.0...0.1.1
 [0.1.0]: https://github.com/gtg922r/obsidian-entities/tree/0.1.0
+
+[Unreleased]: https://github.com/gtg922r/obsidian-entities/compare/v0.4.0...HEAD
+[0.4.0]: https://github.com/gtg922r/obsidian-entities/compare/v0.3.9...v0.4.0
