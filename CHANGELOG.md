@@ -9,12 +9,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 ### Fixed
-- Further fixes to pickup changelog in release notes
-
 ### Changed
 ### Deprecated
 ### Removed
 ### Security
+
+## [0.4.2] - 2025-08-31
+### Fixed
+- Further fixes to pickup changelog in release notes
 
 ## [0.4.1] - 2025-08-31
 ### Fixed
@@ -280,5 +282,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 [0.4.0]: https://github.com/gtg922r/obsidian-entities/compare/v0.3.9...v0.4.0
 
-[Unreleased]: https://github.com/gtg922r/obsidian-entities/compare/v0.4.1...HEAD
 [0.4.1]: https://github.com/gtg922r/obsidian-entities/compare/v0.4.0...v0.4.1
+
+[Unreleased]: https://github.com/gtg922r/obsidian-entities/compare/v0.4.2...HEAD
+[0.4.2]: https://github.com/gtg922r/obsidian-entities/compare/v0.4.1...v0.4.2
