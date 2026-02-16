@@ -16,9 +16,9 @@ import { HelperEntityProvider } from "./Providers/HelperActionsProvider";
 import { CharacterProvider } from "./Providers/CharacterProvider";
 
 export default class Entities extends Plugin {
-	settings: EntitiesSettings;
-	suggestor: EntitiesSuggestor;
-	providerRegistry: ProviderRegistry;
+	settings!: EntitiesSettings;
+	suggestor!: EntitiesSuggestor;
+	providerRegistry!: ProviderRegistry;
 
 	async onload() {
 		await this.loadSettings();

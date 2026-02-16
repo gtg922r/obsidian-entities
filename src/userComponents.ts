@@ -37,7 +37,7 @@ export interface EntitiesModalInputOptions {
 
 export class EntitiesModalInput extends Modal {
 	promise: Promise<string>;
-	resolve: (value: string | PromiseLike<string>) => void;
+	resolve!: (value: string | PromiseLike<string>) => void;
 	placeholder: string;
 	instructions: { insertString: string; dismissString: string };
 
@@ -129,7 +129,7 @@ export async function openTemplateDetailsModal(
 }
 
 export class TemplateDetailsModal extends Modal {
-	private resolve: (value: entityFromTemplateSettings | null) => void;
+	private resolve!: (value: entityFromTemplateSettings | null) => void;
 	private initialSettings?: entityFromTemplateSettings;
 
 	constructor(app: App, initialSettings?: entityFromTemplateSettings) {
@@ -240,10 +240,10 @@ export class TemplateDetailsModal extends Modal {
 }
 
 export class IconPickerModal extends Modal {
-	private resolve: (value: string | PromiseLike<string>) => void;
+	private resolve!: (value: string | PromiseLike<string>) => void;
 	private icons: string[];
 	private filteredIcons: string[];
-	private gridContainer: HTMLElement; // Add a property to hold the reference
+	private gridContainer!: HTMLElement; // Add a property to hold the reference
 	private promise?: Promise<string>; // Make the promise property optional
 
 	constructor(app: App) {

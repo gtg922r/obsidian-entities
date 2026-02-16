@@ -27,12 +27,12 @@ const mockPlugin = {
 const mockProviderTypeID = "Mock Entity Provider";
 interface MockEntityProviderUserSettings extends EntityProviderUserSettings {
 	providerTypeID: typeof mockProviderTypeID;
-	mockSetting: string | undefined;
+	mockSetting?: string;
 }
 
 class MockEntityProvider extends EntityProvider<MockEntityProviderUserSettings> {
-	constructor(plugin: Plugin, settings: MockEntityProviderUserSettings) {
-		super(mockPlugin, settings);
+	constructor(plugin: Plugin, settings: EntityProviderUserSettings) {
+		super(mockPlugin, settings as MockEntityProviderUserSettings);
 	}
 	
 	static readonly providerTypeID = mockProviderTypeID;

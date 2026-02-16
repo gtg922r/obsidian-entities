@@ -35,7 +35,7 @@ export type RegisterableEntityProvider = DerivedClassWithConstructorArgs<
 // Class to handle provider registration and instantiation using Singleton pattern
 class ProviderRegistry {
 	private static instance: ProviderRegistry;
-	private plugin: Plugin;
+	private plugin!: Plugin;
 	private providerClasses: Map<string, RegisterableEntityProvider> = new Map();
 	private providers: EntityProvider<EntityProviderUserSettings>[] = [];
 

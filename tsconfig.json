@@ -6,11 +6,11 @@
     "module": "ESNext",
     "target": "ES6",
     "allowJs": true,
-    "noImplicitAny": true,
+    "strict": true,
     "moduleResolution": "node",
     "importHelpers": true,
     "isolatedModules": true,
-	"strictNullChecks": true,
+    "noFallthroughCasesInSwitch": true,
     "lib": [
       "DOM",
       "ES5",
