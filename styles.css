@@ -1,17 +1,17 @@
 /* @settings
 
-name: Numerals
-id: numerals-style
+name: Entities
+id: entities-style
 settings:
     - 
-        id: numerals-font
-        title: Numerals block font
-        description: Font used for Numerals block. Default is same as a code-block
+        id: entities-font
+        title: Entities block font
+        description: Font used for Entities block. Default is same as a code-block
         type: variable-text
         default: ''
     - 
-        id: numerals-size
-        title: Numerals block font size
+        id: entities-size
+        title: Entities block font size
         description: Accepts an CSS font-size value. Default is same as a code-block
         type: variable-text
         default: ''
