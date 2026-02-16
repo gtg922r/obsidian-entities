@@ -308,7 +308,7 @@ export class DataviewEntityProvider extends EntityProvider<DataviewProviderUserS
 					const initialSettings =
 						settings.entityCreationTemplates ?? [];
 					const templateDetails = await openTemplateDetailsModal(
-						initialSettings[0]
+						plugin.app, initialSettings[0]
 					);
 					if (templateDetails) {
 						settings.entityCreationTemplates = [templateDetails];

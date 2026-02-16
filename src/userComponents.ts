@@ -121,9 +121,10 @@ export class EntitiesModalInput extends Modal {
 }
 
 export async function openTemplateDetailsModal(
+	app: App,
 	initialSettings: entityFromTemplateSettings
 ): Promise<entityFromTemplateSettings | null> {
-	const modal = new TemplateDetailsModal(this.app, initialSettings);
+	const modal = new TemplateDetailsModal(app, initialSettings);
 	return await modal.openAndGetValue();
 }
 

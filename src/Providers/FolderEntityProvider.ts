@@ -289,7 +289,7 @@ export class FolderEntityProvider extends EntityProvider<FolderProviderUserSetti
 					const initialSettings =
 						settings.entityCreationTemplates ?? [];
 					const templateDetails = await openTemplateDetailsModal(
-						initialSettings[0]
+						plugin.app, initialSettings[0]
 					);
 					if (templateDetails) {
 						settings.entityCreationTemplates = [templateDetails];
