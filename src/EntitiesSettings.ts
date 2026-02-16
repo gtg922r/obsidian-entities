@@ -38,7 +38,6 @@ function updateProviderAtIndexAndSaveAndReload(
 				providerConfig;
 			settingsTab.plugin.saveSettings().then(() => {
 				settingsTab.plugin.loadEntityProviders(); // Reload providers after setting change
-				console.log("✅ Settings saved and providers reloaded");
 			});
 			saveTimeout = undefined;
 			if (shouldRefreshUI) {
@@ -339,7 +338,6 @@ export class ProviderSettingsModal extends Modal {
 				contentEl,
 				this.providerSettings,
 				(newSettings) => {
-					console.log("Saving new settings", newSettings);
 					this.saveCallback(newSettings);
 				},
 				this.plugin
@@ -375,7 +373,6 @@ export class ProviderSettingsModal extends Modal {
 					contentEl,
 					this.providerSettings,
 					(newSettings) => {
-						console.log("Saving new settings", newSettings);
 						this.saveCallback(newSettings);
 					},
 					this.plugin

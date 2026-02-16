@@ -73,9 +73,7 @@ export class DataviewEntityProvider extends EntityProvider<DataviewProviderUserS
 			2,
 			this.plugin.app
 		);
-		if (!this.dv) {
-			console.log("❌ Dataview API Not Found");
-		}
+
 	}
 
 	getEntityList(query: string): EntitySuggestionItem[] {
@@ -453,10 +451,7 @@ export class DataviewEntityProvider extends EntityProvider<DataviewProviderUserS
 				if (dv || attempts >= maxAttempts) {
 					resolve(dv);
 				} else {
-					console.log(
-						`Dataview API not found, retrying in ${retryDelay}ms...`
-					);
-					setTimeout(attemptFetching, retryDelay);
+						setTimeout(attemptFetching, retryDelay);
 				}
 			};
 

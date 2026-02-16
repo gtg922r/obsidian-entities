@@ -46,7 +46,6 @@ class ProviderRegistry {
 		registry.plugin = plugin;
 		registry.providerClasses.clear();
 		registry.providers = [];
-		console.log(`Entities:\t✨ Provider Registry initialized.`);
 		return registry;
 	}
 
@@ -65,7 +64,6 @@ class ProviderRegistry {
 			providerClass
 			// TODO: ProviderClass<EntityProviderUserSettings> also seemed to be working
 		);
-		console.log(`Entities:\t └── "${providerClass.providerTypeID}" Provider Type Registered.`);
 		return this;
 	}
 
@@ -78,11 +76,6 @@ class ProviderRegistry {
 				this.plugin,
 				settings
 			)
-			console.log(
-				`Entities:\t └── ${providerClass.getDescription(
-					settings
-				)} added...`
-			);
 			this.providers.push(providerInstance);
 			return this;
 		} else {
@@ -103,8 +96,6 @@ class ProviderRegistry {
 				"ProviderRegistry needs to be initialized before loading providers."
 			);
 		}
-		console.log(`Entities:\t🔄 Loading entity providers...`);
-
 		settingsList.forEach((settings) => {
 			this.instantiateProvider(settings);
 		});
