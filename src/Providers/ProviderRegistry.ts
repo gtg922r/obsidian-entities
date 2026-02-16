@@ -110,7 +110,7 @@ class ProviderRegistry {
 	}
 
 	getProvidersForTrigger(trigger: TriggerCharacter): EntityProvider<EntityProviderUserSettings>[] {
-		return this.providers.filter(provider => provider.triggers.includes(trigger));
+		return this.providers.filter(provider => provider.isEnabled && provider.triggers.includes(trigger));
 	}
 }
 

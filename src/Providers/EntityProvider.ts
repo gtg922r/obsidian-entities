@@ -37,6 +37,10 @@ export abstract class EntityProvider<T extends EntityProviderUserSettings> {
 		return RefreshBehavior.Default;
 	}
 
+	get isEnabled(): boolean {
+		return this.settings.enabled;
+	}
+
 	constructor(plugin: Plugin, settings: Partial<T>) {
 		this.plugin = plugin;
 		this.settings = { ...this.getDefaultSettings(), ...settings };
