@@ -1,12 +1,12 @@
 import { EntitySuggestionItem } from "src/EntitiesSuggestor";
 import { EntityProvider, EntityProviderUserSettings } from "./EntityProvider";
-import { ExtraButtonComponent, Plugin, Setting, TFile, TFolder } from "obsidian";
-import { EntitiesModalInput, IconPickerModal } from "src/userComponents";
+import { Plugin, Setting, TFile, TFolder } from "obsidian";
+import { EntitiesModalInput } from "src/userComponents";
 import {
 	createNewNoteFromTemplate,
 	insertTemplateUsingTemplater,
 } from "src/entitiesUtilities";
-import { FolderSuggest } from "src/ui/file-suggest";
+import { buildIconPickerSetting, buildFolderPathSummarySetting } from "src/ui/providerSettingsComponents";
 import { TriggerCharacter } from "src/entities.types";
 
 const templateProviderTypeID = "template";
@@ -91,42 +91,7 @@ export class TemplateEntityProvider extends EntityProvider<TemplateProviderUserS
 		onShouldSave: (newSettings: TemplateProviderUserSettings) => void,
 		plugin: Plugin
 	): void {
-		const folderExists = (folderPath: string) =>
-			plugin.app.vault.getFolderByPath(folderPath) !== null;
-		let folderExistsIcon: ExtraButtonComponent;
-		const updateFolderExistsIcon = (path: string) => {
-			if (folderExists(path) && folderExistsIcon) {
-				folderExistsIcon.setIcon("folder-check");
-				folderExistsIcon.setTooltip("Folder Found");
-				folderExistsIcon.extraSettingsEl.style.color = "";
-			} else if (folderExistsIcon) {
-				folderExistsIcon.setIcon("folder-x");
-				folderExistsIcon.setTooltip("Folder Not Found");
-				folderExistsIcon.extraSettingsEl.style.color =
-					"var(--text-error)";
-			}
-		};
-		settingContainer.addExtraButton((button) => {
-			folderExistsIcon = button;
-			updateFolderExistsIcon(settings.path);
-			button.setDisabled(true);
-		});
-
-		settingContainer.addText((text) => {
-			text.setPlaceholder("Folder Path").setValue(settings.path);
-			text.onChange((value) => {
-				if (folderExists(value)) {
-					updateFolderExistsIcon(value);
-					settings.path = value;
-					onShouldSave(settings);
-				} else {
-					updateFolderExistsIcon(value);
-				}
-			});
-
-			new FolderSuggest(plugin.app, text.inputEl, {additionalClasses:"entities-settings"});
-		});		
-		
+		buildFolderPathSummarySetting(settingContainer, settings, onShouldSave, plugin);
 	}
 
 	static buildSimpleSettings(
@@ -136,23 +101,7 @@ export class TemplateEntityProvider extends EntityProvider<TemplateProviderUserS
 		plugin: Plugin
 	): void {
 
-		new Setting(settingContainer)
-			.setName("Icon")
-			.setDesc("Icon for the entities returned by this provider")
-			.addButton((button) =>
-				button
-					.setIcon(settings.icon ?? "box-select")
-					.setDisabled(false)
-					.onClick(() => {
-						const iconPickerModal = new IconPickerModal(plugin.app);
-						iconPickerModal.open();
-						iconPickerModal.getInput().then((iconName) => {
-							settings.icon = iconName;
-							onShouldSave(settings);
-							button.setIcon(iconName);
-						});
-					})
-			);
+		buildIconPickerSetting(settingContainer, "Icon", settings, "box-select", () => onShouldSave(settings), plugin.app);
 			
 		new Setting(settingContainer)
 			.setName("Action Type")

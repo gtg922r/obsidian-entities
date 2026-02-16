@@ -12,8 +12,8 @@ import { getAPI, DataviewApi } from "obsidian-dataview";
 import { EntitySuggestionItem } from "src/EntitiesSuggestor";
 import { EntityProvider, EntityProviderUserSettings } from "./EntityProvider";
 import { TextInputSuggest, TextInputSuggestOptions } from "src/ui/suggest";
-import { IconPickerModal, openTemplateDetailsModal } from "src/userComponents";
-import { EntityFilter, entityFromTemplateSettings } from "src/entities.types";
+import { EntityFilter } from "src/entities.types";
+import { buildIconPickerSetting, buildTemplateCreationSetting } from "src/ui/providerSettingsComponents";
 import { applyFiltersToQueryResults } from "./EntityFilters";
 import { FrontmatterKeySuggest } from "src/ui/FrontmatterKeySuggest";
 
@@ -188,23 +188,7 @@ export class DataviewEntityProvider extends EntityProvider<DataviewProviderUserS
 		onShouldSave: (newSettings: DataviewProviderUserSettings) => void,
 		plugin: Plugin
 	): void {
-		new Setting(settingContainer)
-			.setName("Icon")
-			.setDesc("Icon for the entities returned by this provider")
-			.addButton((button) =>
-				button
-					.setIcon(settings.icon ?? "box-select")
-					.setDisabled(false)
-					.onClick(() => {
-						const iconPickerModal = new IconPickerModal(plugin.app);
-						iconPickerModal.open();
-						iconPickerModal.getInput().then((iconName) => {
-							settings.icon = iconName;
-							onShouldSave(settings);
-							button.setIcon(iconName);
-						});
-					})
-			);
+		buildIconPickerSetting(settingContainer, "Icon", settings, "box-select", () => onShouldSave(settings), plugin.app);
 
 		const dvQuerySetting = new Setting(settingContainer)
 			.setName("Dataview Source")
@@ -231,54 +215,7 @@ export class DataviewEntityProvider extends EntityProvider<DataviewProviderUserS
 				});
 			});
 
-		const entityTemplateStatusFromSetting = (
-			entityCreationTemplates: entityFromTemplateSettings[]
-		) => {
-			if (entityCreationTemplates.length === 0) {
-				return "Set Template";
-			} else if (
-				entityCreationTemplates.length === 1 &&
-				entityCreationTemplates[0].engine !== "disabled"
-			) {
-				return "1 template";
-			} else if (
-				entityCreationTemplates.length === 1 &&
-				entityCreationTemplates[0].engine === "disabled"
-			) {
-				return "Set Template";
-			} else {
-				return `${entityCreationTemplates.length} templates`;
-			}
-		};
-		const newEntityFromTemplatesSetting = new Setting(settingContainer)
-			.setName("New Entity From Templates")
-			.setDesc(
-				"Create entity which uses the template for a new file with the query as the file name."
-			);
-		newEntityFromTemplatesSetting.addButton((button) =>
-			button
-				.setButtonText(
-					entityTemplateStatusFromSetting(
-						settings.entityCreationTemplates ?? []
-					)
-				)
-				.onClick(async () => {
-					// Open a modal or another UI component to input template details
-					// For simplicity, assuming a modal is used and returns an object with template details
-					const initialSettings =
-						settings.entityCreationTemplates ?? [];
-					const templateDetails = await openTemplateDetailsModal(
-						plugin.app, initialSettings[0]
-					);
-					if (templateDetails) {
-						settings.entityCreationTemplates = [templateDetails];
-						button.setButtonText(
-							entityTemplateStatusFromSetting([templateDetails])
-						);
-						onShouldSave(settings);
-					}
-				})
-		);
+		buildTemplateCreationSetting(settingContainer, settings, onShouldSave, plugin.app);
 
 		new Setting(settingContainer)
 			.setName("Entity Filters")

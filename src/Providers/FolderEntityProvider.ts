@@ -7,11 +7,10 @@ import {
 } from "obsidian";
 import { EntitySuggestionItem } from "src/EntitiesSuggestor";
 import { EntityProvider, EntityProviderUserSettings } from "./EntityProvider";
-import { FolderSuggest } from "src/ui/file-suggest";
-import { IconPickerModal, openTemplateDetailsModal } from "src/userComponents";
-import { EntityFilter, entityFromTemplateSettings } from "src/entities.types";
+import { EntityFilter } from "src/entities.types";
 import { applyFiltersToFiles } from "./EntityFilters";
 import { FrontmatterKeySuggest } from "src/ui/FrontmatterKeySuggest";
+import { buildIconPickerSetting, buildTemplateCreationSetting, buildFolderPathSummarySetting } from "src/ui/providerSettingsComponents";
 
 const folderProviderTypeID = "folder";
 
@@ -111,49 +110,7 @@ export class FolderEntityProvider extends EntityProvider<FolderProviderUserSetti
 		onShouldSave: (newSettings: FolderProviderUserSettings) => void,
 		plugin: Plugin
 	): void {
-		const folderExists = (folderPath: string) =>
-			plugin.app.vault.getFolderByPath(folderPath) !== null;
-		let folderExistsIcon: ExtraButtonComponent;
-		const updateFolderExistsIcon = (path: string) => {
-			if (folderExists(path) && folderExistsIcon) {
-				const folder = plugin.app.vault.getFolderByPath(path);
-				const numberNotesInFolder = folder?.children.filter(
-					(file) => file instanceof TFile
-				).length;
-				folderExistsIcon.setIcon("folder-check");
-				folderExistsIcon.setTooltip(
-					`Folder Found (${numberNotesInFolder} notes)`
-				);
-				folderExistsIcon.extraSettingsEl.style.color = "";
-			} else if (folderExistsIcon) {
-				folderExistsIcon.setIcon("folder-x");
-				folderExistsIcon.setTooltip("Folder Not Found");
-				folderExistsIcon.extraSettingsEl.style.color =
-					"var(--text-error)";
-			}
-		};
-		settingContainer.addExtraButton((button) => {
-			folderExistsIcon = button;
-			updateFolderExistsIcon(settings.path);
-			button.setDisabled(true);
-		});
-
-		settingContainer.addText((text) => {
-			text.setPlaceholder("Folder Path").setValue(settings.path);
-			text.onChange((value) => {
-				if (folderExists(value)) {
-					updateFolderExistsIcon(value);
-					settings.path = value;
-					onShouldSave(settings);
-				} else {
-					updateFolderExistsIcon(value);
-				}
-			});
-
-			new FolderSuggest(plugin.app, text.inputEl, {
-				additionalClasses: "entities-settings",
-			});
-		});
+		buildFolderPathSummarySetting(settingContainer, settings, onShouldSave, plugin, { showNoteCount: true });
 	}
 
 	static buildSimpleSettings(
@@ -162,23 +119,7 @@ export class FolderEntityProvider extends EntityProvider<FolderProviderUserSetti
 		onShouldSave: (newSettings: FolderProviderUserSettings) => void,
 		plugin: Plugin
 	): void {
-		new Setting(settingContainer)
-			.setName("Icon")
-			.setDesc("Icon for the entities returned by this provider")
-			.addButton((button) =>
-				button
-					.setIcon(settings.icon ?? "box-select")
-					.setDisabled(false)
-					.onClick(() => {
-						const iconPickerModal = new IconPickerModal(plugin.app);
-						iconPickerModal.open();
-						iconPickerModal.getInput().then((iconName) => {
-							settings.icon = iconName;
-							onShouldSave(settings);
-							button.setIcon(iconName);
-						});
-					})
-			);
+		buildIconPickerSetting(settingContainer, "Icon", settings, "box-select", () => onShouldSave(settings), plugin.app);
 
 		const folderPathSetting = new Setting(settingContainer)
 			.setName("Folder Path")
@@ -216,54 +157,7 @@ export class FolderEntityProvider extends EntityProvider<FolderProviderUserSetti
 					onShouldSave(settings);
 				});
 			});
-		const entityTemplateStatusFromSetting = (
-			entityCreationTemplates: entityFromTemplateSettings[]
-		) => {
-			if (entityCreationTemplates.length === 0) {
-				return "Set Template";
-			} else if (
-				entityCreationTemplates.length === 1 &&
-				entityCreationTemplates[0].engine !== "disabled"
-			) {
-				return "1 template";
-			} else if (
-				entityCreationTemplates.length === 1 &&
-				entityCreationTemplates[0].engine === "disabled"
-			) {
-				return "Set Template";
-			} else {
-				return `${entityCreationTemplates.length} templates`;
-			}
-		};
-		const newEntityFromTemplatesSetting = new Setting(settingContainer)
-			.setName("New Entity From Templates")
-			.setDesc(
-				"Create entity which uses the template for a new file with the query as the file name."
-			);
-		newEntityFromTemplatesSetting.addButton((button) =>
-			button
-				.setButtonText(
-					entityTemplateStatusFromSetting(
-						settings.entityCreationTemplates ?? []
-					)
-				)
-				.onClick(async () => {
-					// Open a modal or another UI component to input template details
-					// For simplicity, assuming a modal is used and returns an object with template details
-					const initialSettings =
-						settings.entityCreationTemplates ?? [];
-					const templateDetails = await openTemplateDetailsModal(
-						plugin.app, initialSettings[0]
-					);
-					if (templateDetails) {
-						settings.entityCreationTemplates = [templateDetails];
-						button.setButtonText(
-							entityTemplateStatusFromSetting([templateDetails])
-						);
-						onShouldSave(settings);
-					}
-				})
-		);
+		buildTemplateCreationSetting(settingContainer, settings, onShouldSave, plugin.app);
 
 		new Setting(settingContainer)
 			.setHeading()
