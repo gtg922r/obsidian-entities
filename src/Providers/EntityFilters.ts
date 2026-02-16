@@ -67,11 +67,11 @@ export function applyFiltersToFiles(
  * Applies entity filters to Dataview query results using the app's metadata cache.
  * Each result must have a `file.path` property to look up metadata.
  */
-export function applyFiltersToQueryResults(
-	queryResults: { file: { path: string } }[],
+export function applyFiltersToQueryResults<T extends { file: { path: string } }>(
+	queryResults: T[],
 	filters: EntityFilter[] | undefined,
 	app: App
-): { file: { path: string } }[] {
+): T[] {
 	if (!filters || filters.length === 0) {
 		return queryResults;
 	}

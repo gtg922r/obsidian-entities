@@ -85,8 +85,8 @@ export class DataviewEntityProvider extends EntityProvider<DataviewProviderUserS
 
 		const filteredQueryResults = applyFiltersToQueryResults(dvQueryReults, this.settings.entityFilters, this.plugin.app);
 
-		const entitiesWithAliases = filteredQueryResults?.flatMap(
-			(project: { file: { name: string; aliases: string[] } }) => {
+		const entitiesWithAliases = (filteredQueryResults as { file: { path: string; name: string; aliases: string[] } }[])?.flatMap(
+			(project) => {
 				const baseEntity: EntitySuggestionItem = {
 					suggestionText: project.file.name,
 					icon: this.settings.icon ?? "box",
