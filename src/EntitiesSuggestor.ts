@@ -206,11 +206,13 @@ export class EntitiesSuggestor extends EditorSuggest<EntitySuggestionItem> {
 
 		// Only fetch template suggestions if the trigger is '@'
 		if (trigger === TriggerCharacter.At) {
-			this.providerRegistry.getProviders().forEach((provider) => {
-				const templateSuggestions =
-					provider.getTemplateCreationSuggestions(searchQuery);
-				fuzzySearchResults.push(...templateSuggestions);
-			});
+			this.providerRegistry
+				.getProvidersForTrigger(trigger)
+				.forEach((provider) => {
+					const templateSuggestions =
+						provider.getTemplateCreationSuggestions(searchQuery);
+					fuzzySearchResults.push(...templateSuggestions);
+				});
 		}
 
 		const uniqueSuggestions = new Map<string, EntitySuggestionItem>();
