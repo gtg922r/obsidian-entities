@@ -51,6 +51,8 @@ export class EntitiesSuggestor extends EditorSuggest<EntitySuggestionItem> {
 	// Track the last dismissed query
 	private lastDismissedQuery: EditorPosition | null = null;
 
+	private lastSuggestionCount = 0;
+
 	//empty constructor
 	constructor(plugin: Entities, registry: ProviderRegistry) {
 		super(plugin.app);
@@ -233,6 +235,8 @@ export class EntitiesSuggestor extends EditorSuggest<EntitySuggestionItem> {
 			(a, b) => (b.match?.score ?? -10) - (a.match?.score ?? -10)
 		);
 
+		this.lastSuggestionCount = sortedSuggestions.length;
+
 		return sortedSuggestions;
 	}
 
@@ -319,14 +323,9 @@ export class EntitiesSuggestor extends EditorSuggest<EntitySuggestionItem> {
 	}
 
 	async close(): Promise<void> {
-		if (this.context) {
-			const { start } = this.context;
-			const suggestions = await this.getSuggestions(this.context);
-			if (suggestions && suggestions.length > 0) {
-				this.lastDismissedQuery = start;
-			}
+		if (this.context && this.lastSuggestionCount > 0) {
+			this.lastDismissedQuery = this.context.start;
 		}
-
 		super.close();
 	}
 }
