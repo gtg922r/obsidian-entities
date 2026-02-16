@@ -14,6 +14,7 @@ import { EntityProvider, EntityProviderUserSettings } from "./EntityProvider";
 import { TextInputSuggest, TextInputSuggestOptions } from "src/ui/suggest";
 import { IconPickerModal, openTemplateDetailsModal } from "src/userComponents";
 import { EntityFilter, entityFromTemplateSettings } from "src/entities.types";
+import { applyFiltersToQueryResults } from "./EntityFilters";
 import { FrontmatterKeySuggest } from "src/ui/FrontmatterKeySuggest";
 
 const dataviewProviderTypeID = "dataview";
@@ -82,7 +83,7 @@ export class DataviewEntityProvider extends EntityProvider<DataviewProviderUserS
 			return [];
 		}
 
-		const filteredQueryResults = this.applyFilters(dvQueryReults);
+		const filteredQueryResults = applyFiltersToQueryResults(dvQueryReults, this.settings.entityFilters, this.plugin.app);
 
 		const entitiesWithAliases = filteredQueryResults?.flatMap(
 			(project: { file: { name: string; aliases: string[] } }) => {
@@ -105,45 +106,6 @@ export class DataviewEntityProvider extends EntityProvider<DataviewProviderUserS
 		);
 
 		return entitiesWithAliases || [];
-	}
-
-	private applyFilters(
-		queryResults: { file: { path: string } }[]
-	): unknown[] {
-		if (
-			!this.settings.entityFilters ||
-			this.settings.entityFilters.length === 0
-		) {
-			return queryResults;
-		}
-
-		const compiledFilters = this.settings.entityFilters
-			.map((filter) => {
-				try {
-					return { ...filter, regex: new RegExp(filter.value, "i") };
-				} catch (e) {
-					console.error(`Invalid regex: ${filter.value}`, e);
-					return null;
-				}
-			})
-			.filter(
-				(filter): filter is EntityFilter & { regex: RegExp } =>
-					filter !== null
-			);
-
-		return queryResults.filter((entity) => {
-			const file = this.plugin.app.vault.getAbstractFileByPath(
-				entity.file.path
-			) as TFile;
-			const metadata = this.plugin.app.metadataCache.getFileCache(file);
-			return compiledFilters.every((filter) => {
-				const propertyValue = metadata?.frontmatter?.[filter.property];
-				if (!propertyValue) return filter.type === "exclude";
-
-				const matches = filter.regex.test(propertyValue);
-				return filter.type === "include" ? matches : !matches;
-			});
-		});
 	}
 
 	static buildSummarySetting(

@@ -10,6 +10,7 @@ import { EntityProvider, EntityProviderUserSettings } from "./EntityProvider";
 import { FolderSuggest } from "src/ui/file-suggest";
 import { IconPickerModal, openTemplateDetailsModal } from "src/userComponents";
 import { EntityFilter, entityFromTemplateSettings } from "src/entities.types";
+import { applyFiltersToFiles } from "./EntityFilters";
 import { FrontmatterKeySuggest } from "src/ui/FrontmatterKeySuggest";
 
 const folderProviderTypeID = "folder";
@@ -72,7 +73,7 @@ export class FolderEntityProvider extends EntityProvider<FolderProviderUserSetti
 			return [];
 		}
 
-		const filteredEntities = this.applyFilters(entities);
+		const filteredEntities = applyFiltersToFiles(entities, this.settings.entityFilters, this.plugin.app);
 
 		const entitySuggestions =
 			filteredEntities?.map((file) => ({
@@ -102,43 +103,6 @@ export class FolderEntityProvider extends EntityProvider<FolderProviderUserSetti
 		return aliasEntitiesSuggestions
 			? [...entitySuggestions, ...aliasEntitiesSuggestions]
 			: entitySuggestions;
-	}
-
-	private applyFilters(entities: TFile[] | undefined): TFile[] | undefined {
-		if (
-			!this.settings.entityFilters ||
-			this.settings.entityFilters.length === 0
-		) {
-			return entities;
-		}
-
-		const compiledFilters = this.settings.entityFilters
-			.map((filter) => {
-				try {
-					return { ...filter, regex: new RegExp(filter.value, "i") };
-				} catch (e) {
-					console.error(`Invalid regex: ${filter.value}`, e);
-					return null;
-				}
-			})
-			.filter(
-				(filter): filter is EntityFilter & { regex: RegExp } =>
-					filter !== null
-			);
-
-		return entities?.filter((file) => {
-			const metadata = this.plugin.app.metadataCache.getFileCache(file);
-			const frontmatter = metadata?.frontmatter;
-			if (!frontmatter) return false;
-
-			return compiledFilters.every((filter) => {
-				const propertyValue = frontmatter[filter.property];
-				if (!propertyValue) return filter.type === "exclude";
-
-				const matches = filter.regex.test(propertyValue);
-				return filter.type === "include" ? matches : !matches;
-			});
-		});
 	}
 
 	static buildSummarySetting(
