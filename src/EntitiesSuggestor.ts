@@ -167,12 +167,13 @@ export class EntitiesSuggestor extends EditorSuggest<EntitySuggestionItem> {
 				//TODO: Support multiple trigger types from a provider with suggestion cacheing
 				let providerSuggestions: EntitySuggestionItem[];
 
-				if (
+				const shouldRefresh =
 					refreshBehavior === RefreshBehavior.ShouldRefresh ||
+					!this.providerSuggestions.has(providerId) ||
 					(refreshBehavior === RefreshBehavior.Default &&
-						currentTime - lastRefresh > refreshThreshold) ||
-					!this.providerSuggestions.has(providerId)
-				) {
+						currentTime - lastRefresh > refreshThreshold);
+
+				if (shouldRefresh) {
 					providerSuggestions = provider.getEntityList(
 						searchQuery,
 						trigger
@@ -182,22 +183,9 @@ export class EntitiesSuggestor extends EditorSuggest<EntitySuggestionItem> {
 						providerSuggestions
 					);
 					this.lastRefreshTime.set(providerId, currentTime);
-				} else if (
-					refreshBehavior === RefreshBehavior.Never &&
-					this.providerSuggestions.has(providerId)
-				) {
-					providerSuggestions =
-						this.providerSuggestions.get(providerId) || [];
 				} else {
-					providerSuggestions = provider.getEntityList(
-						searchQuery,
-						trigger
-					);
-					this.providerSuggestions.set(
-						providerId,
-						providerSuggestions
-					);
-					this.lastRefreshTime.set(providerId, currentTime);
+					providerSuggestions =
+						this.providerSuggestions.get(providerId) ?? [];
 				}
 
 				allSuggestions.push(...providerSuggestions);
