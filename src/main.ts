@@ -1,5 +1,5 @@
 import { Plugin } from "obsidian";
-import { EntitiesSettingTab } from "./EntitiesSettings";
+import { EntitiesSettingTab, clearPendingSave } from "./EntitiesSettings";
 import { EntitiesSettings, DEFAULT_SETTINGS } from "./entities.types";
 import { EntitiesSuggestor } from "./EntitiesSuggestor";
 import ProviderRegistry from "./Providers/ProviderRegistry";
@@ -33,7 +33,10 @@ export default class Entities extends Plugin {
 		this.loadEntityProviders();
 	}
 
-	onunload() {}
+	onunload() {
+		clearPendingSave();
+		this.providerRegistry.resetProviders();
+	}
 
 	registerEntityProviders() {
 		this.providerRegistry

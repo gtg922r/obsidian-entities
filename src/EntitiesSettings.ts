@@ -14,6 +14,13 @@ import { RegisterableEntityProvider } from "./Providers/ProviderRegistry";
 
 let saveTimeout: NodeJS.Timeout | undefined;
 
+export function clearPendingSave(): void {
+    if (saveTimeout !== undefined) {
+        clearTimeout(saveTimeout);
+        saveTimeout = undefined;
+    }
+}
+
 function updateProviderAtIndexAndSaveAndReload(
 	settingsTab: EntitiesSettingTab,
 	providerConfig: EntityProviderUserSettings,
