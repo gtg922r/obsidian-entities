@@ -387,6 +387,74 @@ describe("onTrigger tests", () => {
 
 		expect(result).toBeNull();
 	});
+
+	test("onTrigger should trigger / immediately after a word", () => {
+		mockEditor.getLine.mockImplementationOnce(() => "word/command");
+		const cursorPosition = { line: 0, ch: 12 };
+		const result = suggestor.onTrigger(
+			cursorPosition,
+			mockEditor as Editor,
+			mockFile
+		);
+
+		expect(result).not.toBeNull();
+		expect(result).toEqual({
+			start: { line: 0, ch: 5 },
+			end: cursorPosition,
+			query: "/command",
+		});
+	});
+
+	test("onTrigger should use last / in token for 'a/b/c'", () => {
+		mockEditor.getLine.mockImplementationOnce(() => "a/b/c");
+		const cursorPosition = { line: 0, ch: 5 };
+		const result = suggestor.onTrigger(
+			cursorPosition,
+			mockEditor as Editor,
+			mockFile
+		);
+
+		expect(result).not.toBeNull();
+		expect(result).toEqual({
+			start: { line: 0, ch: 4 },
+			end: cursorPosition,
+			query: "/c",
+		});
+	});
+
+	test("onTrigger should trigger lone / after a word at EOL", () => {
+		mockEditor.getLine.mockImplementationOnce(() => "word/");
+		const cursorPosition = { line: 0, ch: 5 };
+		const result = suggestor.onTrigger(
+			cursorPosition,
+			mockEditor as Editor,
+			mockFile
+		);
+
+		expect(result).not.toBeNull();
+		expect(result).toEqual({
+			start: { line: 0, ch: 5 },
+			end: cursorPosition,
+			query: "/",
+		});
+	});
+
+	test("onTrigger should trigger / after text with preceding content", () => {
+		mockEditor.getLine.mockImplementationOnce(() => "some text word/cmd");
+		const cursorPosition = { line: 0, ch: 18 };
+		const result = suggestor.onTrigger(
+			cursorPosition,
+			mockEditor as Editor,
+			mockFile
+		);
+
+		expect(result).not.toBeNull();
+		expect(result).toEqual({
+			start: { line: 0, ch: 15 },
+			end: cursorPosition,
+			query: "/cmd",
+		});
+	});
 });
 
 describe("getSuggestions tests", () => {

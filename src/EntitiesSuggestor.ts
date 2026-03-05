@@ -103,7 +103,13 @@ export class EntitiesSuggestor extends EditorSuggest<EntitySuggestionItem> {
 		tokenStart += 1;
 		const tokenStartChar = currentLineToCursor.charAt(tokenStart) ?? "";
 		const colonValid = tokenStartChar === ":" && hasNonWhitespaceAfter(tokenStart);
-		const slashValid = tokenStartChar === "/" && hasNonWhitespaceAfter(tokenStart);
+
+		// Slash trigger: find the last '/' within the current token so that
+		// typing e.g. "word/command" still activates the suggestor.
+		const tokenSlice = currentLineToCursor.slice(tokenStart);
+		const lastSlashInToken = tokenSlice.lastIndexOf("/");
+		const slashIndex = lastSlashInToken >= 0 ? tokenStart + lastSlashInToken : -1;
+		const slashValid = slashIndex >= 0 && hasNonWhitespaceAfter(slashIndex);
 
 		let triggerIndex = -1;
 		let triggerChar: string | null = null;
@@ -114,7 +120,7 @@ export class EntitiesSuggestor extends EditorSuggest<EntitySuggestionItem> {
 			triggerIndex = tokenStart;
 			triggerChar = ":";
 		} else if (slashValid) {
-			triggerIndex = tokenStart;
+			triggerIndex = slashIndex;
 			triggerChar = "/";
 		}
 
