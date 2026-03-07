@@ -18,12 +18,13 @@ jest.mock("obsidian", () => {
 				this.app = app;
 			}
 		},
-		prepareQuery: jest.fn().mockImplementation((query) => query),
-		fuzzySearch: jest.fn().mockImplementation((query, text) => {
-			if (text.toLowerCase().includes(query.toLowerCase())) {
-				return { score: 10, matches: [[0, query.length]] };
-			}
-			return null;
+		prepareFuzzySearch: jest.fn().mockImplementation((query: string) => {
+			return (text: string) => {
+				if (text.toLowerCase().includes(query.toLowerCase())) {
+					return { score: 10, matches: [[0, query.length]] };
+				}
+				return null;
+			};
 		}),
 	};
 });
