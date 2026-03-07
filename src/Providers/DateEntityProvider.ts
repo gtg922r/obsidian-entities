@@ -71,9 +71,7 @@ export class DateEntityProvider extends EntityProvider<DatesProviderUserSettings
 			"nldates-obsidian"
 		) as NLPlugin;
 		if (!this.nlpPlugin || this.nlpPlugin.parseDate === undefined) {
-			console.log(
-				"NLDates plugin not found or parseDate method is missing."
-			);
+
 		}
 	}
 
@@ -173,7 +171,6 @@ export class DateEntityProvider extends EntityProvider<DatesProviderUserSettings
 		const weekStartDate = weekMoment.format('YYYY-MM-DD');
 		const weekStartDateShort = weekMoment.format('M/D');
 
-		console.log(weekStartDate);
 		return [{
 			suggestionText: dateString,
 			noteText: `${year}-W${week.toString().padStart(2, '0')} (Wk of ${weekStartDateShort})`,

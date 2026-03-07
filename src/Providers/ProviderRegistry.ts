@@ -1,7 +1,6 @@
 import { Plugin, Setting } from "obsidian";
 import { EntityProvider, EntityProviderID, EntityProviderUserSettings } from "./EntityProvider";
 import { DerivedClassWithConstructorArgs } from "src/entities.types";
-import { CharacterProvider } from "./CharacterProvider";
 import { TriggerCharacter } from "src/entities.types";
 
 interface ProviderRegistryClassMethods<T extends EntityProviderUserSettings> {
@@ -36,7 +35,7 @@ export type RegisterableEntityProvider = DerivedClassWithConstructorArgs<
 // Class to handle provider registration and instantiation using Singleton pattern
 class ProviderRegistry {
 	private static instance: ProviderRegistry;
-	private plugin: Plugin;
+	private plugin!: Plugin;
 	private providerClasses: Map<string, RegisterableEntityProvider> = new Map();
 	private providers: EntityProvider<EntityProviderUserSettings>[] = [];
 
@@ -47,7 +46,6 @@ class ProviderRegistry {
 		registry.plugin = plugin;
 		registry.providerClasses.clear();
 		registry.providers = [];
-		console.log(`Entities:\t✨ Provider Registry initialized.`);
 		return registry;
 	}
 
@@ -66,7 +64,6 @@ class ProviderRegistry {
 			providerClass
 			// TODO: ProviderClass<EntityProviderUserSettings> also seemed to be working
 		);
-		console.log(`Entities:\t └── "${providerClass.providerTypeID}" Provider Type Registered.`);
 		return this;
 	}
 
@@ -79,11 +76,6 @@ class ProviderRegistry {
 				this.plugin,
 				settings
 			)
-			console.log(
-				`Entities:\t └── ${providerClass.getDescription(
-					settings
-				)} added...`
-			);
 			this.providers.push(providerInstance);
 			return this;
 		} else {
@@ -104,8 +96,6 @@ class ProviderRegistry {
 				"ProviderRegistry needs to be initialized before loading providers."
 			);
 		}
-		console.log(`Entities:\t🔄 Loading entity providers...`);
-
 		settingsList.forEach((settings) => {
 			this.instantiateProvider(settings);
 		});
@@ -120,12 +110,8 @@ class ProviderRegistry {
 	}
 
 	getProvidersForTrigger(trigger: TriggerCharacter): EntityProvider<EntityProviderUserSettings>[] {
-		return this.providers.filter(provider => provider.triggers.includes(trigger));
+		return this.providers.filter(provider => provider.isEnabled && provider.triggers.includes(trigger));
 	}
 }
 
 export default ProviderRegistry;
-
-// Register the CharacterProvider
-ProviderRegistry.getInstance()
-    .registerProviderType(CharacterProvider)

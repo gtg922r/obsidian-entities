@@ -3,6 +3,7 @@ import {
 	EntityProvider,
 	EntityProviderUserSettings,
 } from "../../src/Providers/EntityProvider";
+import { TriggerCharacter } from "../../src/entities.types";
 import { App, Plugin } from "obsidian";
 
 // Mocking the necessary Obsidian interfaces and classes inline
@@ -26,12 +27,12 @@ const mockPlugin = {
 const mockProviderTypeID = "Mock Entity Provider";
 interface MockEntityProviderUserSettings extends EntityProviderUserSettings {
 	providerTypeID: typeof mockProviderTypeID;
-	mockSetting: string | undefined;
+	mockSetting?: string;
 }
 
 class MockEntityProvider extends EntityProvider<MockEntityProviderUserSettings> {
-	constructor(plugin: Plugin, settings: MockEntityProviderUserSettings) {
-		super(mockPlugin, settings);
+	constructor(plugin: Plugin, settings: EntityProviderUserSettings) {
+		super(mockPlugin, settings as MockEntityProviderUserSettings);
 	}
 	
 	static readonly providerTypeID = mockProviderTypeID;
@@ -138,5 +139,26 @@ describe("ProviderRegistry tests", () => {
 		const providers = registry.getProviders();
 		expect(providers.length).toBe(1);
 		expect(providers[0]).toBeInstanceOf(MockEntityProvider);
+	});
+
+	test("getProvidersForTrigger should exclude disabled providers", () => {
+		registry.registerProviderType(MockEntityProvider);
+		const enabledSettings: MockEntityProviderUserSettings = {
+			providerTypeID: mockProviderTypeID,
+			enabled: true,
+			icon: "mock-icon",
+			mockSetting: "enabled",
+		};
+		const disabledSettings: MockEntityProviderUserSettings = {
+			providerTypeID: mockProviderTypeID,
+			enabled: false,
+			icon: "mock-icon",
+			mockSetting: "disabled",
+		};
+		registry.instantiateProvider(enabledSettings);
+		registry.instantiateProvider(disabledSettings);
+
+		const providers = registry.getProvidersForTrigger(TriggerCharacter.At);
+		expect(providers.length).toBe(1);
 	});
 });

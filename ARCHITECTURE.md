@@ -8,110 +8,178 @@ This document explains the overall layout and flow of the **Entities** Obsidian 
 .
 ├── src/                # TypeScript source
 │   ├── Providers/      # Autocomplete providers
+│   │   ├── EntityProvider.ts      # Abstract base class
+│   │   ├── ProviderRegistry.ts    # Singleton registry
+│   │   ├── EntityFilters.ts       # Shared filter logic
+│   │   ├── FolderEntityProvider.ts
+│   │   ├── DataviewEntityProvider.ts
+│   │   ├── TemplateProvider.ts
+│   │   ├── DateEntityProvider.ts
+│   │   ├── MetadataMenuProvider.ts
+│   │   ├── HelperActionsProvider.ts
+│   │   └── CharacterProvider.ts
 │   ├── ui/             # Reusable UI helpers
-│   ├── EntitiesSuggestor.ts
-│   ├── EntitiesSettings.ts
-│   ├── entities.types.ts
-│   ├── entitiesUtilities.ts
-│   ├── userComponents.ts
-│   └── main.ts         # Plugin entry point
-├── tests/              # Jest unit tests
+│   │   ├── suggest.ts                   # Base text input suggest (from obsidian-periodic-notes)
+│   │   ├── file-suggest.ts              # File/folder suggesters
+│   │   ├── FrontmatterKeySuggest.ts     # Frontmatter key autocomplete
+│   │   └── providerSettingsComponents.ts # Shared settings UI builders
+│   ├── EntitiesSuggestor.ts   # EditorSuggest implementation
+│   ├── EntitiesSettings.ts    # Settings tab & modal
+│   ├── entities.types.ts      # Shared types & interfaces
+│   ├── entitiesUtilities.ts   # Templater integration helpers
+│   ├── userComponents.ts      # Notices, modals, icon picker
+│   └── main.ts                # Plugin entry point
+├── tests/              # Jest unit & integration tests
+├── docs/               # Developer documentation & templates
 ├── styles.css          # Plugin styles
 ├── manifest.json       # Obsidian plugin manifest
 ├── esbuild.config.mjs  # Build configuration
 └── package.json
 ```
 
-### Providers
-
-`src/Providers` contains implementations that supply suggestion items. Each provider
-extends the `EntityProvider` base class and registers itself through
-`ProviderRegistry`. Examples include:
-
-- `FolderEntityProvider` – suggestions from a folder of notes
-- `DataviewEntityProvider` – suggestions from a Dataview query
-- `TemplateEntityProvider` – insert or create notes from templates
-- `DateEntityProvider` – natural language dates
-- `MetadataMenuProvider` – integration with Metadata Menu
-- `HelperActionsProvider` – utility commands (checkboxes, etc.)
-- `CharacterProvider` – emoji or symbol look‑ups
-
 ## Plugin Flow
 
-1. **`main.ts`** – When the plugin loads, it
-   - reads saved settings,
-   - initializes a singleton `ProviderRegistry`,
-   - registers the available provider classes,
-   - instantiates providers from settings,
-   - creates an `EntitiesSuggestor` and registers it with Obsidian.
-2. **`EntitiesSuggestor`** – Implements `EditorSuggest` to show autocomplete
-   results. `onTrigger` detects trigger characters (`@`, `:`, `/`). It then asks
-   the registry for providers matching that trigger, gathers suggestions, runs
-   fuzzy search, and renders the list. Selecting an item inserts text or
-   performs the provider’s action.
-3. **`EntitiesSettings`** – Implements the settings tab UI where users configure
-   provider instances. It uses provider‑supplied helper methods to render both
-   summary and advanced settings.
-4. **Providers** – Each provider implements `getEntityList` to return
-   suggestions and may override `getTemplateCreationSuggestions` to create new
-   entities. Providers declare which trigger characters they support.
-5. **Utilities and UI Components** – Helper modules under `src/ui/` and
-   `userComponents.ts` supply reusable UI pieces such as suggestion modals and
-   file/folder choosers. `entitiesUtilities.ts` wraps Templater functions for
-   template insertion and note creation.
+1. **`main.ts`** – On load, the plugin:
+   - Reads saved settings.
+   - Initializes the singleton `ProviderRegistry`.
+   - Registers all provider classes.
+   - Instantiates provider instances from saved settings.
+   - Creates an `EntitiesSuggestor` and registers it with Obsidian.
+   - On unload, cleans up pending saves and resets providers.
+
+2. **`EntitiesSuggestor`** – Implements `EditorSuggest`:
+   - `onTrigger` detects trigger characters (`@`, `:`, `/`). `@` is phrase-scoped
+     (spans spaces), while `:` and `/` are token-scoped (stop at whitespace).
+     `@` takes priority when multiple triggers are present.
+   - `getSuggestions` queries providers matching the trigger, applies caching
+     based on each provider's `RefreshBehavior`, runs Obsidian's built-in fuzzy
+     search, and deduplicates results.
+   - Template creation suggestions are only requested from providers that
+     support the `@` trigger and have templates configured.
+   - `selectSuggestion` either inserts a `[[wikilink]]` or executes the
+     provider's custom action.
+
+3. **`EntitiesSettings`** – Settings tab where users add, configure, and remove
+   provider instances. Provider classes supply their own settings UI via static
+   `buildSummarySetting` / `buildSimpleSettings` / `buildAdvancedSettings`
+   methods.
+
+4. **Providers** – Each provider:
+   - Extends `EntityProvider<T>` with strongly-typed settings.
+   - Implements `getEntityList(query, trigger)` synchronously.
+   - Declares supported triggers via the `triggers` getter.
+   - Optionally overrides `getRefreshBehavior()` and
+     `getTemplateCreationSuggestions(query)`.
+   - Disabled providers (where `enabled === false`) are automatically excluded.
+
+## Shared Modules
+
+### EntityFilters (`src/Providers/EntityFilters.ts`)
+
+Extracts the duplicated filter compilation and application logic used by both
+`FolderEntityProvider` and `DataviewEntityProvider`:
+
+- `compileFilters(filters)` – Compiles `EntityFilter[]` into regex-ready
+  `CompiledFilter[]`, discarding invalid patterns.
+- `applyFiltersToFiles(files, filters, app)` – Filters `TFile[]` by frontmatter
+  properties using the metadata cache.
+- `applyFiltersToQueryResults(results, filters, app)` – Generic version for
+  Dataview query results (any `{ file: { path } }[]`).
+
+All filters use AND logic. Include filters require a property match; exclude
+filters pass entities that lack the property.
+
+### Provider Settings Components (`src/ui/providerSettingsComponents.ts`)
+
+Shared UI builders eliminating duplication across provider settings:
+
+- `buildIconPickerSetting()` – Icon selection button with picker modal.
+- `buildTemplateCreationSetting()` – Template configuration button with status
+  label.
+- `buildFolderPathSummarySetting()` – Folder path input with existence indicator
+  and optional note count.
+- `entityTemplateStatusLabel()` – Human-readable template status string.
 
 ## Major Interfaces
 
-- **`EntityProvider`** (base class)
+- **`EntityProvider<T>`** (abstract base class)
   - Holds provider settings and plugin reference.
-  - Defines `getEntityList(query, trigger)` and optional template creation
-    methods.
-  - Exposes a `triggers` getter describing which characters activate the
-    provider.
-- **`ProviderRegistry`**
-  - Singleton that tracks registered provider classes and instantiated providers.
-  - Provides `getProvidersForTrigger` to retrieve providers matching a trigger
-    for the suggestor.
-- **`EntitiesSuggestor`**
-  - Collects suggestions from providers, performs fuzzy search, and inserts the
-    chosen result into the editor.
+  - Defines `getEntityList(query, trigger)` (sync) and optional template creation.
+  - Exposes `triggers` getter, `isEnabled` getter, and `getRefreshBehavior()`.
 
-### Provider Registry Interface
+- **`ProviderRegistry`** (singleton)
+  - Manages registered provider classes and instantiated providers.
+  - `getProvidersForTrigger(trigger)` returns enabled providers matching a trigger.
+  - `registerProviderType(cls)` / `instantiateProvider(settings)` for lifecycle.
+  - `resetProviders()` clears instances (called during unload and settings changes).
 
-`ProviderRegistry` resides in `src/Providers/ProviderRegistry.ts` and acts as the
-central hub for managing entity providers. It exposes several helpers used
-throughout the plugin:
+- **`EntitiesSuggestor`** (extends `EditorSuggest`)
+  - Collects and caches suggestions per provider with configurable refresh.
+  - Performs fuzzy search and deduplication.
+  - Handles text insertion and provider actions.
 
-- **RegisterableEntityProvider** – type describing provider classes that can be
-  registered. Such classes extend `EntityProvider`, define a static
-  `providerTypeID`, and implement static methods like `getDescription`,
-  `getDefaultSettings`, and `buildSummarySetting` (with optional
-  `buildSimpleSettings` and `buildAdvancedSettings`). These are leveraged by the
-  settings UI.
-- **registerProviderType(cls)** – registers a provider class under its
-  `providerTypeID` so it can later be instantiated from settings.
-- **instantiateProvider(settings)** – constructs a provider instance given its
-  saved settings and stores it in an internal array.
-- **instantiateProvidersFromSettings(list)** – recreates all provider instances
-  from a list of saved settings, typically on startup or after the user saves
-  changes.
-- **getProvidersForTrigger(trigger)** – filters the instantiated providers by
-  the trigger characters declared by each provider via the `triggers` getter.
-- **getProviderClasses()** – exposes the map of registered classes so the
-  settings tab can populate the "Add New Provider" dropdown.
-- **resetProviders()** – clears existing provider instances prior to reloading
-  them from updated settings.
+- **`RegisterableEntityProvider`** – Type describing provider classes that can be
+  registered. Requires static `providerTypeID`, `getDescription()`,
+  `getDefaultSettings()`, `buildSummarySetting()`, and optionally
+  `buildSimpleSettings()` / `buildAdvancedSettings()`.
 
-## Testing and Build
+## Trigger System
 
-- Tests reside under `tests/` and use Jest with `ts-jest`. Example tests cover
-  the suggestor and provider registry.
-- `esbuild.config.mjs` bundles the plugin to `main.js`. The `build` script also
-  runs TypeScript type checking.
+| Character | Scope | Behavior |
+|-----------|-------|----------|
+| `@` | Phrase | Spans spaces (`@John Doe`), takes priority over `:` and `/` |
+| `:` | Token | Stops at whitespace, for symbols/emoji |
+| `/` | Token | Stops at whitespace, for commands/actions |
 
-## Further Exploration
+Providers declare their trigger(s) via the `triggers` getter. The suggestor
+queries the registry for providers matching the detected trigger.
 
-To extend the plugin, examine existing providers under `src/Providers` and see
-how they integrate with external plugins or custom logic. Adding a new provider
-involves subclassing `EntityProvider`, registering the class in `main.ts`, and
-adding configuration UI in `EntitiesSettings.ts`.
+## Refresh Behavior
+
+Providers control caching via `getRefreshBehavior()`:
+
+| Behavior | Description |
+|----------|-------------|
+| `Default` | Refreshes when >200ms since last fetch |
+| `ShouldRefresh` | Refreshes on every keystroke |
+| `Never` | Fetched once, cached indefinitely |
+
+## External Plugin Dependencies
+
+Several providers integrate with optional external plugins:
+
+- **Dataview** – `DataviewEntityProvider` uses the Dataview API with retry logic.
+- **Natural Language Dates** – `DateEntityProvider` uses `nldates-obsidian`.
+- **Templater** – Template creation in `EntityProvider` base and `TemplateEntityProvider`.
+- **Metadata Menu** – `MetadataMenuProvider` reads file class definitions.
+
+All dependencies are guarded: providers return empty results when their
+dependency is missing.
+
+## Testing
+
+- Tests under `tests/` use Jest with `ts-jest` and `jsdom` environment.
+- Obsidian APIs are mocked inline per test file.
+- Coverage includes: trigger detection, provider filtering, refresh behavior,
+  suggestion selection, entity filters, and provider-specific logic.
+- Run with `npm test`; build with `npm run build` (includes type checking).
+
+## TypeScript Configuration
+
+- Full `strict` mode enabled (includes `strictNullChecks`,
+  `strictPropertyInitialization`, `strictFunctionTypes`, etc.).
+- `noFallthroughCasesInSwitch` enabled.
+- Target: ES6, Module: ESNext.
+
+## Adding a New Provider
+
+1. Create a new file in `src/Providers/` extending `EntityProvider<T>`.
+2. Define settings interface extending `EntityProviderUserSettings`.
+3. Implement required static methods: `providerTypeID`, `getDescription()`,
+   `getDefaultSettings()`, `buildSummarySetting()`.
+4. Implement `getEntityList(query, trigger)` returning `EntitySuggestionItem[]`.
+5. Use shared UI components from `src/ui/providerSettingsComponents.ts` for
+   common settings (icon picker, folder path, template creation).
+6. Use `EntityFilters` for frontmatter-based filtering if needed.
+7. Register the class in `main.ts` → `registerEntityProviders()`.
+8. Add tests in `tests/Providers/`.

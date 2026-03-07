@@ -37,6 +37,10 @@ export abstract class EntityProvider<T extends EntityProviderUserSettings> {
 		return RefreshBehavior.Default;
 	}
 
+	get isEnabled(): boolean {
+		return this.settings.enabled;
+	}
+
 	constructor(plugin: Plugin, settings: Partial<T>) {
 		this.plugin = plugin;
 		this.settings = { ...this.getDefaultSettings(), ...settings };
@@ -66,7 +70,6 @@ export abstract class EntityProvider<T extends EntityProviderUserSettings> {
 			suggestionText: `New ${template.entityName}: ${query}`,
 			icon: "plus-circle",
 			action: async () => {
-				console.log(`New ${template.entityName}: ${query}`);
 				await createNewNoteFromTemplate(
 					this.plugin,
 					template.templatePath,

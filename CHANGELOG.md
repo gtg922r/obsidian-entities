@@ -14,6 +14,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Removed
 ### Security
 
+## [0.4.3] - 2026-03-07
+### Fixed
+- Slash commands now trigger immediately after text (e.g., `word/command`) instead of requiring a leading space.
+
 ## [0.4.2] - 2025-08-31
 ### Fixed
 - Further fixes to pickup changelog in release notes
@@ -284,5 +288,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 [0.4.1]: https://github.com/gtg922r/obsidian-entities/compare/v0.4.0...v0.4.1
 
-[Unreleased]: https://github.com/gtg922r/obsidian-entities/compare/v0.4.2...HEAD
 [0.4.2]: https://github.com/gtg922r/obsidian-entities/compare/v0.4.1...v0.4.2
+
+[Unreleased]: https://github.com/gtg922r/obsidian-entities/compare/v0.4.3...HEAD
+[0.4.3]: https://github.com/gtg922r/obsidian-entities/compare/v0.4.2...v0.4.3

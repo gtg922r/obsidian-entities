@@ -1,5 +1,5 @@
 import { Plugin } from "obsidian";
-import { EntitiesSettingTab } from "./EntitiesSettings";
+import { EntitiesSettingTab, clearPendingSave } from "./EntitiesSettings";
 import { EntitiesSettings, DEFAULT_SETTINGS } from "./entities.types";
 import { EntitiesSuggestor } from "./EntitiesSuggestor";
 import ProviderRegistry from "./Providers/ProviderRegistry";
@@ -16,9 +16,9 @@ import { HelperEntityProvider } from "./Providers/HelperActionsProvider";
 import { CharacterProvider } from "./Providers/CharacterProvider";
 
 export default class Entities extends Plugin {
-	settings: EntitiesSettings;
-	suggestor: EntitiesSuggestor;
-	providerRegistry: ProviderRegistry;
+	settings!: EntitiesSettings;
+	suggestor!: EntitiesSuggestor;
+	providerRegistry!: ProviderRegistry;
 
 	async onload() {
 		await this.loadSettings();
@@ -33,7 +33,10 @@ export default class Entities extends Plugin {
 		this.loadEntityProviders();
 	}
 
-	onunload() {}
+	onunload() {
+		clearPendingSave();
+		this.providerRegistry.resetProviders();
+	}
 
 	registerEntityProviders() {
 		this.providerRegistry

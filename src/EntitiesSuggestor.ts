@@ -51,6 +51,8 @@ export class EntitiesSuggestor extends EditorSuggest<EntitySuggestionItem> {
 	// Track the last dismissed query
 	private lastDismissedQuery: EditorPosition | null = null;
 
+	private lastSuggestionCount = 0;
+
 	//empty constructor
 	constructor(plugin: Entities, registry: ProviderRegistry) {
 		super(plugin.app);
@@ -101,7 +103,13 @@ export class EntitiesSuggestor extends EditorSuggest<EntitySuggestionItem> {
 		tokenStart += 1;
 		const tokenStartChar = currentLineToCursor.charAt(tokenStart) ?? "";
 		const colonValid = tokenStartChar === ":" && hasNonWhitespaceAfter(tokenStart);
-		const slashValid = tokenStartChar === "/" && hasNonWhitespaceAfter(tokenStart);
+
+		// Slash trigger: find the last '/' within the current token so that
+		// typing e.g. "word/command" still activates the suggestor.
+		const tokenSlice = currentLineToCursor.slice(tokenStart);
+		const lastSlashInToken = tokenSlice.lastIndexOf("/");
+		const slashIndex = lastSlashInToken >= 0 ? tokenStart + lastSlashInToken : -1;
+		const slashValid = slashIndex >= 0 && hasNonWhitespaceAfter(slashIndex);
 
 		let triggerIndex = -1;
 		let triggerChar: string | null = null;
@@ -112,7 +120,7 @@ export class EntitiesSuggestor extends EditorSuggest<EntitySuggestionItem> {
 			triggerIndex = tokenStart;
 			triggerChar = ":";
 		} else if (slashValid) {
-			triggerIndex = tokenStart;
+			triggerIndex = slashIndex;
 			triggerChar = "/";
 		}
 
@@ -165,12 +173,13 @@ export class EntitiesSuggestor extends EditorSuggest<EntitySuggestionItem> {
 				//TODO: Support multiple trigger types from a provider with suggestion cacheing
 				let providerSuggestions: EntitySuggestionItem[];
 
-				if (
+				const shouldRefresh =
 					refreshBehavior === RefreshBehavior.ShouldRefresh ||
+					!this.providerSuggestions.has(providerId) ||
 					(refreshBehavior === RefreshBehavior.Default &&
-						currentTime - lastRefresh > refreshThreshold) ||
-					!this.providerSuggestions.has(providerId)
-				) {
+						currentTime - lastRefresh > refreshThreshold);
+
+				if (shouldRefresh) {
 					providerSuggestions = provider.getEntityList(
 						searchQuery,
 						trigger
@@ -180,22 +189,9 @@ export class EntitiesSuggestor extends EditorSuggest<EntitySuggestionItem> {
 						providerSuggestions
 					);
 					this.lastRefreshTime.set(providerId, currentTime);
-				} else if (
-					refreshBehavior === RefreshBehavior.Never &&
-					this.providerSuggestions.has(providerId)
-				) {
-					providerSuggestions =
-						this.providerSuggestions.get(providerId) || [];
 				} else {
-					providerSuggestions = provider.getEntityList(
-						searchQuery,
-						trigger
-					);
-					this.providerSuggestions.set(
-						providerId,
-						providerSuggestions
-					);
-					this.lastRefreshTime.set(providerId, currentTime);
+					providerSuggestions =
+						this.providerSuggestions.get(providerId) ?? [];
 				}
 
 				allSuggestions.push(...providerSuggestions);
@@ -216,11 +212,13 @@ export class EntitiesSuggestor extends EditorSuggest<EntitySuggestionItem> {
 
 		// Only fetch template suggestions if the trigger is '@'
 		if (trigger === TriggerCharacter.At) {
-			this.providerRegistry.getProviders().forEach((provider) => {
-				const templateSuggestions =
-					provider.getTemplateCreationSuggestions(searchQuery);
-				fuzzySearchResults.push(...templateSuggestions);
-			});
+			this.providerRegistry
+				.getProvidersForTrigger(trigger)
+				.forEach((provider) => {
+					const templateSuggestions =
+						provider.getTemplateCreationSuggestions(searchQuery);
+					fuzzySearchResults.push(...templateSuggestions);
+				});
 		}
 
 		const uniqueSuggestions = new Map<string, EntitySuggestionItem>();
@@ -232,6 +230,8 @@ export class EntitiesSuggestor extends EditorSuggest<EntitySuggestionItem> {
 		const sortedSuggestions = Array.from(uniqueSuggestions.values()).sort(
 			(a, b) => (b.match?.score ?? -10) - (a.match?.score ?? -10)
 		);
+
+		this.lastSuggestionCount = sortedSuggestions.length;
 
 		return sortedSuggestions;
 	}
@@ -319,14 +319,9 @@ export class EntitiesSuggestor extends EditorSuggest<EntitySuggestionItem> {
 	}
 
 	async close(): Promise<void> {
-		if (this.context) {
-			const { start } = this.context;
-			const suggestions = await this.getSuggestions(this.context);
-			if (suggestions && suggestions.length > 0) {
-				this.lastDismissedQuery = start;
-			}
+		if (this.context && this.lastSuggestionCount > 0) {
+			this.lastDismissedQuery = this.context.start;
 		}
-
 		super.close();
 	}
 }

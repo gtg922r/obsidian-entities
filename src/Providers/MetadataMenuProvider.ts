@@ -75,9 +75,7 @@ export class MetadataMenuProvider extends EntityProvider<MetadataMenuProviderUse
 		this.mdmPlugin = appWithPlugins.plugins?.getPlugin(
 			"metadata-menu"
 		) as MetadataMenuPlugin;
-		if (!this.mdmPlugin) {
-			console.log("Metadata Menu plugin not found.");
-		}
+
 	}
 
 	getEntityList(query: string): EntitySuggestionItem[] {
