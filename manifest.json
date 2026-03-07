@@ -1,8 +1,8 @@
 {
 	"id": "entities",
 	"name": "Entities",
-	"version": "0.4.3",
-	"minAppVersion": "1.5.7",
+	"version": "0.4.4",
+	"minAppVersion": "1.7.2",
 	"description": "Adds autocomplete of \"Entities\" like files or templates in a specific folder or a from a dataview query.",
 	"author": "RyanC",
 	"authorUrl": "https://github.com/gtg922r",

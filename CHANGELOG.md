@@ -14,6 +14,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Removed
 ### Security
 
+## [0.4.4] - 2026-03-07
+### Fixed
+- Migrated from removed `fuzzySearch`/`prepareQuery` API to `prepareFuzzySearch` for compatibility with Obsidian ≥1.7.2.
+### Changed
+- Minimum Obsidian version bumped to 1.7.2.
+- Obsidian API dependency updated from `^1.5.7-1` to `^1.7.2`.
+
 ## [0.4.3] - 2026-03-07
 ### Fixed
 - Slash commands now trigger immediately after text (e.g., `word/command`) instead of requiring a leading space.
@@ -290,5 +297,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 [0.4.2]: https://github.com/gtg922r/obsidian-entities/compare/v0.4.1...v0.4.2
 
-[Unreleased]: https://github.com/gtg922r/obsidian-entities/compare/v0.4.3...HEAD
 [0.4.3]: https://github.com/gtg922r/obsidian-entities/compare/v0.4.2...v0.4.3
+
+[Unreleased]: https://github.com/gtg922r/obsidian-entities/compare/v0.4.4...HEAD
+[0.4.4]: https://github.com/gtg922r/obsidian-entities/compare/v0.4.3...v0.4.4
