@@ -6,8 +6,7 @@ import {
 	TFile,
 	EditorSuggestContext,
 	setIcon,
-	fuzzySearch,
-	prepareQuery,
+	prepareFuzzySearch,
 	SearchResult,
 	EditorSuggestTriggerInfo,
 } from "obsidian";
@@ -197,14 +196,13 @@ export class EntitiesSuggestor extends EditorSuggest<EntitySuggestionItem> {
 				allSuggestions.push(...providerSuggestions);
 			});
 
-		// Prepare the search query for fuzzy search
-		const preparedQuery = prepareQuery(searchQuery);
+		// Prepare the fuzzy search callback
+		const fuzzyMatch = prepareFuzzySearch(searchQuery);
 
 		// Perform fuzzy search on the cached suggestions
 		const fuzzySearchResults: EntitySuggestionItem[] =
 			allSuggestions.flatMap((suggestionItem) => {
-				const match: SearchResult | null = fuzzySearch(
-					preparedQuery,
+				const match: SearchResult | null = fuzzyMatch(
 					suggestionItem.suggestionText
 				);
 				return match ? [{ ...suggestionItem, match }] : [];
