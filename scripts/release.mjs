@@ -45,7 +45,6 @@ function run(cmd, opts = {}) {
 // Parse CLI args: first non-flag is the release type; support --dry-run
 const args = process.argv.slice(2);
 const dryRun = args.includes("--dry-run") || args.includes("-n");
-const showTestLogs = args.includes("--show-test-logs");
 const type = args.find((a) => ["patch", "minor", "major"].includes(a));
 if (!type) {
 	fail("Usage: node scripts/release.mjs <patch|minor|major> [--dry-run|-n]");
@@ -69,16 +68,12 @@ try {
 	try { run("npm ci"); } catch { warn("npm ci failed, falling back to npm install"); run("npm install"); }
 	ok("Dependencies installed");
 
-	log("Step 4:", "Running tests");
-	run(showTestLogs ? "npm test --silent=false --verbose --runInBand" : "npm test");
-	ok("Tests passed");
-
-	log("Step 5:", "Building project");
-	run("npm run build");
-	ok("Build succeeded");
+	log("Step 4:", "Running release checks");
+	run("npm run check");
+	ok("Release checks passed");
 
 	log(
-		"Step 6:",
+		"Step 5:",
 		dryRun
 			? `Bumping version (${type}) without git tag/commit and updating changelog`
 			: `Bumping version (${type}) and updating changelog`
@@ -97,7 +92,7 @@ try {
 	);
 
 	log(
-		"Step 7:",
+		"Step 6:",
 		dryRun ? "Dry-run: would push commit and tags" : "Pushing commit and tags"
 	);
 	if (dryRun) {

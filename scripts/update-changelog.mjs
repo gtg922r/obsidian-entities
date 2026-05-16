@@ -209,12 +209,12 @@ function updateChangelog() {
 		(line) => !line.startsWith("[Unreleased]:") && !line.startsWith(`[${currentVersion}]:`)
 	);
 
-	const unreleasedLink = `[Unreleased]: ${repoUrl}/compare/v${currentVersion}...HEAD`;
+	const unreleasedLink = `[Unreleased]: ${repoUrl}/compare/${currentVersion}...HEAD`;
 	let currentVersionLink;
 	if (latestReleasedBefore) {
-		currentVersionLink = `[${currentVersion}]: ${repoUrl}/compare/v${latestReleasedBefore}...v${currentVersion}`;
+		currentVersionLink = `[${currentVersion}]: ${repoUrl}/compare/${latestReleasedBefore}...${currentVersion}`;
 	} else {
-		currentVersionLink = `[${currentVersion}]: ${repoUrl}/releases/tag/v${currentVersion}`;
+		currentVersionLink = `[${currentVersion}]: ${repoUrl}/releases/tag/${currentVersion}`;
 	}
 
 	// Ensure a blank line before link refs block
