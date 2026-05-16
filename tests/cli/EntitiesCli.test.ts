@@ -96,13 +96,14 @@ describe("registerEntitiesCli", () => {
 		expect(handlerFor(handlers, "entities").flags).toEqual({
 			format: {
 				value: "<text|json>",
-				description: "Output format.",
+				description: "Output format. Use json for automation.",
 			},
 		});
 		expect(handlerFor(handlers, "entities:create").flags).toEqual({
 			entity: {
 				value: "<entity>",
-				description: "Creation target id or unique entity name.",
+				description:
+					"Target id from `obsidian entities`, such as folder:person, or a unique entity name such as person.",
 				required: true,
 			},
 			name: {
@@ -111,11 +112,11 @@ describe("registerEntitiesCli", () => {
 				required: true,
 			},
 			open: {
-				description: "Open the created note when set to true.",
+				description: "Open the created note after creation.",
 			},
 			format: {
 				value: "<text|json>",
-				description: "Output format.",
+				description: "Output format. Use json for automation.",
 			},
 		});
 	});

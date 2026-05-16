@@ -6,14 +6,15 @@ import type ProviderRegistry from "../Providers/ProviderRegistry";
 const LIST_FLAGS: CliFlags = {
 	format: {
 		value: "<text|json>",
-		description: "Output format.",
+		description: "Output format. Use json for automation.",
 	},
 };
 
 const CREATE_FLAGS: CliFlags = {
 	entity: {
 		value: "<entity>",
-		description: "Creation target id or unique entity name.",
+		description:
+			"Target id from `obsidian entities`, such as folder:person, or a unique entity name such as person.",
 		required: true,
 	},
 	name: {
@@ -22,11 +23,11 @@ const CREATE_FLAGS: CliFlags = {
 		required: true,
 	},
 	open: {
-		description: "Open the created note when set to true.",
+		description: "Open the created note after creation.",
 	},
 	format: {
 		value: "<text|json>",
-		description: "Output format.",
+		description: "Output format. Use json for automation.",
 	},
 };
 
@@ -48,13 +49,13 @@ export function registerEntitiesCli(
 
 	cliPlugin.registerCliHandler(
 		"entities",
-		"List configured entity creation targets.",
+		"List configured Entities creation targets and stable ids for entities:create.",
 		LIST_FLAGS,
 		buildListHandler(buildService)
 	);
 	cliPlugin.registerCliHandler(
 		"entities:create",
-		"Create an entity note from a configured target.",
+		"Create an entity note using a target id or unique entity name from `obsidian entities`.",
 		CREATE_FLAGS,
 		buildCreateHandler(buildService)
 	);

@@ -66,6 +66,13 @@ obsidian entities
 obsidian entities format=json
 ```
 
+Learn the available commands and flags from the CLI itself:
+
+```bash
+obsidian help entities
+obsidian help entities:create
+```
+
 Create an entity using the same template creation configuration used by the `@` suggester:
 
 ```bash
