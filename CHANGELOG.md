@@ -8,10 +8,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Added Obsidian's official ESLint plugin with CI coverage for lint, tests, and builds.
 ### Fixed
 ### Changed
+- Modernized release publishing for BRAT by using GitHub Release prerelease metadata with production-shaped semver tags.
 ### Deprecated
 ### Removed
+- Removed the legacy beta-manifest release path in favor of GitHub Release assets.
 ### Security
 
 ## [0.4.4] - 2026-03-07

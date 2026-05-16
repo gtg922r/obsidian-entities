@@ -57,10 +57,35 @@ Open **Settings → Entities** to add providers and configure their options. Sta
 
 ## Development
 
-Run tests with:
+Run the local quality checks with:
 
 ```bash
+npm run lint
 npm test
+npm run build
+```
+
+Or run the full local check:
+
+```bash
+npm run check
+```
+
+## Releases
+
+Stable releases use production-shaped semver tags such as `0.4.5`:
+
+```bash
+npm run release:patch
+npm run release:minor
+npm run release:major
+```
+
+Beta testing with BRAT uses the same tag shape. Publish the GitHub Release as a prerelease instead of creating a beta manifest:
+
+```bash
+git tag 0.4.5
+npm run release:publish:brat -- 0.4.5
 ```
 
 Contributions are welcome via pull requests.
