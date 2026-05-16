@@ -31,10 +31,6 @@ jest.mock("../../src/entityCreation/EntityCreationSuggestions", () => ({
 	buildEntityCreationSuggestions: jest.fn(),
 }));
 
-jest.mock("../../src/ui/validationStatus", () => ({
-	setValidationStatus: jest.fn(),
-}));
-
 interface TestFileClass {
 	name: string;
 	options?: {
