@@ -12,6 +12,9 @@
 		"lint:fix": "eslint . --fix",
 		"check": "npm run lint && npm test && npm run build",
 		"release:check": "npm run check",
+		"release:assets": "node scripts/prepare-release-assets.mjs",
+		"release:publish": "node scripts/publish-release.mjs",
+		"release:publish:brat": "node scripts/publish-release.mjs --prerelease",
 		"release:patch": "node scripts/release.mjs patch",
 		"release:minor": "node scripts/release.mjs minor",
 		"release:major": "node scripts/release.mjs major"

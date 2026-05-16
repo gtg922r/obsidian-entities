@@ -1,5 +1,8 @@
 #!/usr/bin/env node
 import { execSync } from "child_process";
+import { readFileSync } from "fs";
+
+const EXACT_SEMVER = /^\d+\.\d+\.\d+$/;
 
 const COLORS = {
 	reset: "\x1b[0m",
@@ -83,6 +86,10 @@ try {
 	// In dry-run, run lifecycle scripts (to update CHANGELOG, etc.) but avoid tagging/committing
 	const versionCmd = `npm version ${type} -m "chore(release): %s"` + (dryRun ? " --no-git-tag-version" : "");
 	run(versionCmd);
+	const newVersion = JSON.parse(readFileSync("package.json", "utf8")).version;
+	if (!EXACT_SEMVER.test(newVersion)) {
+		fail(`npm version produced "${newVersion}". Releases require exact semver like 1.9.10.`);
+	}
 	ok(
 		dryRun
 			? "Version + lifecycle ran; files updated, no tag/commit"
@@ -95,12 +102,12 @@ try {
 	);
 	if (dryRun) {
 		run("git push --dry-run");
-		run("git push --tags --dry-run");
+		warn(`Dry-run: would push tag ${newVersion} and dispatch release.yml with prerelease=false.`);
 		ok("Dry-run complete. No changes pushed.");
 	} else {
 		run("git push");
-		run("git push --tags");
-		ok("Pushed to origin. GitHub Actions will build and publish the release.");
+		run(`node scripts/publish-release.mjs ${newVersion}`);
+		ok("Pushed to origin and dispatched the stable release workflow.");
 	}
 
 } catch (err) {
