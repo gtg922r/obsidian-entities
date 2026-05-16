@@ -13,6 +13,7 @@
 		"check": "npm run lint && npm test && npm run build",
 		"release:check": "npm run check",
 		"release:assets": "node scripts/prepare-release-assets.mjs",
+		"release:notes": "node scripts/extract-release-notes.mjs",
 		"release:publish": "node scripts/publish-release.mjs",
 		"release:publish:brat": "node scripts/publish-release.mjs --prerelease",
 		"release:patch": "node scripts/release.mjs patch",

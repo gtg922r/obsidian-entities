@@ -54,30 +54,26 @@ jobs:
       - name: Prepare release assets
         run: npm run release:assets -- ${{ inputs.tag }}
 
-      - name: Read changelog for release notes
-        id: changelog
-        uses: mindsers/changelog-reader-action@v2
-        with:
-          version: ${{ inputs.tag }}
-          path: ./CHANGELOG.md
-
-      - name: Prepare release body
-        id: release_notes
-        env:
-          CHANGELOG_LOG: ${{ steps.changelog.outputs.log }}
-        run: |
-          echo "body<<EOF" >> "$GITHUB_OUTPUT"
-          echo "$CHANGELOG_LOG" >> "$GITHUB_OUTPUT"
-          echo "EOF" >> "$GITHUB_OUTPUT"
+      - name: Prepare release notes
+        run: npm run release:notes -- ${{ inputs.tag }}
 
       - name: Publish GitHub Release
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: ${{ inputs.tag }}
-          name: ${{ inputs.tag }}
-          prerelease: ${{ inputs.prerelease }}
-          body: ${{ steps.release_notes.outputs.body }}
-          files: |
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ inputs.tag }}
+          IS_PRERELEASE: ${{ inputs.prerelease }}
+        run: |
+          args=(
+            "$RELEASE_TAG"
+            --title "$RELEASE_TAG"
+            --notes-file dist/release/release-notes.md
             dist/release/main.js
             dist/release/manifest.json
             dist/release/styles.css
+          )
+
+          if [[ "$IS_PRERELEASE" == "true" ]]; then
+            args+=(--prerelease)
+          fi
+
+          gh release create "${args[@]}"
