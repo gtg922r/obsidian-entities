@@ -124,7 +124,7 @@ export class DataviewEntityProvider extends EntityProvider<DataviewProviderUserS
 			let pages;
 			try {
 				pages = dv.pages(query);
-			} catch (error) {
+			} catch {
 				return "error";
 			}
 			return pages.length > 0 ? "ok" : "empty";
@@ -350,7 +350,7 @@ export class DataviewEntityProvider extends EntityProvider<DataviewProviderUserS
 				if (dv || attempts >= maxAttempts) {
 					resolve(dv);
 				} else {
-						setTimeout(attemptFetching, retryDelay);
+					window.setTimeout(attemptFetching, retryDelay);
 				}
 			};
 

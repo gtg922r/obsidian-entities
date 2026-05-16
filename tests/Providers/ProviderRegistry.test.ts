@@ -73,7 +73,6 @@ describe("ProviderRegistry tests", () => {
 	let registry: ProviderRegistry;
 
 	beforeEach(() => {
-		// eslint-disable-next-line @typescript-eslint/no-explicit-any
 		(ProviderRegistry as any).instance = null;
 		ProviderRegistry.initializeRegistry(mockPlugin);
 		registry = ProviderRegistry.getInstance();
@@ -87,7 +86,6 @@ describe("ProviderRegistry tests", () => {
 
 	test("registerProviderType should register a provider class", () => {
 		registry.registerProviderType(MockEntityProvider);
-		// eslint-disable-next-line @typescript-eslint/no-explicit-any
 		const providerClass = (registry as any).providerClasses.get(mockProviderTypeID);
 		expect(providerClass).toBe(MockEntityProvider);
 	});
@@ -104,7 +102,6 @@ describe("ProviderRegistry tests", () => {
 		const providers = registry.getProviders();
 		expect(providers.length).toBe(1);
 		expect(providers[0]).toBeInstanceOf(MockEntityProvider);
-		// eslint-disable-next-line @typescript-eslint/no-explicit-any
 		expect((providers[0] as any).settings).toEqual(settings);
 	});
 

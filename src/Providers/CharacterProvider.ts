@@ -48,7 +48,6 @@ const emojiDictionary: CharacterKeywordDictionary = Object.entries(
 	return acc;
 }, {} as CharacterKeywordDictionary);
 
-// eslint-disable-next-line @typescript-eslint/no-var-requires
 const fontAwesomeDictionary = require("./fontAwesomeDictionary.json") as CharacterKeywordDictionary;
 
 

@@ -1,4 +1,3 @@
-/* eslint-disable no-mixed-spaces-and-tabs */
 import {
 	PluginSettingTab,
 	Setting,
@@ -12,13 +11,13 @@ import { EntitiesNotice, IconPickerModal } from "./userComponents";
 import { EntityProviderUserSettings } from "./Providers/EntityProvider";
 import { RegisterableEntityProvider } from "./Providers/ProviderRegistry";
 
-let saveTimeout: NodeJS.Timeout | undefined;
+let saveTimeout: number | undefined;
 
 export function clearPendingSave(): void {
-    if (saveTimeout !== undefined) {
-        clearTimeout(saveTimeout);
-        saveTimeout = undefined;
-    }
+	if (saveTimeout !== undefined) {
+		window.clearTimeout(saveTimeout);
+		saveTimeout = undefined;
+	}
 }
 
 function updateProviderAtIndexAndSaveAndReload(
@@ -29,10 +28,10 @@ function updateProviderAtIndexAndSaveAndReload(
 	shouldRefreshUI = true
 ) {
 	if (saveTimeout !== undefined) {
-		clearTimeout(saveTimeout);
+		window.clearTimeout(saveTimeout);
 	}
 
-	saveTimeout = setTimeout(
+	saveTimeout = window.setTimeout(
 		() => {
 			settingsTab.plugin.settings.providerSettings[index] =
 				providerConfig;
@@ -260,11 +259,6 @@ export class EntitiesSettingTab extends PluginSettingTab {
 					);
 			}
 		);
-
-		new Setting(containerEl)
-			.setName("Entities Plugin Settings")
-			.setDesc("Settings for the Entities Plugin")
-			.setHeading();
 
 		new Setting(containerEl)
 			.setName("Reload Providers")

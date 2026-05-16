@@ -42,7 +42,6 @@ describe("onTrigger tests", () => {
 			getProviders: jest.fn(),
 			getProvidersForTrigger: jest.fn(),
 		} as unknown as jest.Mocked<ProviderRegistry>;
-		// eslint-disable-next-line @typescript-eslint/no-explicit-any
 		suggestor = new EntitiesSuggestor(mockPlugin, registry);
 
 		// Mocking the editor instance

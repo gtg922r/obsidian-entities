@@ -138,7 +138,7 @@ export class MetadataMenuProvider extends EntityProvider<MetadataMenuProviderUse
 						query,
 						false
 					);
-					await new Promise((resolve) => setTimeout(resolve, 20));
+					await new Promise((resolve) => window.setTimeout(resolve, 20));
 					return `[[${query}]]`;
 				},
 				match: { score: -10, matches: [] } as SearchResult,

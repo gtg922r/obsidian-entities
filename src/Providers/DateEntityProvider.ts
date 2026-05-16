@@ -67,12 +67,15 @@ export class DateEntityProvider extends EntityProvider<DatesProviderUserSettings
 
 	private initialize() {
 		const appWithPlugins = this.plugin.app as AppWithPlugins;
-		this.nlpPlugin = appWithPlugins.plugins?.getPlugin(
+		const nlpPlugin = appWithPlugins.plugins?.getPlugin(
 			"nldates-obsidian"
-		) as NLPlugin;
-		if (!this.nlpPlugin || this.nlpPlugin.parseDate === undefined) {
-
+		) as Partial<NLPlugin> | undefined;
+		if (!nlpPlugin || typeof nlpPlugin.parseDate !== "function") {
+			this.nlpPlugin = undefined;
+			return;
 		}
+
+		this.nlpPlugin = nlpPlugin as NLPlugin;
 	}
 
 	getEntityList(query: string): EntitySuggestionItem[] {
@@ -168,7 +171,6 @@ export class DateEntityProvider extends EntityProvider<DatesProviderUserSettings
 		}
 
 		const weekMoment = moment().year(parseInt(year)).isoWeek(week).startOf('isoWeek');
-		const weekStartDate = weekMoment.format('YYYY-MM-DD');
 		const weekStartDateShort = weekMoment.format('M/D');
 
 		return [{

@@ -182,8 +182,6 @@ describe("CharacterProvider", () => {
 			const provider = new CharacterProvider(mockPlugin, {});
 			// Search for a common emoji keyword that might be a synonym
 			const results = provider.getEntityList("happy", TriggerCharacter.Colon);
-			// There should be some results with "for" indicating synonym match
-			const hasSynonymIndicator = results.some(r => r.suggestionText.includes('for "'));
 			// This might not always be true depending on the emoji dictionary
 			// but the search should still work
 			expect(results.length).toBeGreaterThan(0);
