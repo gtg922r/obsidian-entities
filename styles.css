@@ -126,3 +126,18 @@ body {
 	display: flex;
 }
 
+.extra-setting-button.entities-validation-status-success {
+	color: var(--text-success);
+}
+
+.extra-setting-button.entities-validation-status-muted {
+	color: var(--text-muted);
+}
+
+.extra-setting-button.entities-validation-status-warning {
+	color: var(--text-warning);
+}
+
+.extra-setting-button.entities-validation-status-error {
+	color: var(--text-error);
+}

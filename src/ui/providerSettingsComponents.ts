@@ -2,6 +2,7 @@ import { App, ExtraButtonComponent, Plugin, Setting, TFile } from "obsidian";
 import { entityFromTemplateSettings } from "../entities.types";
 import { IconPickerModal, openTemplateDetailsModal } from "../userComponents";
 import { FolderSuggest } from "./file-suggest";
+import { setValidationStatus } from "./validationStatus";
 
 /**
  * Builds an icon picker setting row.
@@ -108,21 +109,27 @@ export function buildFolderPathSummarySetting<T extends { path: string }>(
 	let folderExistsIcon: ExtraButtonComponent;
 	const updateFolderExistsIcon = (path: string) => {
 		if (folderExists(path) && folderExistsIcon) {
-			if (options?.showNoteCount) {
-				const folder = plugin.app.vault.getFolderByPath(path);
-				const noteCount = folder?.children.filter(
-					(file) => file instanceof TFile
-				).length;
-				folderExistsIcon.setTooltip(`Folder Found (${noteCount} notes)`);
-			} else {
-				folderExistsIcon.setTooltip("Folder Found");
-			}
-			folderExistsIcon.setIcon("folder-check");
-			folderExistsIcon.extraSettingsEl.style.color = "";
+			const folder = plugin.app.vault.getFolderByPath(path);
+			const noteCount = folder?.children.filter(
+				(file) => file instanceof TFile
+			).length;
+			const tooltip = options?.showNoteCount
+				? `Folder Found (${noteCount} notes)`
+				: "Folder Found";
+
+			setValidationStatus(
+				folderExistsIcon,
+				"folder-check",
+				tooltip,
+				"neutral"
+			);
 		} else if (folderExistsIcon) {
-			folderExistsIcon.setIcon("folder-x");
-			folderExistsIcon.setTooltip("Folder Not Found");
-			folderExistsIcon.extraSettingsEl.style.color = "var(--text-error)";
+			setValidationStatus(
+				folderExistsIcon,
+				"folder-x",
+				"Folder not found",
+				"error"
+			);
 		}
 	};
 	settingContainer.addExtraButton((button) => {

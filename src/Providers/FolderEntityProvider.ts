@@ -11,6 +11,7 @@ import { EntityFilter } from "src/entities.types";
 import { applyFiltersToFiles } from "./EntityFilters";
 import { FrontmatterKeySuggest } from "src/ui/FrontmatterKeySuggest";
 import { buildIconPickerSetting, buildTemplateCreationSetting, buildFolderPathSummarySetting } from "src/ui/providerSettingsComponents";
+import { setValidationStatus } from "src/ui/validationStatus";
 
 const folderProviderTypeID = "folder";
 
@@ -201,21 +202,28 @@ export class FolderEntityProvider extends EntityProvider<FolderProviderUserSetti
 				const updateRegexStatusIcon = (regex: string) => {
 					const status = validateRegex(regex);
 					if (status === "valid") {
-						regexStatusIcon.setIcon("checkmark");
-						regexStatusIcon.setTooltip("Valid regex");
-						regexStatusIcon.extraSettingsEl.style.color = "";
+						setValidationStatus(
+							regexStatusIcon,
+							"checkmark",
+							"Valid regex",
+							"neutral"
+						);
 					} else if (status === "invalid") {
-						regexStatusIcon.setIcon("cross");
-						regexStatusIcon.setTooltip("Invalid regex");
-						regexStatusIcon.extraSettingsEl.style.color =
-							"var(--text-error)";
+						setValidationStatus(
+							regexStatusIcon,
+							"cross",
+							"Invalid regex",
+							"error"
+						);
 					} else {
-						regexStatusIcon.setIcon("help");
-						regexStatusIcon.setTooltip("Empty regex");
-						regexStatusIcon.extraSettingsEl.style.color =
-							"var(--text-muted)";
-					}
-				};
+							setValidationStatus(
+								regexStatusIcon,
+								"help",
+								"Empty regex",
+								"muted"
+							);
+						}
+					};
 
 				filterSetting.addExtraButton((button) => {
 					regexStatusIcon = button;

@@ -5,6 +5,7 @@ import { AppWithPlugins } from "src/entities.types";
 import { EntitiesNotice } from "src/userComponents";
 import { RefreshBehavior } from "./EntityProvider";
 import { IconPickerModal } from "src/userComponents";
+import { setValidationStatus } from "src/ui/validationStatus";
 
 const dateProviderTypeID = "nlDates";
 
@@ -214,16 +215,20 @@ export class DateEntityProvider extends EntityProvider<DatesProviderUserSettings
 
 		settingContainer.addExtraButton((button) => {
 			if (!pluginIsConfigured) {
-				button.setIcon("package-x");
-				button.setTooltip("NLDates Plugin Not Found");
-				button.extraSettingsEl.style.color = "var(--text-error)";
+				setValidationStatus(
+					button,
+					"package-x",
+					"NLDates plugin not found",
+					"error"
+				);
 				return;
 			} else if (pluginConflicts) {
-				button.setIcon("alert-triangle");
-				button.setTooltip(
-					"NLDates Plugin Conflicts with Autocomplete!"
+				setValidationStatus(
+					button,
+					"alert-triangle",
+					"NLDates plugin conflicts with autocomplete!",
+					"error"
 				);
-				button.extraSettingsEl.style.color = "var(--text-error)";
 				button.onClick(() => {
 					new EntitiesNotice(
 						"NLDates Plugin Conflicts with Autocomplete. " +
@@ -233,9 +238,12 @@ export class DateEntityProvider extends EntityProvider<DatesProviderUserSettings
 				});
 				return;
 			} else {
-				button.setIcon("package-check");
-				button.setTooltip("NLDates Plugin OK");
-				button.extraSettingsEl.style.color = "";
+				setValidationStatus(
+					button,
+					"package-check",
+					"NLDates plugin OK",
+					"neutral"
+				);
 			}
 		});
 	}

@@ -16,6 +16,7 @@ import { EntityFilter } from "src/entities.types";
 import { buildIconPickerSetting, buildTemplateCreationSetting } from "src/ui/providerSettingsComponents";
 import { applyFiltersToQueryResults } from "./EntityFilters";
 import { FrontmatterKeySuggest } from "src/ui/FrontmatterKeySuggest";
+import { setValidationStatus } from "src/ui/validationStatus";
 
 const dataviewProviderTypeID = "dataview";
 
@@ -144,23 +145,33 @@ export class DataviewEntityProvider extends EntityProvider<DataviewProviderUserS
 					plugin.app
 				);
 				const numberNotesFromQuery = dv?.pages(query).length;
-				queryOKIcon.setIcon("search-check");
-				queryOKIcon.setTooltip(
-					`Dataview Source OK (${numberNotesFromQuery} notes)`
+				setValidationStatus(
+					queryOKIcon,
+					"search-check",
+					`Dataview Source OK (${numberNotesFromQuery} notes)`,
+					"neutral"
 				);
-				queryOKIcon.extraSettingsEl.style.color = "";
 			} else if (queryIsOK(query) === "empty") {
-				queryOKIcon.setIcon("search-x");
-				queryOKIcon.setTooltip("Dataview Source Valid but Empty");
-				queryOKIcon.extraSettingsEl.style.color = "var(--text-warning)";
+				setValidationStatus(
+					queryOKIcon,
+					"search-x",
+					"Dataview source valid but empty",
+					"warning"
+				);
 			} else if (queryIsOK(query) === "error") {
-				queryOKIcon.setIcon("alert-triangle");
-				queryOKIcon.setTooltip("Dataview Source Error");
-				queryOKIcon.extraSettingsEl.style.color = "var(--text-error)";
+				setValidationStatus(
+					queryOKIcon,
+					"alert-triangle",
+					"Dataview source error",
+					"error"
+				);
 			} else if (queryIsOK(query) === "dv not found") {
-				queryOKIcon.setIcon("package-x");
-				queryOKIcon.setTooltip("Dataview Plugin Not Found!");
-				queryOKIcon.extraSettingsEl.style.color = "var(--text-error)";
+				setValidationStatus(
+					queryOKIcon,
+					"package-x",
+					"Dataview plugin not found!",
+					"error"
+				);
 			}
 		};
 
@@ -258,21 +269,28 @@ export class DataviewEntityProvider extends EntityProvider<DataviewProviderUserS
 				const updateRegexStatusIcon = (regex: string) => {
 					const status = validateRegex(regex);
 					if (status === "valid") {
-						regexStatusIcon.setIcon("checkmark");
-						regexStatusIcon.setTooltip("Valid regex");
-						regexStatusIcon.extraSettingsEl.style.color = "";
+						setValidationStatus(
+							regexStatusIcon,
+							"checkmark",
+							"Valid regex",
+							"neutral"
+						);
 					} else if (status === "invalid") {
-						regexStatusIcon.setIcon("cross");
-						regexStatusIcon.setTooltip("Invalid regex");
-						regexStatusIcon.extraSettingsEl.style.color =
-							"var(--text-error)";
+						setValidationStatus(
+							regexStatusIcon,
+							"cross",
+							"Invalid regex",
+							"error"
+						);
 					} else {
-						regexStatusIcon.setIcon("help");
-						regexStatusIcon.setTooltip("Empty regex");
-						regexStatusIcon.extraSettingsEl.style.color =
-							"var(--text-muted)";
-					}
-				};
+							setValidationStatus(
+								regexStatusIcon,
+								"help",
+								"Empty regex",
+								"muted"
+							);
+						}
+					};
 
 				filterSetting.addExtraButton((button) => {
 					regexStatusIcon = button;
