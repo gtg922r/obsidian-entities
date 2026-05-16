@@ -37,13 +37,13 @@ const obsidianCompatibilityRules = {
 };
 
 const obsidianAdvisoryRules = {
-	"obsidianmd/no-static-styles-assignment": "warn",
-	"obsidianmd/prefer-abstract-input-suggest": "warn",
+	"obsidianmd/no-static-styles-assignment": "error",
+	"obsidianmd/prefer-abstract-input-suggest": "error",
 	"obsidianmd/prefer-active-doc": "warn",
-	"obsidianmd/prefer-window-timers": "warn",
-	"obsidianmd/settings-tab/no-manual-html-headings": "warn",
-	"obsidianmd/settings-tab/no-problematic-settings-headings": "warn",
-	"obsidianmd/ui/sentence-case": "warn",
+	"obsidianmd/prefer-window-timers": "error",
+	"obsidianmd/settings-tab/no-manual-html-headings": "error",
+	"obsidianmd/settings-tab/no-problematic-settings-headings": "error",
+	"obsidianmd/ui/sentence-case": "error",
 };
 
 export default tseslint.config(

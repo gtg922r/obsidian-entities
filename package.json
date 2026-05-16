@@ -8,7 +8,7 @@
 		"build": "tsc -noEmit -skipLibCheck && node esbuild.config.mjs production",
 		"version": "node version-bump.mjs && node scripts/update-changelog.mjs && git add manifest.json versions.json package.json package-lock.json CHANGELOG.md",
 		"test": "jest",
-		"lint": "eslint .",
+		"lint": "eslint . --max-warnings=0",
 		"lint:fix": "eslint . --fix",
 		"check": "npm run lint && npm test && npm run build",
 		"release:check": "npm run check",
