@@ -192,6 +192,7 @@ export abstract class TextInputSuggest<T> implements ISuggestOwner<T> {
     (<any>this.app).keymap.pushScope(this.scope);
 
     container.appendChild(this.suggestEl);
+    // eslint-disable-next-line obsidianmd/prefer-abstract-input-suggest -- This custom suggest preserves caller-controlled no-suggestion closing and additional popover classes, which AbstractInputSuggest does not expose in the installed API.
     this.popper = createPopper(inputEl, this.suggestEl, {
       placement: "bottom-start",
       modifiers: [
