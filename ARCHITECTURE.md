@@ -23,6 +23,11 @@ This document explains the overall layout and flow of the **Entities** Obsidian 
 │   │   ├── file-suggest.ts              # File/folder suggesters
 │   │   ├── FrontmatterKeySuggest.ts     # Frontmatter key autocomplete
 │   │   └── providerSettingsComponents.ts # Shared settings UI builders
+│   ├── cli/            # Native Obsidian CLI handlers
+│   │   └── EntitiesCli.ts
+│   ├── entityCreation/ # Shared template-backed entity creation flow
+│   │   ├── EntityCreationService.ts
+│   │   └── EntityCreationSuggestions.ts
 │   ├── EntitiesSuggestor.ts   # EditorSuggest implementation
 │   ├── EntitiesSettings.ts    # Settings tab & modal
 │   ├── entities.types.ts      # Shared types & interfaces
@@ -45,6 +50,8 @@ This document explains the overall layout and flow of the **Entities** Obsidian 
    - Registers all provider classes.
    - Instantiates provider instances from saved settings.
    - Creates an `EntitiesSuggestor` and registers it with Obsidian.
+   - Registers native Obsidian CLI handlers when the host Obsidian version
+     exposes `registerCliHandler`.
    - On unload, cleans up pending saves and resets providers.
 
 2. **`EntitiesSuggestor`** – Implements `EditorSuggest`:
@@ -100,11 +107,36 @@ Shared UI builders eliminating duplication across provider settings:
   and optional note count.
 - `entityTemplateStatusLabel()` – Human-readable template status string.
 
+### Entity Creation (`src/entityCreation/`)
+
+Template-backed entity creation is shared between the editor suggester and the
+native Obsidian CLI:
+
+- `EntityCreationService` lists enabled provider creation targets, assigns
+  stable ids, resolves ids or unique entity names, and calls the template
+  creation utility.
+- `EntityCreationSuggestions` adapts those creation definitions into the
+  low-scored `New <Entity>: <query>` suggestion items used by the editor UI.
+
+Providers expose `EntityCreationDefinition` objects through
+`getEntityCreationDefinitions()`. This keeps provider discovery synchronous
+while ensuring UI actions and CLI commands use the same target model.
+
+### CLI (`src/cli/EntitiesCli.ts`)
+
+`registerEntitiesCli()` registers the native `entities` and `entities:create`
+commands through Obsidian's `registerCliHandler` API. The registration is
+guarded so older Obsidian versions continue to load the plugin without CLI
+support. Handlers resolve providers lazily on each invocation so settings
+changes are reflected without a plugin reload.
+
 ## Major Interfaces
 
 - **`EntityProvider<T>`** (abstract base class)
   - Holds provider settings and plugin reference.
   - Defines `getEntityList(query, trigger)` (sync) and optional template creation.
+  - Exposes `getEntityCreationDefinitions()` for template-backed creation
+    targets shared by suggestions and CLI commands.
   - Exposes `triggers` getter, `isEnabled` getter, and `getRefreshBehavior()`.
 
 - **`ProviderRegistry`** (singleton)
@@ -117,6 +149,12 @@ Shared UI builders eliminating duplication across provider settings:
   - Collects and caches suggestions per provider with configurable refresh.
   - Performs fuzzy search and deduplication.
   - Handles text insertion and provider actions.
+
+- **`EntityCreationService`**
+  - Lists creation targets from enabled providers.
+  - Resolves exact target ids and unique entity names.
+  - Creates notes through the existing template utility and returns structured
+    results for CLI formatting.
 
 - **`RegisterableEntityProvider`** – Type describing provider classes that can be
   registered. Requires static `providerTypeID`, `getDescription()`,

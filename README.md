@@ -55,6 +55,26 @@ npm run build
 
 Open **Settings → Entities** to add providers and configure their options. Start typing `@`, `:` or `/` to see the autocomplete menu.
 
+## Obsidian CLI
+
+Entities registers native Obsidian CLI commands when running in Obsidian 1.12.2 or newer.
+
+List configured entity creation targets:
+
+```bash
+obsidian entities
+obsidian entities format=json
+```
+
+Create an entity using the same template creation configuration used by the `@` suggester:
+
+```bash
+obsidian entities:create entity=person name="Ada Lovelace"
+obsidian entities:create entity=folder:person name="Ada Lovelace" open format=json
+```
+
+Use `obsidian entities` to find stable target ids. If multiple providers expose the same entity name, `entities:create` requires the id.
+
 ## Development
 
 Run tests with:
