@@ -122,6 +122,12 @@ Providers expose `EntityCreationDefinition` objects through
 `getEntityCreationDefinitions()`. This keeps provider discovery synchronous
 while ensuring UI actions and CLI commands use the same target model.
 
+Creation definitions can be template-backed with `templatePath` and
+`folderPath`, or provider-backed with a custom `create()` handler. Providers can
+also attach CLI discovery metadata such as `description`, `inputLabel`, and
+`examples`; this metadata is returned by `obsidian entities format=json` so
+agents can learn the expected input format before calling `entities:create`.
+
 ### CLI (`src/cli/EntitiesCli.ts`)
 
 `registerEntitiesCli()` registers the native `entities` and `entities:create`
@@ -153,8 +159,9 @@ changes are reflected without a plugin reload.
 - **`EntityCreationService`**
   - Lists creation targets from enabled providers.
   - Resolves exact target ids and unique entity names.
-  - Creates notes through the existing template utility and returns structured
-    results for CLI formatting.
+  - Creates notes through either the existing template utility or a
+    provider-supplied creation handler.
+  - Returns structured results for CLI formatting.
 
 - **`RegisterableEntityProvider`** – Type describing provider classes that can be
   registered. Requires static `providerTypeID`, `getDescription()`,

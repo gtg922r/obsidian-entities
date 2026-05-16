@@ -20,7 +20,7 @@ jest.mock("obsidian", () => ({
 
 // Mock entitiesUtilities
 jest.mock("../../src/entitiesUtilities", () => ({
-	createNewNoteFromTemplate: jest.fn().mockResolvedValue(undefined),
+	createNewNoteFromTemplate: jest.fn().mockResolvedValue({ path: "People/Alice.md" }),
 }));
 
 // Test implementation of EntityProvider

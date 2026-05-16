@@ -9,9 +9,13 @@ import { createNewNoteFromTemplate } from "src/entitiesUtilities";
 export interface EntityCreationDefinition {
 	providerTypeID: string;
 	entityName: string;
-	templatePath: string;
-	folderPath: string;
+	templatePath?: string;
+	folderPath?: string;
 	icon?: string;
+	description?: string;
+	inputLabel?: string;
+	examples?: string[];
+	create?: EntityCreationHandler;
 }
 
 /** Creation definition with the stable CLI/UI target id assigned. */
@@ -25,10 +29,28 @@ export interface EntityCreationResult {
 	entityName: string;
 	name: string;
 	link: string;
-	templatePath: string;
-	folderPath: string;
+	templatePath?: string;
+	folderPath?: string;
 	path?: string;
 }
+
+export interface EntityCreationHandlerContext {
+	plugin: Plugin;
+	target: EntityCreationTarget;
+	name: string;
+	openNewNote: boolean;
+}
+
+export interface EntityCreationHandlerResult {
+	link?: string;
+	path?: string;
+	templatePath?: string;
+	folderPath?: string;
+}
+
+export type EntityCreationHandler = (
+	context: EntityCreationHandlerContext
+) => Promise<EntityCreationHandlerResult> | EntityCreationHandlerResult;
 
 /** Request to create by exact target id or by a unique entity name. */
 export type EntityCreationRequest =
@@ -76,27 +98,26 @@ export class EntityCreationService {
 	/** Creates a note from the resolved target's template. */
 	async create(request: EntityCreationRequest): Promise<EntityCreationResult> {
 		const target = this.resolveTarget(request);
-		const createdFile = await createNewNoteFromTemplate(
+		const creationResult = await createEntityFromDefinition(
 			this.plugin,
-			target.templatePath,
-			target.folderPath,
+			target,
 			request.name,
-			request.openNewNote ?? false
+			request.openNewNote ?? false,
+			target.id
 		);
-		if (!createdFile) {
-			throw new Error(
-				`Entity creation failed for "${request.name}" using target "${target.id}".`
-			);
-		}
 
 		return {
 			id: target.id,
 			entityName: target.entityName,
 			name: request.name,
-			link: `[[${request.name}]]`,
-			templatePath: target.templatePath,
-			folderPath: target.folderPath,
-			path: createdFile.path,
+			link: creationResult.link ?? `[[${request.name}]]`,
+			...(creationResult.templatePath
+				? { templatePath: creationResult.templatePath }
+				: {}),
+			...(creationResult.folderPath !== undefined
+				? { folderPath: creationResult.folderPath }
+				: {}),
+			...(creationResult.path ? { path: creationResult.path } : {}),
 		};
 	}
 
@@ -142,4 +163,53 @@ function normalizeIDPart(value: string, fallback: string): string {
 
 function normalizeEntityName(value: string): string {
 	return value.toLowerCase();
+}
+
+export async function createEntityFromDefinition(
+	plugin: Plugin,
+	definition: EntityCreationDefinition,
+	name: string,
+	openNewNote: boolean,
+	targetId = `${definition.providerTypeID}:${definition.entityName}`
+): Promise<EntityCreationHandlerResult> {
+	const target: EntityCreationTarget = {
+		id: targetId,
+		...definition,
+	};
+
+	if (definition.create) {
+		return definition.create({
+			plugin,
+			target,
+			name,
+			openNewNote,
+		});
+	}
+
+	if (!definition.templatePath) {
+		throw new Error(
+			`Entity creation target "${targetId}" does not define a template or creation handler.`
+		);
+	}
+
+	const folderPath = definition.folderPath ?? "";
+	const createdFile = await createNewNoteFromTemplate(
+		plugin,
+		definition.templatePath,
+		folderPath,
+		name,
+		openNewNote
+	);
+	if (!createdFile) {
+		throw new Error(
+			`Entity creation failed for "${name}" using target "${targetId}".`
+		);
+	}
+
+	return {
+		link: `[[${name}]]`,
+		templatePath: definition.templatePath,
+		folderPath,
+		path: createdFile.path,
+	};
 }

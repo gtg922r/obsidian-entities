@@ -71,8 +71,17 @@ function buildListHandler(buildService: () => EntityCreationService): CliHandler
 					id: target.id,
 					entity: target.entityName,
 					provider: target.providerTypeID,
-					templatePath: target.templatePath,
-					folderPath: target.folderPath,
+					...(target.description
+						? { description: target.description }
+						: {}),
+					...(target.inputLabel ? { inputLabel: target.inputLabel } : {}),
+					...(target.examples ? { examples: target.examples } : {}),
+					...(target.templatePath
+						? { templatePath: target.templatePath }
+						: {}),
+					...(target.folderPath !== undefined
+						? { folderPath: target.folderPath }
+						: {}),
 					...(target.icon ? { icon: target.icon } : {}),
 				}))
 			);
@@ -83,14 +92,17 @@ function buildListHandler(buildService: () => EntityCreationService): CliHandler
 		}
 
 		return [
-			"id\tentity\tprovider\ttemplatePath\tfolderPath\ticon",
+			"id\tentity\tprovider\tdescription\tinputLabel\texamples\ttemplatePath\tfolderPath\ticon",
 			...targets.map((target) =>
 				[
 					target.id,
 					target.entityName,
 					target.providerTypeID,
-					target.templatePath,
-					target.folderPath,
+					target.description ?? "",
+					target.inputLabel ?? "",
+					target.examples?.join(", ") ?? "",
+					target.templatePath ?? "",
+					target.folderPath ?? "",
 					target.icon ?? "",
 				].join("\t")
 			),
@@ -134,8 +146,8 @@ function toCreateJson(result: EntityCreationResult): Record<string, string> {
 		name: result.name,
 		link: result.link,
 		...(result.path ? { path: result.path } : {}),
-		templatePath: result.templatePath,
-		folderPath: result.folderPath,
+		...(result.templatePath ? { templatePath: result.templatePath } : {}),
+		...(result.folderPath !== undefined ? { folderPath: result.folderPath } : {}),
 	};
 }
 

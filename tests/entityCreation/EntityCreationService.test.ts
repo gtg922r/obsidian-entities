@@ -97,6 +97,9 @@ describe("EntityCreationService", () => {
 					entityName: "Person",
 					templatePath: "Templates/Person.md",
 					folderPath: "People",
+					description: "Create a person note.",
+					inputLabel: "Person name",
+					examples: ["Ada Lovelace", "Grace Hopper"],
 				},
 				{
 					entityName: "Movie Character",
@@ -120,6 +123,9 @@ describe("EntityCreationService", () => {
 				entityName: "Person",
 				templatePath: "Templates/Person.md",
 				folderPath: "People",
+				description: "Create a person note.",
+				inputLabel: "Person name",
+				examples: ["Ada Lovelace", "Grace Hopper"],
 			},
 			{
 				id: "folder-provider:movie-character",
@@ -267,6 +273,70 @@ describe("EntityCreationService", () => {
 			"People",
 			"Bob",
 			false
+		);
+	});
+
+	test("creates through a provider-specific creation handler", async () => {
+		const create = jest.fn().mockResolvedValue({
+			link: "[[Weeks/2026-W01|2026-W01]]",
+			path: "Weeks/2026-W01.md",
+			folderPath: "Weeks",
+		});
+		const service = new EntityCreationService(plugin, [
+			provider("Dates", true, [
+				{
+					entityName: "Week",
+					description: "Create a weekly note from an ISO week.",
+					inputLabel: "ISO week or natural week phrase",
+					examples: ["this week", "next week", "2026-W01"],
+					icon: "calendar-range",
+					create,
+				},
+			]),
+		]);
+
+		await expect(
+			service.create({
+				entityName: "week",
+				name: "2026-W01",
+				openNewNote: true,
+			})
+		).resolves.toEqual({
+			id: "dates:week",
+			entityName: "Week",
+			name: "2026-W01",
+			link: "[[Weeks/2026-W01|2026-W01]]",
+			folderPath: "Weeks",
+			path: "Weeks/2026-W01.md",
+		});
+		expect(create).toHaveBeenCalledWith({
+			plugin,
+			target: expect.objectContaining({
+				id: "dates:week",
+				entityName: "Week",
+			}),
+			name: "2026-W01",
+			openNewNote: true,
+		});
+		expect(mockedCreateNewNoteFromTemplate).not.toHaveBeenCalled();
+	});
+
+	test("throws a clear error when a target has no template or custom creation handler", async () => {
+		const service = new EntityCreationService(plugin, [
+			provider("Custom", true, [
+				{
+					entityName: "Broken",
+				},
+			]),
+		]);
+
+		await expect(
+			service.create({
+				entityName: "Broken",
+				name: "Anything",
+			})
+		).rejects.toThrow(
+			'Entity creation target "custom:broken" does not define a template or creation handler.'
 		);
 	});
 

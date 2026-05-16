@@ -129,6 +129,9 @@ describe("registerEntitiesCli", () => {
 					templatePath: "Templates/Person.md",
 					folderPath: "People",
 					icon: "user",
+					description: "Create a person note.",
+					inputLabel: "Person name",
+					examples: ["Ada Lovelace"],
 				},
 				{
 					entityName: "Project",
@@ -142,9 +145,9 @@ describe("registerEntitiesCli", () => {
 			Promise.resolve(handlerFor(handlers, "entities").handler({}))
 		).resolves.toBe(
 			[
-				"id\tentity\tprovider\ttemplatePath\tfolderPath\ticon",
-				"people-provider:person\tPerson\tPeople Provider\tTemplates/Person.md\tPeople\tuser",
-				"people-provider:project\tProject\tPeople Provider\tTemplates/Project.md\tProjects\t",
+				"id\tentity\tprovider\tdescription\tinputLabel\texamples\ttemplatePath\tfolderPath\ticon",
+				"people-provider:person\tPerson\tPeople Provider\tCreate a person note.\tPerson name\tAda Lovelace\tTemplates/Person.md\tPeople\tuser",
+				"people-provider:project\tProject\tPeople Provider\t\t\t\tTemplates/Project.md\tProjects\t",
 			].join("\n")
 		);
 	});
@@ -167,6 +170,9 @@ describe("registerEntitiesCli", () => {
 					templatePath: "Templates/Person.md",
 					folderPath: "People",
 					icon: "user",
+					description: "Create a person note.",
+					inputLabel: "Person name",
+					examples: ["Ada Lovelace"],
 				},
 				{
 					entityName: "Project",
@@ -187,6 +193,9 @@ describe("registerEntitiesCli", () => {
 						id: "people-provider:person",
 						entity: "Person",
 						provider: "People Provider",
+						description: "Create a person note.",
+						inputLabel: "Person name",
+						examples: ["Ada Lovelace"],
 						templatePath: "Templates/Person.md",
 						folderPath: "People",
 						icon: "user",

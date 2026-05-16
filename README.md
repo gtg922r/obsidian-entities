@@ -66,6 +66,11 @@ obsidian entities
 obsidian entities format=json
 ```
 
+The JSON output includes provider-supplied discovery metadata when available:
+`description`, `inputLabel`, and `examples`. Agents should prefer
+`obsidian entities format=json` before creating notes so they can choose the
+right target id and input format.
+
 Learn the available commands and flags from the CLI itself:
 
 ```bash
