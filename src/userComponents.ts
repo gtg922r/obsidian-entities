@@ -141,7 +141,7 @@ export class TemplateDetailsModal extends Modal {
 		const { contentEl } = this;
 		contentEl.empty(); // Clear previous content
 
-		contentEl.createEl("h2", { text: "New Entity From Template" });
+		contentEl.createEl("h2", { text: "New entity from template" });
 
 		let engineDropdown: DropdownComponent;
 		let templatePathInput: TextComponent;
@@ -170,10 +170,10 @@ export class TemplateDetailsModal extends Modal {
 
 		// Template Path Input Setting
 		new Setting(contentEl)
-			.setName("Template Path")
+			.setName("Template path")
 			.setDesc("Path for the template (include extension)")
 			.addText((text) => {
-				text.setPlaceholder("Template Path").setValue(
+				text.setPlaceholder("Template path").setValue(
 					this.initialSettings?.templatePath || ""
 				);
 				templatePathInput = text;
@@ -183,10 +183,10 @@ export class TemplateDetailsModal extends Modal {
 
 		// Folder Path Input Setting (optional)
 		new Setting(contentEl)
-			.setName("Folder Path (Optional)")
+			.setName("Folder path (optional)")
 			.setDesc("Folder where the new note will be created. Leave empty for vault root.")
 			.addText((text) => {
-				text.setPlaceholder("Folder Path").setValue(
+				text.setPlaceholder("Folder path").setValue(
 					this.initialSettings?.folderPath || ""
 				);
 				folderPathInput = text;
@@ -196,10 +196,10 @@ export class TemplateDetailsModal extends Modal {
 
 		// Entity Name Input Setting
 		new Setting(contentEl)
-			.setName("Entity Type")
+			.setName("Entity type")
 			.setDesc("How to describe the entity that will be created")
 			.addText((text) => {
-				text.setPlaceholder("Entity Name").setValue(
+				text.setPlaceholder("Entity name").setValue(
 					this.initialSettings?.entityName || ""
 				);
 				entityNameInput = text;

@@ -51,9 +51,9 @@ export class FolderEntityProvider extends EntityProvider<FolderProviderUserSetti
 
 	static getDescription(settings?: FolderProviderUserSettings): string {
 		if (settings) {
-			return `📂 Folder Entity Provider (${settings.path})`;
+			return `📂 Folder entity provider (${settings.path})`;
 		} else {
-			return `Folder Entity Provider`;
+			return `Folder entity provider`;
 		}
 	}
 
@@ -123,7 +123,7 @@ export class FolderEntityProvider extends EntityProvider<FolderProviderUserSetti
 		buildIconPickerSetting(settingContainer, "Icon", settings, "box-select", () => onShouldSave(settings), plugin.app);
 
 		const folderPathSetting = new Setting(settingContainer)
-			.setName("Folder Path")
+			.setName("Folder path")
 			.setDesc("The path of the folder to use as a provider");
 		this.buildSummarySetting(
 			folderPathSetting,
@@ -133,9 +133,9 @@ export class FolderEntityProvider extends EntityProvider<FolderProviderUserSetti
 		);
 
 		new Setting(settingContainer)
-			.setName("Create Entities for Aliases")
+			.setName("Create entities for aliases")
 			.setDesc(
-				"Whether to also create Entities for each alias specified for a Note in the folder"
+				"Whether to also create entities for each alias specified for a note in the folder"
 			)
 			.addToggle((toggle) => {
 				toggle.setValue(
@@ -147,7 +147,7 @@ export class FolderEntityProvider extends EntityProvider<FolderProviderUserSetti
 				});
 			});
 		new Setting(settingContainer)
-			.setName("Load Entities from Sub-Folders")
+			.setName("Load entities from sub-folders")
 			.setDesc(
 				"Whether to also load entities from sub-folders or just the top-level folder"
 			)
@@ -162,12 +162,12 @@ export class FolderEntityProvider extends EntityProvider<FolderProviderUserSetti
 
 		new Setting(settingContainer)
 			.setHeading()
-			.setName("Entity Filter")
+			.setName("Entity filter")
 			.setDesc(
 				"Include or exclude entities based on whether property matches the following criteria."
 			)
 			.addButton((button) => {
-				button.setButtonText("Add Filter").onClick(() => {
+				button.setButtonText("Add filter").onClick(() => {
 					settings.entityFilters = settings.entityFilters || [];
 					settings.entityFilters.push({
 						type: "include",
@@ -216,14 +216,14 @@ export class FolderEntityProvider extends EntityProvider<FolderProviderUserSetti
 							"error"
 						);
 					} else {
-							setValidationStatus(
-								regexStatusIcon,
-								"help",
-								"Empty regex",
-								"muted"
-							);
-						}
-					};
+						setValidationStatus(
+							regexStatusIcon,
+							"help",
+							"Empty regex",
+							"muted"
+						);
+					}
+				};
 
 				filterSetting.addExtraButton((button) => {
 					regexStatusIcon = button;
@@ -232,8 +232,8 @@ export class FolderEntityProvider extends EntityProvider<FolderProviderUserSetti
 				});
 
 				filterSetting.addDropdown((dropdown) => {
-					dropdown.addOption("include", "Include If");
-					dropdown.addOption("exclude", "Exclude If");
+					dropdown.addOption("include", "Include if");
+					dropdown.addOption("exclude", "Exclude if");
 					dropdown.setValue(filter.type);
 					dropdown.onChange((value) => {
 						filter.type = value as "include" | "exclude";
@@ -242,7 +242,7 @@ export class FolderEntityProvider extends EntityProvider<FolderProviderUserSetti
 				});
 
 				filterSetting.addText((text) => {
-					text.setPlaceholder("Property Name");
+					text.setPlaceholder("Property name");
 					text.setValue(filter.property);
 					text.onChange((value) => {
 						filter.property = value;
@@ -255,7 +255,7 @@ export class FolderEntityProvider extends EntityProvider<FolderProviderUserSetti
 				});
 
 				filterSetting.addText((text) => {
-					text.setPlaceholder("Property Value/Regex");
+					text.setPlaceholder("Property value/regex");
 					text.setValue(filter.value);
 					text.onChange((value) => {
 						filter.value = value;
@@ -285,24 +285,24 @@ export class FolderEntityProvider extends EntityProvider<FolderProviderUserSetti
 		plugin: Plugin
 	): void {
 		new Setting(settingContainer)
-			.setName("Create Entities for Values of Note Property")
+			.setName("Create entities for values of note property")
 			.setDesc(
 				sanitizeHTMLToDom(
-					"Whether to also create Entities for each value listed in the specified property of a Note in the folder.<br><br>For example, add entities based on 'username' of a note for a Person."
+					"Whether to also create entities for each value listed in the specified property of a note in the folder.<br><br>For example, add entities based on 'username' of a note for a person."
 				)
 			)
 			.addText((text) => {
-				text.setPlaceholder("Property Name").setValue("");
+				text.setPlaceholder("Property name").setValue("");
 			});
 		new Setting(settingContainer)
-			.setName("Filter Entities by Matching Property")
+			.setName("Filter entities by matching property")
 			.setDesc(
 				sanitizeHTMLToDom(
 					"Filter entities based on the value of the specified property of the current note.<br><br>For example, only show entities that have the same 'project' property as the current note."
 				)
 			)
 			.addText((text) => {
-				text.setPlaceholder("Property Name").setValue("");
+				text.setPlaceholder("Property name").setValue("");
 			});
 	}
 }

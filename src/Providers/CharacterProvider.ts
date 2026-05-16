@@ -58,9 +58,9 @@ export class CharacterProvider extends EntityProvider<CharacterProviderUserSetti
 
 	static getDescription(settings?: CharacterProviderUserSettings): string {
 		if (settings) {
-			return `⌨️ Character Provider`;
+			return `⌨️ Character provider`;
 		} else {
-			return `Character Provider`;
+			return `Character provider`;
 		}
 	}
 
@@ -122,11 +122,11 @@ export class CharacterProvider extends EntityProvider<CharacterProviderUserSetti
 		if (trigger === TriggerCharacter.Colon) {
 			return [
 				...(this.settings.suggestEmoji
-				? this.getSuggestionsFromDictionary(emojiDictionary, query, "em")
-				: []),
-			...(this.settings.suggestFontAwesome
-				? this.getSuggestionsFromDictionary(fontAwesomeDictionary, query, "fa")
-				: []),
+					? this.getSuggestionsFromDictionary(emojiDictionary, query, "em")
+					: []),
+				...(this.settings.suggestFontAwesome
+					? this.getSuggestionsFromDictionary(fontAwesomeDictionary, query, "fa")
+					: []),
 			];
 		}
 		return [];
@@ -148,8 +148,8 @@ export class CharacterProvider extends EntityProvider<CharacterProviderUserSetti
 		plugin: Plugin
 	): void {
 		new Setting(settingContainer)
-			.setName("Suggest Emoji")
-			.setDesc("Provide Emoji Suggestion")
+			.setName("Suggest emoji")
+			.setDesc("Provide emoji suggestion")
 			.addToggle((toggle) =>
 				toggle
 					.setValue(settings.suggestEmoji)
@@ -159,8 +159,10 @@ export class CharacterProvider extends EntityProvider<CharacterProviderUserSetti
 					})
 			);
 		new Setting(settingContainer)
+			// eslint-disable-next-line obsidianmd/ui/sentence-case -- "Font Awesome" is the icon library brand name.
 			.setName("Suggest Font Awesome")
-			.setDesc("Provide Font Awesome Glyph Suggestions")
+			// eslint-disable-next-line obsidianmd/ui/sentence-case -- "Font Awesome" is the icon library brand name.
+			.setDesc("Provide Font Awesome glyph suggestions")
 			.addToggle((toggle) =>
 				toggle
 					.setValue(settings.suggestFontAwesome)

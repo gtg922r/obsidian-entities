@@ -44,9 +44,9 @@ export class MetadataMenuProvider extends EntityProvider<MetadataMenuProviderUse
 
 	static getDescription(settings?: MetadataMenuProviderUserSettings): string {
 		if (settings) {
-			return `🔖 Metadata Menu Provider`;
+			return `🔖 Metadata Menu provider`;
 		} else {
-			return `Metadata Menu Provider`;
+			return `Metadata Menu provider`;
 		}
 	}
 

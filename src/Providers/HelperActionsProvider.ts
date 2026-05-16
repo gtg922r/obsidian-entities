@@ -94,9 +94,9 @@ export class HelperEntityProvider extends EntityProvider<HelperProviderUserSetti
 
 	static getDescription(settings?: HelperProviderUserSettings): string {
 		if (settings) {
-			return `🪄 Helper Entity Provider`;
+			return `🪄 Helper entity provider`;
 		} else {
-			return `Helper Entity Provider`;
+			return `Helper entity provider`;
 		}
 	}
 
@@ -231,7 +231,7 @@ export class HelperEntityProvider extends EntityProvider<HelperProviderUserSetti
 		plugin: Plugin
 	): void {
 		new Setting(settingContainer)
-			.setName("Checkbox Icon")
+			.setName("Checkbox icon")
 			.setDesc("Icon for the checkbox helper entities")
 			.addButton((button) =>
 				button
@@ -249,7 +249,7 @@ export class HelperEntityProvider extends EntityProvider<HelperProviderUserSetti
 			);
 
 		new Setting(settingContainer)
-			.setName("Callout Icon")
+			.setName("Callout icon")
 			.setDesc("Icon for the callout helper entities")
 			.addButton((button) =>
 				button
@@ -268,7 +268,7 @@ export class HelperEntityProvider extends EntityProvider<HelperProviderUserSetti
 
 		// New setting for adding the created tag
 		new Setting(settingContainer)
-			.setName("Add Created Tag")
+			.setName("Add created tag")
 			.setDesc("Whether to add the [created::...] tag at the end of a line from the checkbox function")
 			.addToggle((toggle) =>
 				toggle

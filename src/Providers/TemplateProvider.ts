@@ -30,13 +30,13 @@ const defaultTemplateProviderUserSettings: TemplateProviderUserSettings = {
 
 export class TemplateEntityProvider extends EntityProvider<TemplateProviderUserSettings> {
 	static readonly providerTypeID: string = templateProviderTypeID;
-    private files: TFile[];
+	private files: TFile[];
 
 	static getDescription(settings?: TemplateProviderUserSettings): string {
 		if (settings) {
-			return `📄 Template Entity Provider - ${settings.actionType} (${settings.path})`;
+			return `📄 Template entity provider - ${settings.actionType} (${settings.path})`;
 		} else {
-			return `Template Entity Provider`;
+			return `Template entity provider`;
 		}
 	}
 
@@ -104,7 +104,7 @@ export class TemplateEntityProvider extends EntityProvider<TemplateProviderUserS
 		buildIconPickerSetting(settingContainer, "Icon", settings, "box-select", () => onShouldSave(settings), plugin.app);
 			
 		new Setting(settingContainer)
-			.setName("Action Type")
+			.setName("Action type")
 			.setDesc("Action to perform with the templates")
 			.addDropdown((dropdown) => {
 				dropdown.addOption("create", "Create a new note from template")
@@ -117,7 +117,7 @@ export class TemplateEntityProvider extends EntityProvider<TemplateProviderUserS
 			});
 
 		new Setting(settingContainer)
-			.setName("Trigger Character")
+			.setName("Trigger character")
 			.setDesc("Character to trigger the template suggestions")
 			.addDropdown((dropdown) => {
 				Object.values(TriggerCharacter).forEach((trigger) => {
@@ -131,8 +131,8 @@ export class TemplateEntityProvider extends EntityProvider<TemplateProviderUserS
 			});
 
 		const folderPathSetting = new Setting(settingContainer)
-			.setName("Folder Path")
-			.setDesc("The path of the folder where Templates are located");
+			.setName("Folder path")
+			.setDesc("The path of the folder where templates are located");
 		this.buildSummarySetting(
 			folderPathSetting,
 			settings,

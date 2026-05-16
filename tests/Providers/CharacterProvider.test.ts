@@ -39,13 +39,13 @@ describe("CharacterProvider", () => {
 
 		test("getDescription returns expected string", () => {
 			const desc = CharacterProvider.getDescription();
-			expect(desc).toBe("Character Provider");
+			expect(desc).toBe("Character provider");
 		});
 
 		test("getDescription with settings returns emoji prefix", () => {
 			const settings = CharacterProvider.getDefaultSettings();
 			const desc = CharacterProvider.getDescription(settings);
-			expect(desc).toBe("⌨️ Character Provider");
+			expect(desc).toBe("⌨️ Character provider");
 		});
 
 		test("getDefaultSettings returns valid defaults", () => {
@@ -73,7 +73,7 @@ describe("CharacterProvider", () => {
 
 		test("getDescription instance method works", () => {
 			const provider = new CharacterProvider(mockPlugin, {});
-			expect(provider.getDescription()).toBe("⌨️ Character Provider");
+			expect(provider.getDescription()).toBe("⌨️ Character provider");
 		});
 	});
 

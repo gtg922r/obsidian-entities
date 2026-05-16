@@ -44,9 +44,9 @@ export class DateEntityProvider extends EntityProvider<DatesProviderUserSettings
 
 	static getDescription(settings?: DatesProviderUserSettings): string {
 		if (settings) {
-			return `📅 Dates Entity Provider`;
+			return `📅 Dates entity provider`;
 		} else {
-			return `Dates Provider`;
+			return `Dates provider`;
 		}
 	}
 
@@ -231,7 +231,7 @@ export class DateEntityProvider extends EntityProvider<DatesProviderUserSettings
 				);
 				button.onClick(() => {
 					new EntitiesNotice(
-						"NLDates Plugin Conflicts with Autocomplete. " +
+						"NLDates plugin conflicts with autocomplete. " +
 							"Disable autocomplete in NLDates settings, or change its trigger phrase.",
 						"alert-triangle"
 					);
@@ -252,7 +252,7 @@ export class DateEntityProvider extends EntityProvider<DatesProviderUserSettings
 		settingContainer: HTMLElement,
 		settings: DatesProviderUserSettings,
 		onShouldSave: (newSettings: DatesProviderUserSettings) => void,
-			plugin: Plugin
+		plugin: Plugin
 	): void {
 		new Setting(settingContainer)
 			.setName("Icon")
@@ -273,7 +273,7 @@ export class DateEntityProvider extends EntityProvider<DatesProviderUserSettings
 			);
 
 		new Setting(settingContainer)
-			.setName("Create Non-Existent Dates")
+			.setName("Create non-existent dates")
 			.setDesc("Whether to create date notes that don't exist yet")
 			.addToggle((toggle) => {
 				toggle.setValue(settings.shouldCreateIfNotExists);
@@ -284,7 +284,8 @@ export class DateEntityProvider extends EntityProvider<DatesProviderUserSettings
 			});
 
 		new Setting(settingContainer)
-			.setName("Include Week Suggestions")
+			.setName("Include week suggestions")
+			// eslint-disable-next-line obsidianmd/ui/sentence-case -- ISO week dates use uppercase W.
 			.setDesc("Whether to include week-based date suggestions (e.g., 2023-W01)")
 			.addToggle((toggle) => {
 				toggle.setValue(settings.includeWeekSuggestions);

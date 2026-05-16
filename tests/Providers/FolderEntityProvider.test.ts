@@ -97,7 +97,7 @@ describe("FolderEntityProvider", () => {
 
 		test("getDescription without settings", () => {
 			const desc = FolderEntityProvider.getDescription();
-			expect(desc).toBe("Folder Entity Provider");
+			expect(desc).toBe("Folder entity provider");
 		});
 
 		test("getDescription with settings shows path", () => {
@@ -106,7 +106,7 @@ describe("FolderEntityProvider", () => {
 				path: "People",
 			};
 			const desc = FolderEntityProvider.getDescription(settings);
-			expect(desc).toBe("📂 Folder Entity Provider (People)");
+			expect(desc).toBe("📂 Folder entity provider (People)");
 		});
 
 		test("getDefaultSettings returns valid defaults", () => {
@@ -132,7 +132,7 @@ describe("FolderEntityProvider", () => {
 			const provider = new FolderEntityProvider(mockPlugin, {
 				path: "Projects",
 			});
-			expect(provider.getDescription()).toBe("📂 Folder Entity Provider (Projects)");
+			expect(provider.getDescription()).toBe("📂 Folder entity provider (Projects)");
 		});
 	});
 

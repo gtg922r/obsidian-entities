@@ -44,9 +44,9 @@ export class DataviewEntityProvider extends EntityProvider<DataviewProviderUserS
 
 	static getDescription(settings?: DataviewProviderUserSettings): string {
 		if (settings) {
-			return `🧠 Dataview Entity Provider (${settings.query})`;
+			return `🧠 Dataview entity provider (${settings.query})`;
 		} else {
-			return `Dataview Entity Provider`;
+			return `Dataview entity provider`;
 		}
 	}
 
@@ -139,19 +139,19 @@ export class DataviewEntityProvider extends EntityProvider<DataviewProviderUserS
 
 		const updateQueryIcon = async (query: string) => {
 			if (queryIsOK(query) === "ok") {
-				const dv = await DataviewEntityProvider.getDataviewApiWithRetry(
-					500,
-					2,
-					plugin.app
-				);
-				const numberNotesFromQuery = dv?.pages(query).length;
-				setValidationStatus(
-					queryOKIcon,
-					"search-check",
-					`Dataview Source OK (${numberNotesFromQuery} notes)`,
-					"neutral"
-				);
-			} else if (queryIsOK(query) === "empty") {
+					const dv = await DataviewEntityProvider.getDataviewApiWithRetry(
+						500,
+						2,
+						plugin.app
+					);
+					const numberNotesFromQuery = dv?.pages(query).length;
+					setValidationStatus(
+						queryOKIcon,
+						"search-check",
+						`Dataview source OK (${numberNotesFromQuery} notes)`,
+						"neutral"
+					);
+				} else if (queryIsOK(query) === "empty") {
 				setValidationStatus(
 					queryOKIcon,
 					"search-x",
@@ -178,7 +178,7 @@ export class DataviewEntityProvider extends EntityProvider<DataviewProviderUserS
 		updateQueryIcon(settings.query);
 
 		settingContainer.addText((text) => {
-			text.setPlaceholder("Dataview Source").setValue(settings.query);
+			text.setPlaceholder("Dataview source").setValue(settings.query);
 			text.onChange((value) => {
 				updateQueryIcon(value);
 				if (["ok", "empty"].includes(queryIsOK(value))) {
@@ -202,7 +202,7 @@ export class DataviewEntityProvider extends EntityProvider<DataviewProviderUserS
 		buildIconPickerSetting(settingContainer, "Icon", settings, "box-select", () => onShouldSave(settings), plugin.app);
 
 		const dvQuerySetting = new Setting(settingContainer)
-			.setName("Dataview Source")
+			.setName("Dataview source")
 			.setDesc("The dataview source query to use as a provider");
 		this.buildSummarySetting(
 			dvQuerySetting,
@@ -212,9 +212,9 @@ export class DataviewEntityProvider extends EntityProvider<DataviewProviderUserS
 		);
 
 		new Setting(settingContainer)
-			.setName("Create Entities for Aliases")
+			.setName("Create entities for aliases")
 			.setDesc(
-				"Whether to also create Entities for each alias specified for a Note in the folder"
+				"Whether to also create entities for each alias specified for a note in the folder"
 			)
 			.addToggle((toggle) => {
 				toggle.setValue(
@@ -229,12 +229,12 @@ export class DataviewEntityProvider extends EntityProvider<DataviewProviderUserS
 		buildTemplateCreationSetting(settingContainer, settings, onShouldSave, plugin.app);
 
 		new Setting(settingContainer)
-			.setName("Entity Filters")
+			.setName("Entity filters")
 			.setDesc(
 				"Include or exclude entities based on whether property matches the following criteria."
 			)
 			.addButton((button) => {
-				button.setButtonText("Add Filter").onClick(() => {
+				button.setButtonText("Add filter").onClick(() => {
 					settings.entityFilters = settings.entityFilters || [];
 					settings.entityFilters.push({
 						type: "include",
@@ -299,8 +299,8 @@ export class DataviewEntityProvider extends EntityProvider<DataviewProviderUserS
 				});
 
 				filterSetting.addDropdown((dropdown) => {
-					dropdown.addOption("include", "Include If");
-					dropdown.addOption("exclude", "Exclude If");
+					dropdown.addOption("include", "Include if");
+					dropdown.addOption("exclude", "Exclude if");
 					dropdown.setValue(filter.type);
 					dropdown.onChange((value) => {
 						filter.type = value as "include" | "exclude";
@@ -309,7 +309,7 @@ export class DataviewEntityProvider extends EntityProvider<DataviewProviderUserS
 				});
 
 				filterSetting.addText((text) => {
-					text.setPlaceholder("Property Name");
+					text.setPlaceholder("Property name");
 					text.setValue(filter.property);
 					text.onChange((value) => {
 						filter.property = value;
@@ -322,7 +322,7 @@ export class DataviewEntityProvider extends EntityProvider<DataviewProviderUserS
 				});
 
 				filterSetting.addText((text) => {
-					text.setPlaceholder("Property Value/Regex");
+					text.setPlaceholder("Property value/regex");
 					text.setValue(filter.value);
 					text.onChange((value) => {
 						filter.value = value;

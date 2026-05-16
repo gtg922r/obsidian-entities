@@ -91,7 +91,7 @@ describe("TemplateEntityProvider", () => {
 
 		test("getDescription without settings", () => {
 			const desc = TemplateEntityProvider.getDescription();
-			expect(desc).toBe("Template Entity Provider");
+			expect(desc).toBe("Template entity provider");
 		});
 
 		test("getDescription with settings shows action type and path", () => {
@@ -101,7 +101,7 @@ describe("TemplateEntityProvider", () => {
 				actionType: "create" as const,
 			};
 			const desc = TemplateEntityProvider.getDescription(settings);
-			expect(desc).toBe("📄 Template Entity Provider - create (Templates)");
+			expect(desc).toBe("📄 Template entity provider - create (Templates)");
 		});
 
 		test("getDefaultSettings returns valid defaults", () => {
@@ -214,7 +214,7 @@ describe("TemplateEntityProvider", () => {
 				actionType: "insert",
 			});
 			const desc = provider.getDescription();
-			expect(desc).toBe("📄 Template Entity Provider - insert (MyTemplates)");
+			expect(desc).toBe("📄 Template entity provider - insert (MyTemplates)");
 		});
 
 		test("getDefaultSettings instance method matches static", () => {
