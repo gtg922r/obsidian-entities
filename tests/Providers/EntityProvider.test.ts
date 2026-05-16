@@ -6,6 +6,7 @@ import {
 } from "../../src/Providers/EntityProvider";
 import { TriggerCharacter } from "../../src/entities.types";
 import { EntitySuggestionItem } from "../../src/EntitiesSuggestor";
+import { createNewNoteFromTemplate } from "../../src/entitiesUtilities";
 
 // Mock Obsidian
 jest.mock("obsidian", () => ({
@@ -19,7 +20,7 @@ jest.mock("obsidian", () => ({
 
 // Mock entitiesUtilities
 jest.mock("../../src/entitiesUtilities", () => ({
-	createNewNoteFromTemplate: jest.fn().mockResolvedValue(undefined),
+	createNewNoteFromTemplate: jest.fn().mockResolvedValue({ path: "People/Alice.md" }),
 }));
 
 // Test implementation of EntityProvider
@@ -92,8 +93,13 @@ const mockPlugin = {
 		},
 	},
 } as unknown as Plugin;
+const mockedCreateNewNoteFromTemplate = jest.mocked(createNewNoteFromTemplate);
 
 describe("EntityProvider base class", () => {
+	beforeEach(() => {
+		mockedCreateNewNoteFromTemplate.mockClear();
+	});
+
 	describe("constructor and settings", () => {
 		test("merges provided settings with defaults", () => {
 			const provider = new TestEntityProvider(mockPlugin, {
@@ -238,6 +244,104 @@ describe("EntityProvider base class", () => {
 			expect(results).toHaveLength(2);
 			expect(results[0].suggestionText).toBe("New Person: Test");
 			expect(results[1].suggestionText).toBe("New Project: Test");
+		});
+
+		test("exposes templater creation definitions for shared creation flows", () => {
+			const provider = new TestEntityProvider(mockPlugin, {
+				entityCreationTemplates: [
+					{
+						engine: "templater",
+						templatePath: "templates/person.md",
+						entityName: "Person",
+						folderPath: "People",
+					},
+					{
+						engine: "core",
+						templatePath: "templates/project.md",
+						entityName: "Project",
+						folderPath: "Projects",
+					},
+				],
+			});
+
+			expect(provider.getEntityCreationDefinitions()).toEqual([
+				{
+					providerTypeID: "testProvider",
+					entityName: "Person",
+					templatePath: "templates/person.md",
+					folderPath: "People",
+				},
+			]);
+		});
+
+		test("builds template creation suggestions from shared creation definitions", async () => {
+			const provider = new TestEntityProvider(mockPlugin, {
+				entityCreationTemplates: [
+					{
+						engine: "templater",
+						templatePath: "templates/person.md",
+						entityName: "Person",
+						folderPath: "People",
+					},
+				],
+			});
+			const getDefinitionsSpy = jest.spyOn(
+				provider,
+				"getEntityCreationDefinitions"
+			);
+
+			const results = provider.getTemplateCreationSuggestions("Alice");
+			const result = await results[0].action!(results[0], null);
+
+			expect(getDefinitionsSpy).toHaveBeenCalledTimes(1);
+			expect(results[0]).toMatchObject({
+				suggestionText: "New Person: Alice",
+				icon: "plus-circle",
+				match: { score: -10, matches: [] },
+			});
+			expect(result).toBe("[[Alice]]");
+			expect(mockedCreateNewNoteFromTemplate).toHaveBeenCalledWith(
+				mockPlugin,
+				"templates/person.md",
+				"People",
+				"Alice",
+				false
+			);
+		});
+
+		test("uses creation definition icon when building template creation suggestions", () => {
+			const provider = new TestEntityProvider(mockPlugin, {});
+			jest.spyOn(provider, "getEntityCreationDefinitions").mockReturnValue([
+				{
+					providerTypeID: "testProvider",
+					entityName: "Person",
+					templatePath: "templates/person.md",
+					folderPath: "People",
+					icon: "id-card",
+				},
+			]);
+
+			const results = provider.getTemplateCreationSuggestions("Alice");
+
+			expect(results).toHaveLength(1);
+			expect(results[0].icon).toBe("id-card");
+		});
+
+		test("falls back to plus-circle when a creation definition omits icon", () => {
+			const provider = new TestEntityProvider(mockPlugin, {});
+			jest.spyOn(provider, "getEntityCreationDefinitions").mockReturnValue([
+				{
+					providerTypeID: "testProvider",
+					entityName: "Person",
+					templatePath: "templates/person.md",
+					folderPath: "People",
+				},
+			]);
+
+			const results = provider.getTemplateCreationSuggestions("Alice");
+
+			expect(results).toHaveLength(1);
+			expect(results[0].icon).toBe("plus-circle");
 		});
 
 		test("template action returns link to new note", async () => {

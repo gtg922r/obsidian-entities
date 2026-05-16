@@ -1,8 +1,9 @@
-import { ExtraButtonComponent, Plugin, SearchResult, Setting, TFile } from "obsidian";
+import { ExtraButtonComponent, Plugin, Setting } from "obsidian";
 import { EntitySuggestionItem } from "src/EntitiesSuggestor";
 import { EntityProvider, EntityProviderUserSettings } from "./EntityProvider";
 import { AppWithPlugins } from "src/entities.types";
-import { createNewNoteFromTemplate } from "src/entitiesUtilities";
+import { buildEntityCreationSuggestions } from "src/entityCreation/EntityCreationSuggestions";
+import type { EntityCreationDefinition } from "src/entityCreation/EntityCreationService";
 
 const newProviderTypeID = "metadata-menu";
 
@@ -36,6 +37,25 @@ const defaultNewProviderUserSettings: MetadataMenuProviderUserSettings = {
 	entityCreationTemplates: [],
 	// Add default values for additional settings here
 };
+
+function parseTemplateLinkpath(templateValue: unknown): string | undefined {
+	if (typeof templateValue !== "string") return undefined;
+
+	const trimmedValue = templateValue.trim();
+	const startsWrapped = trimmedValue.startsWith("[[");
+	const endsWrapped = trimmedValue.endsWith("]]");
+	if (startsWrapped !== endsWrapped) return undefined;
+
+	const linkpath =
+		startsWrapped && endsWrapped
+			? trimmedValue.slice(2, -2).trim()
+			: trimmedValue;
+	const pathWithoutAlias = linkpath.split("|", 1)[0]?.trim();
+
+	return pathWithoutAlias && pathWithoutAlias.length > 0
+		? pathWithoutAlias
+		: undefined;
+}
 
 export class MetadataMenuProvider extends EntityProvider<MetadataMenuProviderUserSettings> {
 	static readonly providerTypeID: string = newProviderTypeID;
@@ -82,6 +102,44 @@ export class MetadataMenuProvider extends EntityProvider<MetadataMenuProviderUse
 		return [];
 	}
 
+	/** Lists Metadata Menu file classes configured with resolvable new note templates. */
+	getEntityCreationDefinitions(): EntityCreationDefinition[] {
+		if (!this.mdmPlugin?.fieldIndex) return [];
+
+		const definitions: EntityCreationDefinition[] = [];
+		for (const [path, fileClass] of this.mdmPlugin.fieldIndex.fileClassesPath) {
+			const fileCache = this.plugin.app.metadataCache.getCache(path);
+			const frontmatter = fileCache?.frontmatter;
+			if (!frontmatter) continue;
+
+			const newNoteTemplate = Array.isArray(frontmatter.newNoteTemplate)
+				? frontmatter.newNoteTemplate[0]
+				: frontmatter.newNoteTemplate;
+			const strippedTemplateName = parseTemplateLinkpath(newNoteTemplate);
+			if (!strippedTemplateName) continue;
+
+			const templateFile = this.plugin.app.metadataCache.getFirstLinkpathDest(
+				strippedTemplateName,
+				path
+			);
+			if (!templateFile) continue;
+
+			const definition = {
+				providerTypeID: this.settings.providerTypeID,
+				entityName: fileClass.name,
+				templatePath: templateFile.path,
+				folderPath: "",
+				icon:
+					frontmatter.newEntityIcon ??
+					fileClass.options?.icon ??
+					"plus-circle",
+			};
+			definitions.push(definition);
+		}
+
+		return definitions;
+	}
+
 	/**
 	 * Generates suggestions for creating new notes based on templates for a given query.
 	 * Currently, only supports templates processed by the "templater" engine.
@@ -92,58 +150,11 @@ export class MetadataMenuProvider extends EntityProvider<MetadataMenuProviderUse
 	 * @returns An array of suggestions for entity creation.
 	 */
 	getTemplateCreationSuggestions(query: string): EntitySuggestionItem[] {
-		if (!this.mdmPlugin || !this.mdmPlugin.fieldIndex) return [];
-
-		const mdmPathsAndFileClasses: [string, MDMFileClass][] = Array.from(
-			this.mdmPlugin.fieldIndex.fileClassesPath
+		return buildEntityCreationSuggestions(
+			this.plugin,
+			this.getEntityCreationDefinitions(),
+			query
 		);
-		const fileClassTemplates: Map<string, { template: TFile, icon: string }> = new Map();
-		mdmPathsAndFileClasses.forEach(([path, fileClass]) => {			
-			const fileCache = this.plugin.app.metadataCache.getCache(path);
-			if (fileCache && fileCache.frontmatter) {
-				// TODO: make newNoteTemplate field settable in the settings
-				const newNoteTemplate = Array.isArray(fileCache.frontmatter.newNoteTemplate)
-					? fileCache.frontmatter.newNoteTemplate[0]
-					: fileCache.frontmatter.newNoteTemplate;
-				const strippedFileName = newNoteTemplate?.replace(/^\[\[|\]\]$/g, '');
-
-				// Extract newEntityIcon from frontmatter
-				const newEntityIcon = fileCache.frontmatter.newEntityIcon || fileClass.options?.icon || "plus-circle";
-
-				if (strippedFileName) {
-					const newNoteTemplateFile = this.plugin.app.metadataCache.getFirstLinkpathDest(strippedFileName, path);
-					if (newNoteTemplateFile) {
-						fileClassTemplates.set(fileClass.name, { template: newNoteTemplateFile, icon: newEntityIcon });
-					}
-				}
-			}
-		});
-
-		// TODO add support for both Template and Templater
-		return Array.from(fileClassTemplates).map(([fileClassName, { template, icon }]) => {
-			const fileClass = this.mdmPlugin?.fieldIndex?.fileClassesName.get(fileClassName);
-			if (!fileClass) {
-				throw new Error(
-					`File class not found: ${fileClassName}`
-				);
-			}
-			return {
-				suggestionText: `New ${fileClassName}: ${query}`,
-				icon: icon,
-				action: async () => {
-					await createNewNoteFromTemplate(
-						this.plugin,
-						template,
-						"", // TODO THINK ABOUT FOLDER
-						query,
-						false
-					);
-					await new Promise((resolve) => setTimeout(resolve, 20));
-					return `[[${query}]]`;
-				},
-				match: { score: -10, matches: [] } as SearchResult,
-			};
-		});
 	}
 
 	static buildSummarySetting(
@@ -158,7 +169,7 @@ export class MetadataMenuProvider extends EntityProvider<MetadataMenuProviderUse
 				"metadata-menu"
 			) !== undefined;
 		const templaterPluginOK =
-			(plugin.app as AppWithPlugins).plugins?.getPlugin("templater") !==
+			(plugin.app as AppWithPlugins).plugins?.getPlugin("templater-obsidian") !==
 			undefined;
 		const updatePluginConfiguredOKIcon = () => {
 			if (

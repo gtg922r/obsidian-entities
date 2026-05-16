@@ -14,6 +14,7 @@ import { DateEntityProvider } from "./Providers/DateEntityProvider";
 import { MetadataMenuProvider } from "./Providers/MetadataMenuProvider";
 import { HelperEntityProvider } from "./Providers/HelperActionsProvider";
 import { CharacterProvider } from "./Providers/CharacterProvider";
+import { registerEntitiesCli } from "./cli/EntitiesCli";
 
 export default class Entities extends Plugin {
 	settings!: EntitiesSettings;
@@ -30,7 +31,8 @@ export default class Entities extends Plugin {
 		this.suggestor = new EntitiesSuggestor(this, this.providerRegistry);
 		this.registerEditorSuggest(this.suggestor);
 		this.registerEntityProviders();
-		this.loadEntityProviders();
+		await this.loadEntityProviders();
+		registerEntitiesCli(this, this.providerRegistry);
 	}
 
 	onunload() {

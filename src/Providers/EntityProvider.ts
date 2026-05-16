@@ -1,8 +1,11 @@
 import { EntitySuggestionItem } from "src/EntitiesSuggestor";
 import { entityFromTemplateSettings } from "../entities.types";
-import { createNewNoteFromTemplate } from "../entitiesUtilities";
-import { Plugin, SearchResult } from "obsidian";
+import type { Plugin } from "obsidian";
 import { TriggerCharacter } from "../entities.types";
+import { buildEntityCreationSuggestions } from "../entityCreation/EntityCreationSuggestions";
+import type {
+	EntityCreationDefinition,
+} from "../entityCreation/EntityCreationService";
 
 // Base interfaces and classes for Providers
 export interface EntityProviderID {
@@ -51,6 +54,18 @@ export abstract class EntityProvider<T extends EntityProviderUserSettings> {
 		return [TriggerCharacter.At]; // Default to '@' if not overridden
 	}
 
+	/** Lists template-backed entity creation definitions supported by this provider. */
+	getEntityCreationDefinitions(): EntityCreationDefinition[] {
+		return (this.settings.entityCreationTemplates ?? [])
+			.filter((template) => template.engine === "templater")
+			.map((template) => ({
+				providerTypeID: this.settings.providerTypeID,
+				entityName: template.entityName,
+				templatePath: template.templatePath,
+				folderPath: template.folderPath ?? "",
+			}));
+	}
+
 	/**
 	 * Generates suggestions for creating new notes based on templates for a given query.
 	 * Currently, only supports templates processed by the "templater" engine.
@@ -61,26 +76,10 @@ export abstract class EntityProvider<T extends EntityProviderUserSettings> {
 	 * @returns An array of suggestions for entity creation.
 	 */
 	getTemplateCreationSuggestions(query: string): EntitySuggestionItem[] {
-		if (!this.settings.entityCreationTemplates) return [];
-		// Only Templater templates are supported for now
-		const creationTemplates = this.settings.entityCreationTemplates.filter(
-			(template) => template.engine === "templater"
+		return buildEntityCreationSuggestions(
+			this.plugin,
+			this.getEntityCreationDefinitions(),
+			query
 		);
-		return creationTemplates.map((template) => ({
-			suggestionText: `New ${template.entityName}: ${query}`,
-			icon: "plus-circle",
-			action: async () => {
-				await createNewNoteFromTemplate(
-					this.plugin,
-					template.templatePath,
-					template.folderPath ?? "",
-					query,
-					false
-				);
-				await new Promise(resolve => setTimeout(resolve, 20));
-				return `[[${query}]]`;
-			},
-			match: { score: -10, matches: [] } as SearchResult,
-		}));
 	}
 }
