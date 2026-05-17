@@ -329,6 +329,7 @@ export class DateEntityProvider extends EntityProvider<DatesProviderUserSettings
 				return this.toMarkdownLink(createdFile, context, item.suggestionText);
 			}
 		} catch (error) {
+			console.error("Unable to create or link periodic note.", error);
 			new EntitiesNotice(
 				"Unable to create or link periodic note.",
 				"alert-triangle"
