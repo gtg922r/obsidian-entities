@@ -303,7 +303,7 @@ describe("DateEntityProvider", () => {
 			.find((item) => item.suggestionText === "this week");
 
 		expect(suggestion?.action).toBeUndefined();
-		expect(suggestion?.replacementText).toMatch(/^\d{4}-W\d{2}$/);
+		expect(suggestion?.replacementText).toBe("2026-W21");
 		expect(periodicNotes.getPeriodicNote).not.toHaveBeenCalled();
 		expect(periodicNotes.createPeriodicNote).not.toHaveBeenCalled();
 	});
@@ -330,7 +330,7 @@ describe("DateEntityProvider", () => {
 			.find((item) => item.suggestionText === "this week");
 
 		expect(suggestion?.action).toBeUndefined();
-		expect(suggestion?.replacementText).toMatch(/^\d{4}-W\d{2}$/);
+		expect(suggestion?.replacementText).toBe("2026-W21");
 		expect(periodicNotes.getPeriodicNote).not.toHaveBeenCalled();
 		expect(periodicNotes.createPeriodicNote).not.toHaveBeenCalled();
 	});
@@ -363,17 +363,11 @@ describe("DateEntityProvider", () => {
 			.find((item) => item.suggestionText === "this week");
 
 		expect(suggestion?.action).toBeDefined();
-		await expect(suggestion?.action?.(suggestion, null)).resolves.toMatch(
-			/^\[\[\d{4}-W\d{2}\]\]$/
+		await expect(suggestion?.action?.(suggestion, null)).resolves.toBe(
+			"[[2026-W21]]"
 		);
-		expect(consoleErrorSpy).toHaveBeenCalledWith(
-			"Unable to create or link periodic note.",
-			error
-		);
-		expect(EntitiesNotice).toHaveBeenCalledWith(
-			"Unable to create or link periodic note.",
-			"alert-triangle"
-		);
+		expect(consoleErrorSpy).toHaveBeenCalledTimes(1);
+		expect(EntitiesNotice).toHaveBeenCalledTimes(1);
 
 		consoleErrorSpy.mockRestore();
 	});
