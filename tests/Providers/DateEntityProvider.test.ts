@@ -135,6 +135,59 @@ describe("DateEntityProvider", () => {
 		);
 	});
 
+	test("passes the semantic week date to Periodic Notes on locale week boundaries", async () => {
+		freezeMomentNow("2026-05-17");
+		const weeklyFile = { path: "Periodic/Weeks/2026-W21.md" };
+		const generateMarkdownLink = jest
+			.fn()
+			.mockReturnValue("[[Periodic/Weeks/2026-W21|this week]]");
+		const periodicNotes = {
+			calendarSetManager: {
+				getActiveGranularities: jest.fn(() => ["week"]),
+				getActiveConfig: jest.fn(() => ({
+					enabled: true,
+					openAtStartup: false,
+					format: "gggg-[W]ww",
+					folder: "Periodic/Weeks",
+				})),
+				getFormat: jest.fn(() => "gggg-[W]ww"),
+			},
+			getPeriodicNote: jest.fn(() => weeklyFile),
+			createPeriodicNote: jest.fn(),
+		};
+		const plugin = createPluginWithPlugins(
+			{
+				"nldates-obsidian": createNlDatesPlugin(),
+				"periodic-notes": periodicNotes,
+			},
+			{ generateMarkdownLink }
+		);
+
+		const provider = new DateEntityProvider(plugin, {
+			shouldCreateIfNotExists: true,
+		});
+		const suggestion = provider
+			.getEntityList("this week")
+			.find((item) => item.suggestionText === "this week");
+
+		expect(moment().format("gggg-[W]ww")).toBe("2026-W21");
+		expect(moment().startOf("isoWeek").format("gggg-[W]ww")).toBe(
+			"2026-W20"
+		);
+		expect(suggestion?.action).toBeDefined();
+		await expect(suggestion?.action?.(suggestion, null)).resolves.toBe(
+			"[[Periodic/Weeks/2026-W21|this week]]"
+		);
+		expect(periodicNotes.getPeriodicNote).toHaveBeenCalledWith(
+			"week",
+			expect.objectContaining({})
+		);
+		const periodicNoteDate = periodicNotes.getPeriodicNote.mock.calls[0][1];
+		expect(periodicNoteDate.format("gggg-[W]ww")).toBe("2026-W21");
+		expect(periodicNoteDate.format("YYYY-MM-DD")).toBe("2026-05-17");
+		expect(periodicNotes.createPeriodicNote).not.toHaveBeenCalled();
+	});
+
 	test("creates a missing weekly periodic note before inserting the link", async () => {
 		freezeMomentNow("2026-05-18");
 		const weeklyFile = { path: "Periodic/Weeks/2026-W22.md" };
@@ -186,6 +239,61 @@ describe("DateEntityProvider", () => {
 			undefined,
 			"next week"
 		);
+	});
+
+	test("adds periodic note actions for explicit parsed week suggestions", async () => {
+		freezeMomentNow("2026-05-17");
+		const weeklyFile = { path: "Periodic/Weeks/2026-W21.md" };
+		const generateMarkdownLink = jest
+			.fn()
+			.mockReturnValue("[[Periodic/Weeks/2026-W21|week 21]]");
+		const periodicNotes = {
+			calendarSetManager: {
+				getActiveGranularities: jest.fn(() => ["week"]),
+				getActiveConfig: jest.fn(() => ({
+					enabled: true,
+					openAtStartup: false,
+					format: "gggg-[W]ww",
+					folder: "Periodic/Weeks",
+				})),
+				getFormat: jest.fn(() => "gggg-[W]ww"),
+			},
+			getPeriodicNote: jest.fn(() => null),
+			createPeriodicNote: jest.fn(async () => weeklyFile),
+		};
+		const plugin = createPluginWithPlugins(
+			{
+				"nldates-obsidian": createNlDatesPlugin(),
+				"periodic-notes": periodicNotes,
+			},
+			{ generateMarkdownLink }
+		);
+
+		const provider = new DateEntityProvider(plugin, {
+			shouldCreateIfNotExists: true,
+		});
+		const suggestion = provider
+			.getEntityList("week 21")
+			.find((item) => item.suggestionText === "week 21");
+
+		expect(suggestion?.replacementText).toBe("2026-W21|2026-W21 (Wk of 5/18)");
+		expect(suggestion?.action).toBeDefined();
+		await expect(suggestion?.action?.(suggestion, null)).resolves.toBe(
+			"[[Periodic/Weeks/2026-W21|week 21]]"
+		);
+		expect(periodicNotes.getPeriodicNote).toHaveBeenCalledWith(
+			"week",
+			expect.objectContaining({})
+		);
+		const getPeriodicNoteDate = periodicNotes.getPeriodicNote.mock.calls[0][1];
+		expect(getPeriodicNoteDate.format("YYYY-MM-DD")).toBe("2026-05-18");
+		expect(periodicNotes.createPeriodicNote).toHaveBeenCalledWith(
+			"week",
+			expect.objectContaining({})
+		);
+		const createPeriodicNoteDate =
+			periodicNotes.createPeriodicNote.mock.calls[0][1];
+		expect(createPeriodicNoteDate.format("YYYY-MM-DD")).toBe("2026-05-18");
 	});
 
 	test("creates a missing daily periodic note before inserting the link", async () => {

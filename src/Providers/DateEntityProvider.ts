@@ -145,21 +145,22 @@ export class DateEntityProvider extends EntityProvider<DatesProviderUserSettings
 			const semanticWeeks = [
 				{
 					suggestionText: "this week",
-					date: moment().startOf("isoWeek"),
+					date: moment(),
 				},
 				{
 					suggestionText: "last week",
-					date: moment().subtract(1, "week").startOf("isoWeek"),
+					date: moment().subtract(1, "week"),
 				},
 				{
 					suggestionText: "next week",
-					date: moment().add(1, "week").startOf("isoWeek"),
+					date: moment().add(1, "week"),
 				},
 			];
 
 			semanticWeeks.forEach(({ suggestionText, date }) => {
-				const week = date.isoWeek().toString().padStart(2, "0");
-				const isoDate = `${date.isoWeekYear()}-W${week}`;
+				const isoWeekDate = date.clone().startOf("isoWeek");
+				const week = isoWeekDate.isoWeek().toString().padStart(2, "0");
+				const isoDate = `${isoWeekDate.isoWeekYear()}-W${week}`;
 				dates.push(
 					this.buildDateSuggestion({
 						suggestionText,
@@ -229,6 +230,8 @@ export class DateEntityProvider extends EntityProvider<DatesProviderUserSettings
 				noteText: `${weekText} (Wk of ${weekStartDateShort})`,
 				replacementText: `${weekText}|${weekText} (Wk of ${weekStartDateShort})`,
 				icon: "calendar-range",
+				granularity: "week",
+				date: weekMoment,
 			}),
 		];
 	}
