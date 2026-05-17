@@ -117,4 +117,25 @@ describe("DateEntityProvider", () => {
 			"this week"
 		);
 	});
+
+	test("does not add an action when Periodic Notes lacks creation APIs", () => {
+		const periodicNotes = {
+			calendarSetManager: {
+				getActiveGranularities: jest.fn(() => ["week"]),
+			},
+		};
+		const plugin = createPluginWithPlugins({
+			"nldates-obsidian": createNlDatesPlugin(),
+			"periodic-notes": periodicNotes,
+		});
+
+		const provider = new DateEntityProvider(plugin, {
+			shouldCreateIfNotExists: true,
+		});
+		const suggestion = provider
+			.getEntityList("this week")
+			.find((item) => item.suggestionText === "this week");
+
+		expect(suggestion?.action).toBeUndefined();
+	});
 });

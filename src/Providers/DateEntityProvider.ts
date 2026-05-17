@@ -97,9 +97,18 @@ export class DateEntityProvider extends EntityProvider<DatesProviderUserSettings
 			this.nlpPlugin = nlpPlugin as NLPlugin;
 		}
 
-		this.periodicNotesPlugin = appWithPlugins.plugins?.getPlugin(
+		const periodicNotesPlugin = appWithPlugins.plugins?.getPlugin(
 			"periodic-notes"
-		) as PeriodicNotesPlugin | undefined;
+		) as Partial<PeriodicNotesPlugin> | undefined;
+		if (
+			periodicNotesPlugin &&
+			typeof periodicNotesPlugin.getPeriodicNote === "function" &&
+			typeof periodicNotesPlugin.createPeriodicNote === "function"
+		) {
+			this.periodicNotesPlugin = periodicNotesPlugin as PeriodicNotesPlugin;
+		} else {
+			this.periodicNotesPlugin = undefined;
+		}
 	}
 
 	getEntityList(query: string): EntitySuggestionItem[] {
