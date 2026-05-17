@@ -1,7 +1,17 @@
-import { Plugin, Setting, moment } from "obsidian";
+import {
+	EditorSuggestContext,
+	Plugin,
+	Setting,
+	TFile,
+	moment,
+} from "obsidian";
 import { EntitySuggestionItem } from "src/EntitiesSuggestor";
 import { EntityProvider, EntityProviderUserSettings } from "./EntityProvider";
-import { AppWithPlugins } from "src/entities.types";
+import {
+	AppWithPlugins,
+	PeriodicNotesGranularity,
+	PeriodicNotesPlugin,
+} from "src/entities.types";
 import { EntitiesNotice } from "src/userComponents";
 import { RefreshBehavior } from "./EntityProvider";
 import { IconPickerModal } from "src/userComponents";
@@ -23,6 +33,15 @@ interface NLPlugin extends Plugin {
 	};
 }
 
+interface DateSuggestionCandidate {
+	suggestionText: string;
+	noteText: string;
+	replacementText: string;
+	icon: string;
+	granularity?: PeriodicNotesGranularity;
+	date?: moment.Moment;
+}
+
 export interface DatesProviderUserSettings extends EntityProviderUserSettings {
 	providerTypeID: string;
 	shouldCreateIfNotExists: boolean;
@@ -41,6 +60,7 @@ const defaultDatesProviderUserSettings: DatesProviderUserSettings = {
 export class DateEntityProvider extends EntityProvider<DatesProviderUserSettings> {
 	static readonly providerTypeID: string = dateProviderTypeID;
 	private nlpPlugin: NLPlugin | undefined;
+	private periodicNotesPlugin: PeriodicNotesPlugin | undefined;
 
 	static getDescription(settings?: DatesProviderUserSettings): string {
 		if (settings) {
@@ -73,10 +93,13 @@ export class DateEntityProvider extends EntityProvider<DatesProviderUserSettings
 		) as Partial<NLPlugin> | undefined;
 		if (!nlpPlugin || typeof nlpPlugin.parseDate !== "function") {
 			this.nlpPlugin = undefined;
-			return;
+		} else {
+			this.nlpPlugin = nlpPlugin as NLPlugin;
 		}
 
-		this.nlpPlugin = nlpPlugin as NLPlugin;
+		this.periodicNotesPlugin = appWithPlugins.plugins?.getPlugin(
+			"periodic-notes"
+		) as PeriodicNotesPlugin | undefined;
 	}
 
 	getEntityList(query: string): EntitySuggestionItem[] {
@@ -109,36 +132,50 @@ export class DateEntityProvider extends EntityProvider<DatesProviderUserSettings
 			);
 		});
 
-		const result = this.nlpPlugin.parseDate(query);
-		if (result && result.date) {
-			dates.push({
-				suggestionText: query,
-				noteText: result.formattedString,
-				replacementText: result.formattedString,
-				icon: this.settings.icon,
+		if (this.settings.includeWeekSuggestions) {
+			const semanticWeeks = [
+				{
+					suggestionText: "this week",
+					date: moment().startOf("isoWeek"),
+				},
+				{
+					suggestionText: "last week",
+					date: moment().subtract(1, "week").startOf("isoWeek"),
+				},
+				{
+					suggestionText: "next week",
+					date: moment().add(1, "week").startOf("isoWeek"),
+				},
+			];
+
+			semanticWeeks.forEach(({ suggestionText, date }) => {
+				const week = date.isoWeek().toString().padStart(2, "0");
+				const isoDate = `${date.isoWeekYear()}-W${week}`;
+				dates.push(
+					this.buildDateSuggestion({
+						suggestionText,
+						noteText: isoDate,
+						replacementText: isoDate,
+						icon: "calendar-range",
+						granularity: "week",
+						date,
+					})
+				);
 			});
+
+			dates.push(...this.dateStringToWeekResults(query));
 		}
 
-		if (this.settings.includeWeekSuggestions) {
-			const currentYear = moment().year();
-			const currentIsoWeek = moment().isoWeek();
-			const semanticWeeks = {
-				"this week": `${currentYear}-W${currentIsoWeek}`,
-				"last week": `${currentYear}-W${currentIsoWeek - 1}`,
-				"next week": `${currentYear}-W${currentIsoWeek + 1}`
-			};
-
-			Object.entries(semanticWeeks).forEach(([desciptor, isoDate]) => {
-				const suggestion: EntitySuggestionItem = {
-					suggestionText: desciptor,
-					noteText: `${isoDate}`,
-					replacementText: isoDate,
-					icon: "calendar-range",
-				};
-				dates.push(suggestion);
-			});
-			
-			dates.push(...this.dateStringToWeekResults(query));
+		const result = this.nlpPlugin.parseDate(query);
+		if (result && result.date) {
+			dates.push(
+				this.buildDateSuggestion({
+					suggestionText: query,
+					noteText: result.formattedString,
+					replacementText: result.formattedString,
+					icon: this.settings.icon,
+				})
+			);
 		}
 
 		return dates;
@@ -162,7 +199,11 @@ export class DateEntityProvider extends EntityProvider<DatesProviderUserSettings
 		const currentYear = currentMoment.year();
 		const currentWeek = currentMoment.isoWeek();
 
-		let year = match[1] ? (match[1].length === 2 ? `20${match[1]}` : match[1]) : currentYear.toString();
+		let year = match[1]
+			? match[1].length === 2
+				? `20${match[1]}`
+				: match[1]
+			: currentYear.toString();
 		const week = parseInt(match[2]);
 
 		// If year is not specified and the week is more than 4 weeks before the current week,
@@ -171,15 +212,21 @@ export class DateEntityProvider extends EntityProvider<DatesProviderUserSettings
 			year = (currentYear + 1).toString();
 		}
 
-		const weekMoment = moment().year(parseInt(year)).isoWeek(week).startOf('isoWeek');
-		const weekStartDateShort = weekMoment.format('M/D');
+		const weekMoment = moment()
+			.year(parseInt(year))
+			.isoWeek(week)
+			.startOf("isoWeek");
+		const weekStartDateShort = weekMoment.format("M/D");
+		const weekText = `${year}-W${week.toString().padStart(2, "0")}`;
 
-		return [{
-			suggestionText: dateString,
-			noteText: `${year}-W${week.toString().padStart(2, '0')} (Wk of ${weekStartDateShort})`,
-			replacementText: `${year}-W${week.toString().padStart(2, '0')}|${year}-W${week.toString().padStart(2, '0')} (Wk of ${weekStartDateShort})`,
-			icon: "calendar-range",
-		}];
+		return [
+			this.buildDateSuggestion({
+				suggestionText: dateString,
+				noteText: `${weekText} (Wk of ${weekStartDateShort})`,
+				replacementText: `${weekText}|${weekText} (Wk of ${weekStartDateShort})`,
+				icon: "calendar-range",
+			}),
+		];
 	}
 
 	private dateStringsToDateResults(
@@ -187,13 +234,100 @@ export class DateEntityProvider extends EntityProvider<DatesProviderUserSettings
 	): EntitySuggestionItem[] {
 		return dateStrings.map((dateString) => {
 			const result = this.nlpPlugin?.parseDate(dateString);
-			return {
+			return this.buildDateSuggestion({
 				suggestionText: dateString,
 				noteText: result?.formattedString ?? "",
 				replacementText: result?.formattedString ?? "",
 				icon: "calendar",
-			};
+			});
 		});
+	}
+
+	private buildDateSuggestion(
+		candidate: DateSuggestionCandidate
+	): EntitySuggestionItem {
+		const suggestion: EntitySuggestionItem = {
+			suggestionText: candidate.suggestionText,
+			noteText: candidate.noteText,
+			replacementText: candidate.replacementText,
+			icon: candidate.icon,
+		};
+
+		if (
+			this.settings.shouldCreateIfNotExists &&
+			this.periodicNotesPlugin &&
+			candidate.granularity &&
+			candidate.date &&
+			this.isPeriodicGranularityEnabled(candidate.granularity)
+		) {
+			suggestion.action = async (item, context) =>
+				this.createOrLinkPeriodicNote(candidate, item, context);
+		}
+
+		return suggestion;
+	}
+
+	private isPeriodicGranularityEnabled(
+		granularity: PeriodicNotesGranularity
+	): boolean {
+		return (
+			this.periodicNotesPlugin?.calendarSetManager
+				?.getActiveGranularities()
+				.includes(granularity) ?? false
+		);
+	}
+
+	private async createOrLinkPeriodicNote(
+		candidate: DateSuggestionCandidate,
+		item: EntitySuggestionItem,
+		context: EditorSuggestContext | null
+	): Promise<string> {
+		const fallbackText = item.replacementText ?? item.suggestionText;
+		if (
+			!candidate.granularity ||
+			!candidate.date ||
+			!this.periodicNotesPlugin
+		) {
+			return fallbackText;
+		}
+
+		try {
+			const existingFile = this.periodicNotesPlugin.getPeriodicNote?.(
+				candidate.granularity,
+				candidate.date
+			);
+			if (existingFile) {
+				return this.toMarkdownLink(existingFile, context, item.suggestionText);
+			}
+
+			const createdFile = await this.periodicNotesPlugin.createPeriodicNote?.(
+				candidate.granularity,
+				candidate.date
+			);
+			if (createdFile) {
+				return this.toMarkdownLink(createdFile, context, item.suggestionText);
+			}
+		} catch (error) {
+			new EntitiesNotice(
+				"Unable to create or link periodic note.",
+				"alert-triangle"
+			);
+		}
+
+		return fallbackText;
+	}
+
+	private toMarkdownLink(
+		file: TFile,
+		context: EditorSuggestContext | null,
+		alias: string
+	): string {
+		return this.plugin.app.fileManager.generateMarkdownLink(
+			file,
+			context?.file?.path ?? "",
+			undefined,
+			alias
+		);
 	}
 
 	static buildSummarySetting(
