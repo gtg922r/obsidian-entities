@@ -279,11 +279,17 @@ export class DateEntityProvider extends EntityProvider<DatesProviderUserSettings
 	private isPeriodicGranularityEnabled(
 		granularity: PeriodicNotesGranularity
 	): boolean {
-		return (
-			this.periodicNotesPlugin?.calendarSetManager
-				?.getActiveGranularities()
-				.includes(granularity) ?? false
-		);
+		const calendarSetManager = this.periodicNotesPlugin?.calendarSetManager;
+		if (
+			!calendarSetManager ||
+			typeof calendarSetManager.getActiveGranularities !== "function"
+		) {
+			return false;
+		}
+
+		return calendarSetManager
+			.getActiveGranularities()
+			.includes(granularity);
 	}
 
 	private async createOrLinkPeriodicNote(
@@ -291,7 +297,7 @@ export class DateEntityProvider extends EntityProvider<DatesProviderUserSettings
 		item: EntitySuggestionItem,
 		context: EditorSuggestContext | null
 	): Promise<string> {
-		const fallbackText = item.replacementText ?? item.suggestionText;
+		const fallbackText = `[[${candidate.replacementText}]]`;
 		if (
 			!candidate.granularity ||
 			!candidate.date ||

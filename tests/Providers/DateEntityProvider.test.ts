@@ -50,7 +50,17 @@ function createNlDatesPlugin() {
 	};
 }
 
+function freezeMomentNow(date: string): void {
+	moment.now = () => new Date(`${date}T00:00:00`).getTime();
+}
+
 describe("DateEntityProvider", () => {
+	const originalMomentNow = moment.now;
+
+	afterEach(() => {
+		moment.now = originalMomentNow;
+	});
+
 	test("returns no suggestions when NLDates does not expose parseDate", () => {
 		const plugin = createPluginWithPlugins({
 			"nldates-obsidian": {
@@ -68,6 +78,7 @@ describe("DateEntityProvider", () => {
 	});
 
 	test("returns an action that links an existing weekly periodic note", async () => {
+		freezeMomentNow("2026-05-18");
 		const weeklyFile = { path: "Periodic/Weeks/2026-W21.md" };
 		const generateMarkdownLink = jest
 			.fn()
@@ -109,6 +120,9 @@ describe("DateEntityProvider", () => {
 			"week",
 			expect.objectContaining({})
 		);
+		const periodicNoteDate = periodicNotes.getPeriodicNote.mock.calls[0][1];
+		expect(periodicNoteDate.isoWeekYear()).toBe(2026);
+		expect(periodicNoteDate.isoWeek()).toBe(21);
 		expect(periodicNotes.createPeriodicNote).not.toHaveBeenCalled();
 		expect(generateMarkdownLink).toHaveBeenCalledWith(
 			weeklyFile,
@@ -116,6 +130,56 @@ describe("DateEntityProvider", () => {
 			undefined,
 			"this week"
 		);
+	});
+
+	test("returns a wiki-link fallback when periodic note creation does not return a file", async () => {
+		freezeMomentNow("2026-05-18");
+		const periodicNotes = {
+			calendarSetManager: {
+				getActiveGranularities: jest.fn(() => ["week"]),
+			},
+			getPeriodicNote: jest.fn(() => null),
+			createPeriodicNote: jest.fn(() => Promise.resolve(undefined)),
+		};
+		const plugin = createPluginWithPlugins({
+			"nldates-obsidian": createNlDatesPlugin(),
+			"periodic-notes": periodicNotes,
+		});
+
+		const provider = new DateEntityProvider(plugin, {
+			shouldCreateIfNotExists: true,
+		});
+		const suggestion = provider
+			.getEntityList("this week")
+			.find((item) => item.suggestionText === "this week");
+
+		expect(suggestion?.action).toBeDefined();
+		await expect(suggestion?.action?.(suggestion, null)).resolves.toBe(
+			"[[2026-W21]]"
+		);
+	});
+
+	test("does not add an action when Periodic Notes lacks active granularity API", () => {
+		const periodicNotes = {
+			calendarSetManager: {},
+			getPeriodicNote: jest.fn(() => null),
+			createPeriodicNote: jest.fn(),
+		};
+		const plugin = createPluginWithPlugins({
+			"nldates-obsidian": createNlDatesPlugin(),
+			"periodic-notes": periodicNotes,
+		});
+
+		const provider = new DateEntityProvider(plugin, {
+			shouldCreateIfNotExists: true,
+		});
+
+		expect(() => provider.getEntityList("this week")).not.toThrow();
+		const suggestion = provider
+			.getEntityList("this week")
+			.find((item) => item.suggestionText === "this week");
+
+		expect(suggestion?.action).toBeUndefined();
 	});
 
 	test("does not add an action when Periodic Notes lacks creation APIs", () => {
