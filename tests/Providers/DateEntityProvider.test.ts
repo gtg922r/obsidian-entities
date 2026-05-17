@@ -185,6 +185,72 @@ describe("DateEntityProvider", () => {
 		);
 	});
 
+	test("creates a missing daily periodic note before inserting the link", async () => {
+		freezeMomentNow("2026-05-18");
+		const dailyFile = { path: "Periodic/Days/2026-05-18.md" };
+		const generateMarkdownLink = jest
+			.fn()
+			.mockReturnValue("[[Periodic/Days/2026-05-18|today]]");
+		const periodicNotes = {
+			calendarSetManager: {
+				getActiveGranularities: jest.fn(() => ["day"]),
+				getActiveConfig: jest.fn(() => ({
+					enabled: true,
+					openAtStartup: false,
+					format: "YYYY-MM-DD",
+					folder: "Periodic/Days",
+				})),
+				getFormat: jest.fn(() => "YYYY-MM-DD"),
+			},
+			getPeriodicNote: jest.fn(() => null),
+			createPeriodicNote: jest.fn(async () => dailyFile),
+		};
+		const nlDates = createNlDatesPlugin();
+		nlDates.parseDate.mockImplementation((date: string) => {
+			const parsed =
+				date === "today"
+					? moment()
+					: moment(date, ["YYYY-MM-DD"], true);
+			const resolved = parsed.isValid() ? parsed : moment("2026-05-17");
+			return {
+				formattedString: resolved.format("YYYY-MM-DD"),
+				date: resolved.toDate(),
+				moment: resolved,
+			};
+		});
+		const plugin = createPluginWithPlugins(
+			{
+				"nldates-obsidian": nlDates,
+				"periodic-notes": periodicNotes,
+			},
+			{ generateMarkdownLink }
+		);
+
+		const provider = new DateEntityProvider(plugin, {
+			shouldCreateIfNotExists: true,
+		});
+		const suggestion = provider
+			.getEntityList("today")
+			.find((item) => item.suggestionText === "today");
+
+		expect(suggestion?.action).toBeDefined();
+		await expect(suggestion?.action?.(suggestion, null)).resolves.toBe(
+			"[[Periodic/Days/2026-05-18|today]]"
+		);
+		expect(periodicNotes.createPeriodicNote).toHaveBeenCalledWith(
+			"day",
+			expect.objectContaining({})
+		);
+		const periodicNoteDate = periodicNotes.createPeriodicNote.mock.calls[0][1];
+		expect(periodicNoteDate.format("YYYY-MM-DD")).toBe("2026-05-18");
+		expect(generateMarkdownLink).toHaveBeenCalledWith(
+			dailyFile,
+			"",
+			undefined,
+			"today"
+		);
+	});
+
 	test("returns a wiki-link fallback when periodic note creation does not return a file", async () => {
 		freezeMomentNow("2026-05-18");
 		const periodicNotes = {

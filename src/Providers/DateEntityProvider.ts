@@ -178,12 +178,7 @@ export class DateEntityProvider extends EntityProvider<DatesProviderUserSettings
 		const result = this.nlpPlugin.parseDate(query);
 		if (result && result.date) {
 			dates.push(
-				this.buildDateSuggestion({
-					suggestionText: query,
-					noteText: result.formattedString,
-					replacementText: result.formattedString,
-					icon: this.settings.icon,
-				})
+				this.buildNlDateSuggestion(query, result, this.settings.icon)
 			);
 		}
 
@@ -243,12 +238,23 @@ export class DateEntityProvider extends EntityProvider<DatesProviderUserSettings
 	): EntitySuggestionItem[] {
 		return dateStrings.map((dateString) => {
 			const result = this.nlpPlugin?.parseDate(dateString);
-			return this.buildDateSuggestion({
-				suggestionText: dateString,
-				noteText: result?.formattedString ?? "",
-				replacementText: result?.formattedString ?? "",
-				icon: "calendar",
-			});
+			return this.buildNlDateSuggestion(dateString, result, "calendar");
+		});
+	}
+
+	private buildNlDateSuggestion(
+		suggestionText: string,
+		result: NLDResult | undefined,
+		icon: string
+	): EntitySuggestionItem {
+		const date = result?.date ? result.moment : undefined;
+		return this.buildDateSuggestion({
+			suggestionText,
+			noteText: result?.formattedString ?? "",
+			replacementText: result?.formattedString ?? "",
+			icon,
+			granularity: date ? "day" : undefined,
+			date,
 		});
 	}
 
