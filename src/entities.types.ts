@@ -1,4 +1,4 @@
-import { App, Plugin, TFile } from "obsidian";
+import { App, Plugin, TFile, moment } from "obsidian";
 import { EntityProviderUserSettings } from "./Providers/EntityProvider";
 
 export enum TriggerCharacter {
@@ -56,6 +56,39 @@ export interface TemplaterPlugin {
 			template_file: TFile
 		) => Promise<void>;
 	};
+}
+
+export type PeriodicNotesGranularity =
+	| "day"
+	| "week"
+	| "month"
+	| "quarter"
+	| "year";
+
+export interface PeriodicNotesConfig {
+	enabled: boolean;
+	openAtStartup: boolean;
+	format: string;
+	folder: string;
+	templatePath?: string;
+}
+
+export interface PeriodicNotesCalendarSetManager {
+	getActiveGranularities(): PeriodicNotesGranularity[];
+	getActiveConfig(granularity: PeriodicNotesGranularity): PeriodicNotesConfig;
+	getFormat(granularity: PeriodicNotesGranularity): string;
+}
+
+export interface PeriodicNotesPlugin extends Plugin {
+	calendarSetManager?: PeriodicNotesCalendarSetManager;
+	createPeriodicNote?: (
+		granularity: PeriodicNotesGranularity,
+		date: moment.Moment
+	) => Promise<TFile>;
+	getPeriodicNote?: (
+		granularity: PeriodicNotesGranularity,
+		date: moment.Moment
+	) => TFile | null;
 }
 
 export const DEFAULT_SETTINGS: EntitiesSettings = {

@@ -18,22 +18,28 @@ jest.mock("../../src/userComponents", () => ({
 	IconPickerModal: jest.fn(),
 }));
 
-function createPluginWithNlDates(nlDatesPlugin: unknown): Plugin {
+function createPluginWithPlugins(
+	pluginsById: Record<string, unknown>,
+	fileManager: { generateMarkdownLink?: jest.Mock } = {}
+): Plugin {
 	return {
 		app: {
 			plugins: {
-				getPlugin: jest.fn(() => nlDatesPlugin),
+				getPlugin: jest.fn((pluginId: string) => pluginsById[pluginId]),
 			},
+			fileManager,
 		},
 	} as unknown as Plugin;
 }
 
 describe("DateEntityProvider", () => {
 	test("returns no suggestions when NLDates does not expose parseDate", () => {
-		const plugin = createPluginWithNlDates({
-			settings: {
-				autocompleteTriggerPhrase: "@",
-				isAutosuggestEnabled: true,
+		const plugin = createPluginWithPlugins({
+			"nldates-obsidian": {
+				settings: {
+					autocompleteTriggerPhrase: "@",
+					isAutosuggestEnabled: true,
+				},
 			},
 		});
 
