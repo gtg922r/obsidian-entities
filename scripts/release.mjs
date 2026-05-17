@@ -1,5 +1,8 @@
 #!/usr/bin/env node
 import { execSync } from "child_process";
+import { readFileSync } from "fs";
+
+const EXACT_SEMVER = /^\d+\.\d+\.\d+$/;
 
 const COLORS = {
 	reset: "\x1b[0m",
@@ -42,7 +45,6 @@ function run(cmd, opts = {}) {
 // Parse CLI args: first non-flag is the release type; support --dry-run
 const args = process.argv.slice(2);
 const dryRun = args.includes("--dry-run") || args.includes("-n");
-const showTestLogs = args.includes("--show-test-logs");
 const type = args.find((a) => ["patch", "minor", "major"].includes(a));
 if (!type) {
 	fail("Usage: node scripts/release.mjs <patch|minor|major> [--dry-run|-n]");
@@ -66,16 +68,12 @@ try {
 	try { run("npm ci"); } catch { warn("npm ci failed, falling back to npm install"); run("npm install"); }
 	ok("Dependencies installed");
 
-	log("Step 4:", "Running tests");
-	run(showTestLogs ? "npm test --silent=false --verbose --runInBand" : "npm test");
-	ok("Tests passed");
-
-	log("Step 5:", "Building project");
-	run("npm run build");
-	ok("Build succeeded");
+	log("Step 4:", "Running release checks");
+	run("npm run check");
+	ok("Release checks passed");
 
 	log(
-		"Step 6:",
+		"Step 5:",
 		dryRun
 			? `Bumping version (${type}) without git tag/commit and updating changelog`
 			: `Bumping version (${type}) and updating changelog`
@@ -83,6 +81,10 @@ try {
 	// In dry-run, run lifecycle scripts (to update CHANGELOG, etc.) but avoid tagging/committing
 	const versionCmd = `npm version ${type} -m "chore(release): %s"` + (dryRun ? " --no-git-tag-version" : "");
 	run(versionCmd);
+	const newVersion = JSON.parse(readFileSync("package.json", "utf8")).version;
+	if (!EXACT_SEMVER.test(newVersion)) {
+		fail(`npm version produced "${newVersion}". Releases require exact semver like 1.9.10.`);
+	}
 	ok(
 		dryRun
 			? "Version + lifecycle ran; files updated, no tag/commit"
@@ -90,17 +92,17 @@ try {
 	);
 
 	log(
-		"Step 7:",
+		"Step 6:",
 		dryRun ? "Dry-run: would push commit and tags" : "Pushing commit and tags"
 	);
 	if (dryRun) {
 		run("git push --dry-run");
-		run("git push --tags --dry-run");
+		warn(`Dry-run: would push tag ${newVersion} and dispatch release.yml with prerelease=false.`);
 		ok("Dry-run complete. No changes pushed.");
 	} else {
 		run("git push");
-		run("git push --tags");
-		ok("Pushed to origin. GitHub Actions will build and publish the release.");
+		run(`node scripts/publish-release.mjs ${newVersion}`);
+		ok("Pushed to origin and dispatched the stable release workflow.");
 	}
 
 } catch (err) {

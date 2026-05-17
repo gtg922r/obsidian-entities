@@ -5,6 +5,7 @@ import { AppWithPlugins } from "src/entities.types";
 import { EntitiesNotice } from "src/userComponents";
 import { RefreshBehavior } from "./EntityProvider";
 import { IconPickerModal } from "src/userComponents";
+import { setValidationStatus } from "src/ui/validationStatus";
 
 const dateProviderTypeID = "nlDates";
 
@@ -43,9 +44,9 @@ export class DateEntityProvider extends EntityProvider<DatesProviderUserSettings
 
 	static getDescription(settings?: DatesProviderUserSettings): string {
 		if (settings) {
-			return `📅 Dates Entity Provider`;
+			return `📅 Dates entity provider`;
 		} else {
-			return `Dates Provider`;
+			return `Dates provider`;
 		}
 	}
 
@@ -67,12 +68,15 @@ export class DateEntityProvider extends EntityProvider<DatesProviderUserSettings
 
 	private initialize() {
 		const appWithPlugins = this.plugin.app as AppWithPlugins;
-		this.nlpPlugin = appWithPlugins.plugins?.getPlugin(
+		const nlpPlugin = appWithPlugins.plugins?.getPlugin(
 			"nldates-obsidian"
-		) as NLPlugin;
-		if (!this.nlpPlugin || this.nlpPlugin.parseDate === undefined) {
-
+		) as Partial<NLPlugin> | undefined;
+		if (!nlpPlugin || typeof nlpPlugin.parseDate !== "function") {
+			this.nlpPlugin = undefined;
+			return;
 		}
+
+		this.nlpPlugin = nlpPlugin as NLPlugin;
 	}
 
 	getEntityList(query: string): EntitySuggestionItem[] {
@@ -168,7 +172,6 @@ export class DateEntityProvider extends EntityProvider<DatesProviderUserSettings
 		}
 
 		const weekMoment = moment().year(parseInt(year)).isoWeek(week).startOf('isoWeek');
-		const weekStartDate = weekMoment.format('YYYY-MM-DD');
 		const weekStartDateShort = weekMoment.format('M/D');
 
 		return [{
@@ -212,28 +215,35 @@ export class DateEntityProvider extends EntityProvider<DatesProviderUserSettings
 
 		settingContainer.addExtraButton((button) => {
 			if (!pluginIsConfigured) {
-				button.setIcon("package-x");
-				button.setTooltip("NLDates Plugin Not Found");
-				button.extraSettingsEl.style.color = "var(--text-error)";
+				setValidationStatus(
+					button,
+					"package-x",
+					"NLDates plugin not found",
+					"error"
+				);
 				return;
 			} else if (pluginConflicts) {
-				button.setIcon("alert-triangle");
-				button.setTooltip(
-					"NLDates Plugin Conflicts with Autocomplete!"
+				setValidationStatus(
+					button,
+					"alert-triangle",
+					"NLDates plugin conflicts with autocomplete!",
+					"error"
 				);
-				button.extraSettingsEl.style.color = "var(--text-error)";
 				button.onClick(() => {
 					new EntitiesNotice(
-						"NLDates Plugin Conflicts with Autocomplete. " +
+						"NLDates plugin conflicts with autocomplete. " +
 							"Disable autocomplete in NLDates settings, or change its trigger phrase.",
 						"alert-triangle"
 					);
 				});
 				return;
 			} else {
-				button.setIcon("package-check");
-				button.setTooltip("NLDates Plugin OK");
-				button.extraSettingsEl.style.color = "";
+				setValidationStatus(
+					button,
+					"package-check",
+					"NLDates plugin OK",
+					"neutral"
+				);
 			}
 		});
 	}
@@ -242,7 +252,7 @@ export class DateEntityProvider extends EntityProvider<DatesProviderUserSettings
 		settingContainer: HTMLElement,
 		settings: DatesProviderUserSettings,
 		onShouldSave: (newSettings: DatesProviderUserSettings) => void,
-			plugin: Plugin
+		plugin: Plugin
 	): void {
 		new Setting(settingContainer)
 			.setName("Icon")
@@ -263,7 +273,7 @@ export class DateEntityProvider extends EntityProvider<DatesProviderUserSettings
 			);
 
 		new Setting(settingContainer)
-			.setName("Create Non-Existent Dates")
+			.setName("Create non-existent dates")
 			.setDesc("Whether to create date notes that don't exist yet")
 			.addToggle((toggle) => {
 				toggle.setValue(settings.shouldCreateIfNotExists);
@@ -274,7 +284,8 @@ export class DateEntityProvider extends EntityProvider<DatesProviderUserSettings
 			});
 
 		new Setting(settingContainer)
-			.setName("Include Week Suggestions")
+			.setName("Include week suggestions")
+			// eslint-disable-next-line obsidianmd/ui/sentence-case -- ISO week dates use uppercase W.
 			.setDesc("Whether to include week-based date suggestions (e.g., 2023-W01)")
 			.addToggle((toggle) => {
 				toggle.setValue(settings.includeWeekSuggestions);

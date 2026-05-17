@@ -180,7 +180,6 @@ export abstract class TextInputSuggest<T> implements ISuggestOwner<T> {
 
     if (suggestions.length > 0) {
       this.suggest.setSuggestions(suggestions);
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       this.open((<any>this.app).dom.appContainerEl, this.inputEl);
     } else {
       if (this.options.shouldCloseIfNoSuggestions) {
@@ -190,10 +189,10 @@ export abstract class TextInputSuggest<T> implements ISuggestOwner<T> {
   }
 
   open(container: HTMLElement, inputEl: HTMLElement): void {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (<any>this.app).keymap.pushScope(this.scope);
 
     container.appendChild(this.suggestEl);
+    // eslint-disable-next-line obsidianmd/prefer-abstract-input-suggest -- This custom suggest preserves caller-controlled no-suggestion closing and additional popover classes, which AbstractInputSuggest does not expose in the installed API.
     this.popper = createPopper(inputEl, this.suggestEl, {
       placement: "bottom-start",
       modifiers: [
@@ -220,7 +219,6 @@ export abstract class TextInputSuggest<T> implements ISuggestOwner<T> {
   }
 
   close(): void {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (<any>this.app).keymap.popScope(this.scope);
 
     this.suggest.setSuggestions([]);

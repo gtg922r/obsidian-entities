@@ -3,6 +3,7 @@ import { EntitySuggestionItem } from "src/EntitiesSuggestor";
 import { EntityProvider, EntityProviderUserSettings } from "./EntityProvider";
 import { AppWithPlugins } from "src/entities.types";
 import { createNewNoteFromTemplate } from "src/entitiesUtilities";
+import { setValidationStatus } from "src/ui/validationStatus";
 
 const newProviderTypeID = "metadata-menu";
 
@@ -43,9 +44,9 @@ export class MetadataMenuProvider extends EntityProvider<MetadataMenuProviderUse
 
 	static getDescription(settings?: MetadataMenuProviderUserSettings): string {
 		if (settings) {
-			return `🔖 Metadata Menu Provider`;
+			return `🔖 Metadata Menu provider`;
 		} else {
-			return `Metadata Menu Provider`;
+			return `Metadata Menu provider`;
 		}
 	}
 
@@ -138,7 +139,7 @@ export class MetadataMenuProvider extends EntityProvider<MetadataMenuProviderUse
 						query,
 						false
 					);
-					await new Promise((resolve) => setTimeout(resolve, 20));
+					await new Promise((resolve) => window.setTimeout(resolve, 20));
 					return `[[${query}]]`;
 				},
 				match: { score: -10, matches: [] } as SearchResult,
@@ -166,23 +167,28 @@ export class MetadataMenuProvider extends EntityProvider<MetadataMenuProviderUse
 				templaterPluginOK &&
 				pluginConfiguredOKIcon
 			) {
-				pluginConfiguredOKIcon.setIcon("package-check");
-				pluginConfiguredOKIcon.setTooltip("Necessary Plugins Installed");
-				pluginConfiguredOKIcon.extraSettingsEl.style.color = "";
+				setValidationStatus(
+					pluginConfiguredOKIcon,
+					"package-check",
+					"Necessary plugins installed",
+					"neutral"
+				);
 			} else if (pluginConfiguredOKIcon) {
 				if (!mdmPluginOK) {
-					pluginConfiguredOKIcon.setIcon("alert-triangle");
-					pluginConfiguredOKIcon.setTooltip(
-						"Metadata Menu plugin not found"
+					setValidationStatus(
+						pluginConfiguredOKIcon,
+						"alert-triangle",
+						"Metadata Menu plugin not found",
+						"error"
 					);
 				} else if (!templaterPluginOK) {
-					pluginConfiguredOKIcon.setIcon("alert-triangle");
-					pluginConfiguredOKIcon.setTooltip(
-						"Templater plugin not found"
+					setValidationStatus(
+						pluginConfiguredOKIcon,
+						"alert-triangle",
+						"Templater plugin not found",
+						"error"
 					);
 				}
-				pluginConfiguredOKIcon.extraSettingsEl.style.color =
-					"var(--text-error)";
 			}
 		};
 

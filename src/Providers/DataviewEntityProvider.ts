@@ -16,6 +16,7 @@ import { EntityFilter } from "src/entities.types";
 import { buildIconPickerSetting, buildTemplateCreationSetting } from "src/ui/providerSettingsComponents";
 import { applyFiltersToQueryResults } from "./EntityFilters";
 import { FrontmatterKeySuggest } from "src/ui/FrontmatterKeySuggest";
+import { setValidationStatus } from "src/ui/validationStatus";
 
 const dataviewProviderTypeID = "dataview";
 
@@ -43,9 +44,9 @@ export class DataviewEntityProvider extends EntityProvider<DataviewProviderUserS
 
 	static getDescription(settings?: DataviewProviderUserSettings): string {
 		if (settings) {
-			return `🧠 Dataview Entity Provider (${settings.query})`;
+			return `🧠 Dataview entity provider (${settings.query})`;
 		} else {
-			return `Dataview Entity Provider`;
+			return `Dataview entity provider`;
 		}
 	}
 
@@ -124,7 +125,7 @@ export class DataviewEntityProvider extends EntityProvider<DataviewProviderUserS
 			let pages;
 			try {
 				pages = dv.pages(query);
-			} catch (error) {
+			} catch {
 				return "error";
 			}
 			return pages.length > 0 ? "ok" : "empty";
@@ -138,36 +139,46 @@ export class DataviewEntityProvider extends EntityProvider<DataviewProviderUserS
 
 		const updateQueryIcon = async (query: string) => {
 			if (queryIsOK(query) === "ok") {
-				const dv = await DataviewEntityProvider.getDataviewApiWithRetry(
-					500,
-					2,
-					plugin.app
+					const dv = await DataviewEntityProvider.getDataviewApiWithRetry(
+						500,
+						2,
+						plugin.app
+					);
+					const numberNotesFromQuery = dv?.pages(query).length;
+					setValidationStatus(
+						queryOKIcon,
+						"search-check",
+						`Dataview source OK (${numberNotesFromQuery} notes)`,
+						"neutral"
+					);
+				} else if (queryIsOK(query) === "empty") {
+				setValidationStatus(
+					queryOKIcon,
+					"search-x",
+					"Dataview source valid but empty",
+					"warning"
 				);
-				const numberNotesFromQuery = dv?.pages(query).length;
-				queryOKIcon.setIcon("search-check");
-				queryOKIcon.setTooltip(
-					`Dataview Source OK (${numberNotesFromQuery} notes)`
-				);
-				queryOKIcon.extraSettingsEl.style.color = "";
-			} else if (queryIsOK(query) === "empty") {
-				queryOKIcon.setIcon("search-x");
-				queryOKIcon.setTooltip("Dataview Source Valid but Empty");
-				queryOKIcon.extraSettingsEl.style.color = "var(--text-warning)";
 			} else if (queryIsOK(query) === "error") {
-				queryOKIcon.setIcon("alert-triangle");
-				queryOKIcon.setTooltip("Dataview Source Error");
-				queryOKIcon.extraSettingsEl.style.color = "var(--text-error)";
+				setValidationStatus(
+					queryOKIcon,
+					"alert-triangle",
+					"Dataview source error",
+					"error"
+				);
 			} else if (queryIsOK(query) === "dv not found") {
-				queryOKIcon.setIcon("package-x");
-				queryOKIcon.setTooltip("Dataview Plugin Not Found!");
-				queryOKIcon.extraSettingsEl.style.color = "var(--text-error)";
+				setValidationStatus(
+					queryOKIcon,
+					"package-x",
+					"Dataview plugin not found!",
+					"error"
+				);
 			}
 		};
 
 		updateQueryIcon(settings.query);
 
 		settingContainer.addText((text) => {
-			text.setPlaceholder("Dataview Source").setValue(settings.query);
+			text.setPlaceholder("Dataview source").setValue(settings.query);
 			text.onChange((value) => {
 				updateQueryIcon(value);
 				if (["ok", "empty"].includes(queryIsOK(value))) {
@@ -191,7 +202,7 @@ export class DataviewEntityProvider extends EntityProvider<DataviewProviderUserS
 		buildIconPickerSetting(settingContainer, "Icon", settings, "box-select", () => onShouldSave(settings), plugin.app);
 
 		const dvQuerySetting = new Setting(settingContainer)
-			.setName("Dataview Source")
+			.setName("Dataview source")
 			.setDesc("The dataview source query to use as a provider");
 		this.buildSummarySetting(
 			dvQuerySetting,
@@ -201,9 +212,9 @@ export class DataviewEntityProvider extends EntityProvider<DataviewProviderUserS
 		);
 
 		new Setting(settingContainer)
-			.setName("Create Entities for Aliases")
+			.setName("Create entities for aliases")
 			.setDesc(
-				"Whether to also create Entities for each alias specified for a Note in the folder"
+				"Whether to also create entities for each alias specified for a note in the folder"
 			)
 			.addToggle((toggle) => {
 				toggle.setValue(
@@ -218,12 +229,12 @@ export class DataviewEntityProvider extends EntityProvider<DataviewProviderUserS
 		buildTemplateCreationSetting(settingContainer, settings, onShouldSave, plugin.app);
 
 		new Setting(settingContainer)
-			.setName("Entity Filters")
+			.setName("Entity filters")
 			.setDesc(
 				"Include or exclude entities based on whether property matches the following criteria."
 			)
 			.addButton((button) => {
-				button.setButtonText("Add Filter").onClick(() => {
+				button.setButtonText("Add filter").onClick(() => {
 					settings.entityFilters = settings.entityFilters || [];
 					settings.entityFilters.push({
 						type: "include",
@@ -258,21 +269,28 @@ export class DataviewEntityProvider extends EntityProvider<DataviewProviderUserS
 				const updateRegexStatusIcon = (regex: string) => {
 					const status = validateRegex(regex);
 					if (status === "valid") {
-						regexStatusIcon.setIcon("checkmark");
-						regexStatusIcon.setTooltip("Valid regex");
-						regexStatusIcon.extraSettingsEl.style.color = "";
+						setValidationStatus(
+							regexStatusIcon,
+							"checkmark",
+							"Valid regex",
+							"neutral"
+						);
 					} else if (status === "invalid") {
-						regexStatusIcon.setIcon("cross");
-						regexStatusIcon.setTooltip("Invalid regex");
-						regexStatusIcon.extraSettingsEl.style.color =
-							"var(--text-error)";
+						setValidationStatus(
+							regexStatusIcon,
+							"cross",
+							"Invalid regex",
+							"error"
+						);
 					} else {
-						regexStatusIcon.setIcon("help");
-						regexStatusIcon.setTooltip("Empty regex");
-						regexStatusIcon.extraSettingsEl.style.color =
-							"var(--text-muted)";
-					}
-				};
+							setValidationStatus(
+								regexStatusIcon,
+								"help",
+								"Empty regex",
+								"muted"
+							);
+						}
+					};
 
 				filterSetting.addExtraButton((button) => {
 					regexStatusIcon = button;
@@ -281,8 +299,8 @@ export class DataviewEntityProvider extends EntityProvider<DataviewProviderUserS
 				});
 
 				filterSetting.addDropdown((dropdown) => {
-					dropdown.addOption("include", "Include If");
-					dropdown.addOption("exclude", "Exclude If");
+					dropdown.addOption("include", "Include if");
+					dropdown.addOption("exclude", "Exclude if");
 					dropdown.setValue(filter.type);
 					dropdown.onChange((value) => {
 						filter.type = value as "include" | "exclude";
@@ -291,7 +309,7 @@ export class DataviewEntityProvider extends EntityProvider<DataviewProviderUserS
 				});
 
 				filterSetting.addText((text) => {
-					text.setPlaceholder("Property Name");
+					text.setPlaceholder("Property name");
 					text.setValue(filter.property);
 					text.onChange((value) => {
 						filter.property = value;
@@ -304,7 +322,7 @@ export class DataviewEntityProvider extends EntityProvider<DataviewProviderUserS
 				});
 
 				filterSetting.addText((text) => {
-					text.setPlaceholder("Property Value/Regex");
+					text.setPlaceholder("Property value/regex");
 					text.setValue(filter.value);
 					text.onChange((value) => {
 						filter.value = value;
@@ -350,7 +368,7 @@ export class DataviewEntityProvider extends EntityProvider<DataviewProviderUserS
 				if (dv || attempts >= maxAttempts) {
 					resolve(dv);
 				} else {
-						setTimeout(attemptFetching, retryDelay);
+					window.setTimeout(attemptFetching, retryDelay);
 				}
 			};
 

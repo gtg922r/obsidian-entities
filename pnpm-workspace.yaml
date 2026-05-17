@@ -1,3 +1,0 @@
-onlyBuiltDependencies:
-  - "@codemirror/language"
-  - esbuild

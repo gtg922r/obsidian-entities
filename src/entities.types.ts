@@ -7,25 +7,20 @@ export enum TriggerCharacter {
 	Slash = "/",    // `/` for Commands
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 type DerivedFrom<T, Arguments extends unknown[] = any[]> = {
 	new (...args: Arguments): T;
 };
 type PropertyKeys<T> = {
-	// eslint-disable-next-line @typescript-eslint/no-explicit-any
 	[K in keyof T]: T[K] extends (...args: any[]) => any ? never : K;
   }[keyof T];
 type MethodKeys<T> = {
-	// eslint-disable-next-line @typescript-eslint/no-explicit-any
 	[K in keyof T]: T[K] extends (...args: any[]) => any ? K : never;
 }[keyof T];
 type Members<T> = Pick<T, PropertyKeys<T> | MethodKeys<T>>;
 
 // DerivedClass type combining Methods and DerivedFrom
 export type DerivedClassWithConstructorArgs<
-	// eslint-disable-next-line @typescript-eslint/no-explicit-any
 	T extends abstract new (...args: any) => any,
-	// eslint-disable-next-line @typescript-eslint/no-explicit-any
 	Arguments extends unknown[] = any[]
 > = Members<T> & DerivedFrom<InstanceType<T>, Arguments>;
 

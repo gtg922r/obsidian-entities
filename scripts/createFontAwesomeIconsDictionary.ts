@@ -34,7 +34,6 @@ interface DictionaryItem {
 // Define the interface for the dictionary itself
 export type Dictionary = { [key: string]: DictionaryItem };
 
-// eslint-disable-next-line @typescript-eslint/no-var-requires
 const faLibrary = require("./icons.json") as Dictionary;
 
 // Create a dictionary mapping Unicode values to their corresponding characters
@@ -107,6 +106,5 @@ fs.writeFile(outputPath, JSON.stringify(fontAwesomeDictionary, null, 2), (err) =
 
 // Export the dictionary
 export { fontAwesomeDictionary };
-
 
 

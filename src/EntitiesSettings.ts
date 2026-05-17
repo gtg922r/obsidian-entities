@@ -1,4 +1,3 @@
-/* eslint-disable no-mixed-spaces-and-tabs */
 import {
 	PluginSettingTab,
 	Setting,
@@ -12,13 +11,13 @@ import { EntitiesNotice, IconPickerModal } from "./userComponents";
 import { EntityProviderUserSettings } from "./Providers/EntityProvider";
 import { RegisterableEntityProvider } from "./Providers/ProviderRegistry";
 
-let saveTimeout: NodeJS.Timeout | undefined;
+let saveTimeout: number | undefined;
 
 export function clearPendingSave(): void {
-    if (saveTimeout !== undefined) {
-        clearTimeout(saveTimeout);
-        saveTimeout = undefined;
-    }
+	if (saveTimeout !== undefined) {
+		window.clearTimeout(saveTimeout);
+		saveTimeout = undefined;
+	}
 }
 
 function updateProviderAtIndexAndSaveAndReload(
@@ -29,10 +28,10 @@ function updateProviderAtIndexAndSaveAndReload(
 	shouldRefreshUI = true
 ) {
 	if (saveTimeout !== undefined) {
-		clearTimeout(saveTimeout);
+		window.clearTimeout(saveTimeout);
 	}
 
-	saveTimeout = setTimeout(
+	saveTimeout = window.setTimeout(
 		() => {
 			settingsTab.plugin.settings.providerSettings[index] =
 				providerConfig;
@@ -61,14 +60,14 @@ export class EntitiesSettingTab extends PluginSettingTab {
 		containerEl.empty();
 
 		new Setting(containerEl)
-			.setName("Entity Providers")
-			.setDesc("Settings for each active Entity provider")
+			.setName("Entity providers")
+			.setDesc("Settings for each active entity provider")
 			.setHeading();
 
 		let newProviderDropdown: DropdownComponent;
 		new Setting(containerEl)
-			.setName("Add New Provider")
-			.setDesc("Open New Provider Settings")
+			.setName("Add new provider")
+			.setDesc("Open new provider settings")
 			.addDropdown((dropdown) => {
 				newProviderDropdown = dropdown;
 				const providerTypes =
@@ -262,18 +261,13 @@ export class EntitiesSettingTab extends PluginSettingTab {
 		);
 
 		new Setting(containerEl)
-			.setName("Entities Plugin Settings")
-			.setDesc("Settings for the Entities Plugin")
-			.setHeading();
-
-		new Setting(containerEl)
-			.setName("Reload Providers")
-			.setDesc("(Debugging) Manually reload all entity providers")
+			.setName("Reload providers")
+			.setDesc("(Debugging) manually reload all entity providers")
 			.addExtraButton((button) =>
 				button
 					.setIcon("bug")
 					.setDisabled(false)
-					.setTooltip("Debugging Only")
+					.setTooltip("Debugging only")
 			)
 			.addButton((button) => {
 				button.setButtonText("Reload").onClick(() => {
@@ -331,7 +325,7 @@ export class ProviderSettingsModal extends Modal {
 		const { contentEl } = this;
 		contentEl.empty();
 
-		this.titleEl.setText(`${this.provider.getDescription()} Settings`);
+		this.titleEl.setText(`${this.provider.getDescription()} settings`);
 
 		if (this.provider.buildSimpleSettings) {
 			this.provider.buildSimpleSettings(
@@ -344,15 +338,15 @@ export class ProviderSettingsModal extends Modal {
 			);
 		} else {
 			new Setting(contentEl)
-				.setName(`Settings: ${this.provider.getDescription()}`)
-				.setDesc("No simple settings available for this provider.")
+				.setName("General")
+				.setDesc("Configure provider refresh and advanced behavior")
 				.setHeading();
 		}
 
 		if (this.provider.buildAdvancedSettings) {
 			new Setting(contentEl)
 				.setHeading()
-				.setName("Advanced Settings")
+				.setName("Advanced settings")
 				.setDesc(
 					"Settings that are more advanced and may require more care"
 				)

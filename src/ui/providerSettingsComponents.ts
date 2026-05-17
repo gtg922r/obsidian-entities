@@ -2,6 +2,7 @@ import { App, ExtraButtonComponent, Plugin, Setting, TFile } from "obsidian";
 import { entityFromTemplateSettings } from "../entities.types";
 import { IconPickerModal, openTemplateDetailsModal } from "../userComponents";
 import { FolderSuggest } from "./file-suggest";
+import { setValidationStatus } from "./validationStatus";
 
 /**
  * Builds an icon picker setting row.
@@ -40,7 +41,7 @@ export function entityTemplateStatusLabel(
 	entityCreationTemplates: entityFromTemplateSettings[]
 ): string {
 	if (entityCreationTemplates.length === 0) {
-		return "Set Template";
+		return "Set template";
 	} else if (
 		entityCreationTemplates.length === 1 &&
 		entityCreationTemplates[0].engine !== "disabled"
@@ -50,14 +51,14 @@ export function entityTemplateStatusLabel(
 		entityCreationTemplates.length === 1 &&
 		entityCreationTemplates[0].engine === "disabled"
 	) {
-		return "Set Template";
+		return "Set template";
 	} else {
 		return `${entityCreationTemplates.length} templates`;
 	}
 }
 
 /**
- * Builds a "New Entity From Templates" setting row with a button to open the template details modal.
+ * Builds a "New entity from templates" setting row with a button to open the template details modal.
  */
 export function buildTemplateCreationSetting<T extends { entityCreationTemplates?: entityFromTemplateSettings[] }>(
 	container: HTMLElement,
@@ -66,7 +67,7 @@ export function buildTemplateCreationSetting<T extends { entityCreationTemplates
 	app: App
 ): void {
 	const newEntityFromTemplatesSetting = new Setting(container)
-		.setName("New Entity From Templates")
+		.setName("New entity from templates")
 		.setDesc(
 			"Create entity which uses the template for a new file with the query as the file name."
 		);
@@ -108,21 +109,27 @@ export function buildFolderPathSummarySetting<T extends { path: string }>(
 	let folderExistsIcon: ExtraButtonComponent;
 	const updateFolderExistsIcon = (path: string) => {
 		if (folderExists(path) && folderExistsIcon) {
-			if (options?.showNoteCount) {
-				const folder = plugin.app.vault.getFolderByPath(path);
-				const noteCount = folder?.children.filter(
-					(file) => file instanceof TFile
-				).length;
-				folderExistsIcon.setTooltip(`Folder Found (${noteCount} notes)`);
-			} else {
-				folderExistsIcon.setTooltip("Folder Found");
-			}
-			folderExistsIcon.setIcon("folder-check");
-			folderExistsIcon.extraSettingsEl.style.color = "";
+			const folder = plugin.app.vault.getFolderByPath(path);
+			const noteCount = folder?.children.filter(
+				(file) => file instanceof TFile
+			).length;
+			const tooltip = options?.showNoteCount
+				? `Folder found (${noteCount} notes)`
+				: "Folder found";
+
+			setValidationStatus(
+				folderExistsIcon,
+				"folder-check",
+				tooltip,
+				"neutral"
+			);
 		} else if (folderExistsIcon) {
-			folderExistsIcon.setIcon("folder-x");
-			folderExistsIcon.setTooltip("Folder Not Found");
-			folderExistsIcon.extraSettingsEl.style.color = "var(--text-error)";
+			setValidationStatus(
+				folderExistsIcon,
+				"folder-x",
+				"Folder not found",
+				"error"
+			);
 		}
 	};
 	settingContainer.addExtraButton((button) => {
@@ -132,7 +139,7 @@ export function buildFolderPathSummarySetting<T extends { path: string }>(
 	});
 
 	settingContainer.addText((text) => {
-		text.setPlaceholder("Folder Path").setValue(settings.path);
+		text.setPlaceholder("Folder path").setValue(settings.path);
 		text.onChange((value) => {
 			updateFolderExistsIcon(value);
 			if (folderExists(value)) {

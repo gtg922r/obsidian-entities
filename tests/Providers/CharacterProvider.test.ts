@@ -39,13 +39,13 @@ describe("CharacterProvider", () => {
 
 		test("getDescription returns expected string", () => {
 			const desc = CharacterProvider.getDescription();
-			expect(desc).toBe("Character Provider");
+			expect(desc).toBe("Character provider");
 		});
 
 		test("getDescription with settings returns emoji prefix", () => {
 			const settings = CharacterProvider.getDefaultSettings();
 			const desc = CharacterProvider.getDescription(settings);
-			expect(desc).toBe("⌨️ Character Provider");
+			expect(desc).toBe("⌨️ Character provider");
 		});
 
 		test("getDefaultSettings returns valid defaults", () => {
@@ -73,7 +73,7 @@ describe("CharacterProvider", () => {
 
 		test("getDescription instance method works", () => {
 			const provider = new CharacterProvider(mockPlugin, {});
-			expect(provider.getDescription()).toBe("⌨️ Character Provider");
+			expect(provider.getDescription()).toBe("⌨️ Character provider");
 		});
 	});
 
@@ -182,8 +182,6 @@ describe("CharacterProvider", () => {
 			const provider = new CharacterProvider(mockPlugin, {});
 			// Search for a common emoji keyword that might be a synonym
 			const results = provider.getEntityList("happy", TriggerCharacter.Colon);
-			// There should be some results with "for" indicating synonym match
-			const hasSynonymIndicator = results.some(r => r.suggestionText.includes('for "'));
 			// This might not always be true depending on the emoji dictionary
 			// but the search should still work
 			expect(results.length).toBeGreaterThan(0);
