@@ -161,11 +161,13 @@ export class DateEntityProvider extends EntityProvider<DatesProviderUserSettings
 				const isoWeekDate = date.clone().startOf("isoWeek");
 				const week = isoWeekDate.isoWeek().toString().padStart(2, "0");
 				const isoDate = `${isoWeekDate.isoWeekYear()}-W${week}`;
+				const replacementText =
+					this.getPeriodicWeekText(date) ?? isoDate;
 				dates.push(
 					this.buildDateSuggestion({
 						suggestionText,
-						noteText: isoDate,
-						replacementText: isoDate,
+						noteText: replacementText,
+						replacementText,
 						icon: "calendar-range",
 						granularity: "week",
 						date,
@@ -223,12 +225,14 @@ export class DateEntityProvider extends EntityProvider<DatesProviderUserSettings
 			.startOf("isoWeek");
 		const weekStartDateShort = weekMoment.format("M/D");
 		const weekText = `${year}-W${week.toString().padStart(2, "0")}`;
+		const replacementWeekText =
+			this.getPeriodicWeekText(weekMoment) ?? weekText;
 
 		return [
 			this.buildDateSuggestion({
 				suggestionText: dateString,
-				noteText: `${weekText} (Wk of ${weekStartDateShort})`,
-				replacementText: `${weekText}|${weekText} (Wk of ${weekStartDateShort})`,
+				noteText: `${replacementWeekText} (Wk of ${weekStartDateShort})`,
+				replacementText: `${replacementWeekText}|${replacementWeekText} (Wk of ${weekStartDateShort})`,
 				icon: "calendar-range",
 				granularity: "week",
 				date: weekMoment,
@@ -299,6 +303,20 @@ export class DateEntityProvider extends EntityProvider<DatesProviderUserSettings
 		return calendarSetManager
 			.getActiveGranularities()
 			.includes(granularity);
+	}
+
+	private getPeriodicWeekText(date: moment.Moment): string | undefined {
+		if (
+			!this.settings.shouldCreateIfNotExists ||
+			!this.periodicNotesPlugin ||
+			!this.isPeriodicGranularityEnabled("week")
+		) {
+			return undefined;
+		}
+
+		const format =
+			this.periodicNotesPlugin.calendarSetManager?.getFormat?.("week");
+		return format ? date.format(format) : undefined;
 	}
 
 	private async createOrLinkPeriodicNote(

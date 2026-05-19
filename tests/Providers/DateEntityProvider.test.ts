@@ -174,6 +174,8 @@ describe("DateEntityProvider", () => {
 		expect(moment().startOf("isoWeek").format("gggg-[W]ww")).toBe(
 			"2026-W20"
 		);
+		expect(suggestion?.noteText).toBe("2026-W21");
+		expect(suggestion?.replacementText).toBe("2026-W21");
 		expect(suggestion?.action).toBeDefined();
 		await expect(suggestion?.action?.(suggestion, null)).resolves.toBe(
 			"[[Periodic/Weeks/2026-W21|this week]]"
@@ -478,6 +480,35 @@ describe("DateEntityProvider", () => {
 		expect(EntitiesNotice).toHaveBeenCalledTimes(1);
 
 		consoleErrorSpy.mockRestore();
+	});
+
+	test("returns a periodic week fallback that matches the displayed semantic week", async () => {
+		freezeMomentNow("2026-05-17");
+		const periodicNotes = {
+			calendarSetManager: {
+				getActiveGranularities: jest.fn(() => ["week"]),
+				getFormat: jest.fn(() => "gggg-[W]ww"),
+			},
+			getPeriodicNote: jest.fn(() => null),
+			createPeriodicNote: jest.fn(async () => undefined),
+		};
+		const plugin = createPluginWithPlugins({
+			"nldates-obsidian": createNlDatesPlugin(),
+			"periodic-notes": periodicNotes,
+		});
+
+		const provider = new DateEntityProvider(plugin, {
+			shouldCreateIfNotExists: true,
+		});
+		const suggestion = provider
+			.getEntityList("this week")
+			.find((item) => item.suggestionText === "this week");
+
+		expect(suggestion?.noteText).toBe("2026-W21");
+		expect(suggestion?.replacementText).toBe("2026-W21");
+		await expect(suggestion?.action?.(suggestion, null)).resolves.toBe(
+			"[[2026-W21]]"
+		);
 	});
 
 	test("does not add an action when Periodic Notes lacks active granularity API", () => {
