@@ -8,17 +8,32 @@ import {
 	TFile,
 	TFolder,
 } from "obsidian";
-import { getAPI, DataviewApi } from "obsidian-dataview";
 import { EntitySuggestionItem } from "src/EntitiesSuggestor";
 import { EntityProvider, EntityProviderUserSettings } from "./EntityProvider";
 import { TextInputSuggest, TextInputSuggestOptions } from "src/ui/suggest";
-import { EntityFilter } from "src/entities.types";
+import { AppWithPlugins, EntityFilter } from "src/entities.types";
 import { buildIconPickerSetting, buildTemplateCreationSetting } from "src/ui/providerSettingsComponents";
 import { applyFiltersToQueryResults } from "./EntityFilters";
 import { FrontmatterKeySuggest } from "src/ui/FrontmatterKeySuggest";
 import { setValidationStatus } from "src/ui/validationStatus";
 
 const dataviewProviderTypeID = "dataview";
+
+interface DataviewPage {
+	file: {
+		path: string;
+		name: string;
+		aliases: string[];
+	};
+}
+
+interface DataviewApi {
+	pages(query: string): DataviewPage[];
+}
+
+interface DataviewPlugin {
+	api?: DataviewApi;
+}
 
 export interface DataviewProviderUserSettings
 	extends EntityProviderUserSettings {
@@ -118,7 +133,7 @@ export class DataviewEntityProvider extends EntityProvider<DataviewProviderUserS
 		const queryIsOK = (
 			query: string
 		): "ok" | "error" | "empty" | "dv not found" => {
-			const dv: DataviewApi | undefined = getAPI(plugin.app);
+			const dv = DataviewEntityProvider.getDataviewApi(plugin.app);
 			if (!dv) {
 				return "dv not found";
 			}
@@ -364,7 +379,7 @@ export class DataviewEntityProvider extends EntityProvider<DataviewProviderUserS
 
 			const attemptFetching = () => {
 				attempts++;
-				const dv: DataviewApi | undefined = getAPI(app);
+				const dv = DataviewEntityProvider.getDataviewApi(app);
 				if (dv || attempts >= maxAttempts) {
 					resolve(dv);
 				} else {
@@ -375,6 +390,20 @@ export class DataviewEntityProvider extends EntityProvider<DataviewProviderUserS
 			attemptFetching();
 		});
 	};
+
+	private static getDataviewApi(app: App): DataviewApi | undefined {
+		const appWithPlugins = app as AppWithPlugins;
+		const dataviewPlugin =
+			(appWithPlugins.plugins?.getPlugin?.("dataview") as
+				| DataviewPlugin
+				| undefined) ??
+			(appWithPlugins.plugins?.plugins?.dataview as
+				| DataviewPlugin
+				| undefined);
+		const api = dataviewPlugin?.api;
+
+		return api && typeof api.pages === "function" ? api : undefined;
+	}
 }
 
 export class DataviewSourceSuggest extends TextInputSuggest<string> {
