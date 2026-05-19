@@ -66,6 +66,7 @@ export interface AppWithPlugins extends App {
 	plugins:
 		| undefined
 		| {
-				getPlugin(pluginName: string): Plugin | undefined;
-          };
+					getPlugin(pluginName: string): Plugin | undefined;
+					plugins?: Record<string, unknown>;
+	          };
 }

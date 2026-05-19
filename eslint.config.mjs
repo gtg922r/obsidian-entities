@@ -50,6 +50,7 @@ export default tseslint.config(
 	{
 		ignores: [
 			"node_modules/",
+			".agents/",
 			"main.js",
 			"dist/",
 			"coverage/",
