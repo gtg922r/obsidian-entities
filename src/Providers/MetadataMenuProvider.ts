@@ -3,7 +3,8 @@ import { ExtraButtonComponent, Plugin, SearchResult, Setting, TFile } from "obsi
 import { EntitySuggestionItem } from "src/suggestion.types";
 import { EntityProvider, EntityProviderUserSettings } from "./EntityProvider";
 import { AppWithPlugins } from "src/entities.types";
-import { createNewNoteFromTemplate } from "src/entitiesUtilities";
+import { createNewNoteFromTemplate, creationFailure, getTemplaterCreationEngine, resolveDefaultCreationDestination } from "../entityCreation";
+import { creationResultLink } from "../creationFeedback";
 import { setValidationStatus } from "src/ui/validationStatus";
 
 const newProviderTypeID = "metadata-menu";
@@ -132,16 +133,15 @@ export class MetadataMenuProvider extends EntityProvider<MetadataMenuProviderUse
 				target: {
 					kind: "action" as const,
 					id: JSON.stringify(["create", fileClassPath, template.path, query]),
-					callback: async () => {
-						await createNewNoteFromTemplate(
-							this.plugin,
-							template,
-							"", // TODO THINK ABOUT FOLDER
-							query,
-							false
-						);
-						await new Promise((resolve) => window.setTimeout(resolve, 20));
-						return `[[${query}]]`;
+					callback: async (_item, context) => {
+						const sourcePath = context?.file?.path ?? "";
+						try {
+							const destination = resolveDefaultCreationDestination(this.plugin.app, sourcePath, `${query}.${template.extension || "md"}`);
+							const result = await createNewNoteFromTemplate(this.plugin.app, { engine: "templater", template, destination, name: query });
+							return creationResultLink(this.plugin.app, result, sourcePath);
+						} catch (error) {
+							return creationResultLink(this.plugin.app, creationFailure(error), sourcePath);
+						}
 					},
 				},
 				match: { score: -10, matches: [] } as SearchResult,
@@ -156,13 +156,9 @@ export class MetadataMenuProvider extends EntityProvider<MetadataMenuProviderUse
 		plugin: Plugin
 	): void {
 		let pluginConfiguredOKIcon: ExtraButtonComponent;
-		const mdmPluginOK =
-			(plugin.app as AppWithPlugins).plugins?.getPlugin(
-				"metadata-menu"
-			) !== undefined;
-		const templaterPluginOK =
-			(plugin.app as AppWithPlugins).plugins?.getPlugin("templater") !==
-			undefined;
+		const mdmPlugin = (plugin.app as AppWithPlugins).plugins?.getPlugin?.("metadata-menu") as MetadataMenuPlugin | undefined;
+		const mdmPluginOK = mdmPlugin?.fieldIndex?.fileClassesName instanceof Map && mdmPlugin.fieldIndex.fileClassesPath instanceof Map;
+		const templaterPluginOK = getTemplaterCreationEngine(plugin.app) !== undefined;
 		const updatePluginConfiguredOKIcon = () => {
 			if (
 				mdmPluginOK &&
@@ -172,7 +168,7 @@ export class MetadataMenuProvider extends EntityProvider<MetadataMenuProviderUse
 				setValidationStatus(
 					pluginConfiguredOKIcon,
 					"package-check",
-					"Necessary plugins installed",
+					"Note creation integrations available",
 					"neutral"
 				);
 			} else if (pluginConfiguredOKIcon) {
@@ -180,14 +176,14 @@ export class MetadataMenuProvider extends EntityProvider<MetadataMenuProviderUse
 					setValidationStatus(
 						pluginConfiguredOKIcon,
 						"alert-triangle",
-						"Metadata Menu plugin not found",
+						"Metadata Menu file classes unavailable",
 						"error"
 					);
 				} else if (!templaterPluginOK) {
 					setValidationStatus(
 						pluginConfiguredOKIcon,
 						"alert-triangle",
-						"Templater plugin not found",
+						"Templater note creation unavailable",
 						"error"
 					);
 				}

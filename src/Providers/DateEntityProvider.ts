@@ -3,11 +3,11 @@ import {
 	EditorSuggestContext,
 	Plugin,
 	Setting,
-	TFile,
 	moment,
 } from "obsidian";
 import { EntitySuggestionItem } from "src/suggestion.types";
-import { unresolvedWikilink } from "../suggestionTargets";
+import { createOrReusePeriodicNote, creationFailure } from "../entityCreation";
+import { creationResultLink } from "../creationFeedback";
 import { EntityProvider, EntityProviderUserSettings } from "./EntityProvider";
 import {
 	AppWithPlugins,
@@ -327,54 +327,12 @@ export class DateEntityProvider extends EntityProvider<DatesProviderUserSettings
 		candidate: DateSuggestionCandidate,
 		item: EntitySuggestionItem,
 		context: EditorSuggestContext | null
-	): Promise<string> {
-		const fallbackText = unresolvedWikilink(candidate.linkpath, candidate.alias);
-		if (
-			!candidate.granularity ||
-			!candidate.date ||
-			!this.periodicNotesPlugin
-		) {
-			return fallbackText;
-		}
-
-		try {
-			const existingFile = this.periodicNotesPlugin.getPeriodicNote?.(
-				candidate.granularity,
-				candidate.date
-			);
-			if (existingFile) {
-				return this.toMarkdownLink(existingFile, context, item.suggestionText);
-			}
-
-			const createdFile = await this.periodicNotesPlugin.createPeriodicNote?.(
-				candidate.granularity,
-				candidate.date
-			);
-			if (createdFile) {
-				return this.toMarkdownLink(createdFile, context, item.suggestionText);
-			}
-		} catch (error) {
-			console.error("Unable to create or link periodic note.", error);
-			new EntitiesNotice(
-				"Unable to create or link periodic note.",
-				"alert-triangle"
-			);
-		}
-
-		return fallbackText;
-	}
-
-	private toMarkdownLink(
-		file: TFile,
-		context: EditorSuggestContext | null,
-		alias: string
-	): string {
-		return this.plugin.app.fileManager.generateMarkdownLink(
-			file,
-			context?.file?.path ?? "",
-			undefined,
-			alias
-		);
+	): Promise<string | undefined> {
+		const sourcePath = context?.file?.path ?? "";
+		const result = candidate.granularity && candidate.date
+			? await createOrReusePeriodicNote(this.plugin.app, candidate.granularity, candidate.date)
+			: creationFailure(new Error("The periodic date is unavailable."));
+		return creationResultLink(this.plugin.app, result, sourcePath, item.suggestionText);
 	}
 
 	static buildSummarySetting(

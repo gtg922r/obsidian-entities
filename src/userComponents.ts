@@ -36,8 +36,9 @@ export interface EntitiesModalInputOptions {
 }
 
 export class EntitiesModalInput extends Modal {
-	promise: Promise<string>;
-	resolve!: (value: string | PromiseLike<string>) => void;
+	private readonly promise: Promise<string | undefined>;
+	private resolve!: (value: string | undefined) => void;
+	private settled = false;
 	placeholder: string;
 	instructions: { insertString: string; dismissString: string };
 
@@ -52,7 +53,7 @@ export class EntitiesModalInput extends Modal {
 			dismissString: instructions?.dismissString ?? "to dismiss",
 		};
 
-		this.promise = new Promise<string>((resolve) => {
+		this.promise = new Promise<string | undefined>((resolve) => {
 			this.resolve = resolve;
 		});
 	}
@@ -104,18 +105,25 @@ export class EntitiesModalInput extends Modal {
 		// Handle enter key press to resolve the promise and close the modal
 		inputEl.addEventListener("keydown", (e) => {
 			if (e.key === "Enter") {
-				this.resolve(inputEl.value);
+				this.settle(inputEl.value);
 				this.close();
 			}
 		});
 	}
 
 	onClose() {
+		this.settle(undefined);
 		const { contentEl } = this;
 		contentEl.empty();
 	}
 
-	getInput(): Promise<string> {
+	private settle(value: string | undefined): void {
+		if (this.settled) return;
+		this.settled = true;
+		this.resolve(value);
+	}
+
+	getInput(): Promise<string | undefined> {
 		return this.promise;
 	}
 }
@@ -131,6 +139,7 @@ export async function openTemplateDetailsModal(
 export class TemplateDetailsModal extends Modal {
 	private resolve!: (value: entityFromTemplateSettings | null) => void;
 	private initialSettings?: entityFromTemplateSettings;
+	private settled = false;
 
 	constructor(app: App, initialSettings?: entityFromTemplateSettings) {
 		super(app);
@@ -153,6 +162,7 @@ export class TemplateDetailsModal extends Modal {
 			.setName("Engine")
 			.setDesc("Choose the template engine for the new entity")
 			.addDropdown((dropdown) => {
+				if (this.initialSettings?.engine === "core") dropdown.addOption("core", "Core (unsupported; recipe preserved)");
 				dropdown
 					.addOptions({
 						disabled: "Disabled",
@@ -211,6 +221,7 @@ export class TemplateDetailsModal extends Modal {
 			.addButton((button) =>
 				button.setButtonText("Save").onClick(() => {
 					const templateDetails: entityFromTemplateSettings = {
+						...this.initialSettings,
 						engine: engineDropdown.getValue() as
 							| "disabled"
 							| "core"
@@ -219,16 +230,26 @@ export class TemplateDetailsModal extends Modal {
 						entityName: entityNameInput.getValue(),
 						folderPath: folderPathInput.getValue(),
 					};
+					this.settle(templateDetails);
 					this.close();
-					this.resolve(templateDetails);
 				})
 			)
 			.addButton((button) =>
 				button.setButtonText("Cancel").onClick(() => {
 					this.close();
-					this.resolve(null);
 				})
 			);
+	}
+
+	onClose(): void {
+		this.settle(null);
+		this.contentEl.empty();
+	}
+
+	private settle(value: entityFromTemplateSettings | null): void {
+		if (this.settled) return;
+		this.settled = true;
+		this.resolve?.(value);
 	}
 
 	async openAndGetValue(): Promise<entityFromTemplateSettings | null> {

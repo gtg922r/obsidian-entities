@@ -597,3 +597,5 @@ describe("replaceTextAtContext tests", () => {
         expect(mockEditor.setCursor).toHaveBeenCalledWith({ line: 1, ch: 4 });
     });
 });
+
+jest.mock("../src/userComponents", () => ({ EntitiesNotice: jest.fn() }));

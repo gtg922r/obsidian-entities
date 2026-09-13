@@ -12,7 +12,7 @@ import { DateEntityProvider } from "../src/Providers/DateEntityProvider";
 import moment = require("moment");
 import { MetadataMenuProvider } from "../src/Providers/MetadataMenuProvider";
 import { TriggerCharacter } from "../src/entities.types";
-import { createNewNoteFromTemplate, insertTemplateUsingTemplater } from "../src/entitiesUtilities";
+import { insertTemplateUsingTemplater } from "../src/entitiesUtilities";
 
 jest.mock("obsidian", () => ({
 	...jest.requireActual("./__mocks__/obsidian"),
@@ -23,7 +23,7 @@ jest.mock("obsidian", () => ({
 	setIcon: jest.fn(),
 }));
 jest.mock("../src/entitiesUtilities", () => ({ createNewNoteFromTemplate: jest.fn(), insertTemplateUsingTemplater: jest.fn(async () => {}) }));
-jest.mock("../src/userComponents", () => ({}));
+jest.mock("../src/userComponents", () => ({ EntitiesNotice: jest.fn() }));
 jest.mock("emojilib", () => ({ __esModule: true, default: { "🐈": ["cat", "cat_face"], "👩🏽‍💻": ["coder", "coding"] } }));
 
 const file = (path: string): TFile => {
@@ -271,7 +271,7 @@ test("Metadata Menu action identity includes file class, template path and query
 	expect(first.target.kind === "action" && JSON.parse(first.target.id)).toEqual(["create", "Classes/Person.md", a.path, "New"]);
 	h.metadata.set("Classes/Person.md", { newNoteTemplate: "[[Templates/B.md]]" });
 	expect(provider.getTemplateCreationSuggestions("New")[0].target).not.toEqual(first.target);
-	expect(createNewNoteFromTemplate).not.toHaveBeenCalled();
+	expect(insertTemplateUsingTemplater).not.toHaveBeenCalled();
 });
 
 test("real-file rows show the current vault-relative path alongside existing explanatory notes", () => {
@@ -286,6 +286,7 @@ test("real-file rows show the current vault-relative path alongside existing exp
 
 test("Date actions keep distinct operative output aliases for the same date", async () => {
 	const h = harness(), f = file("Calendar/2026-09-13.md");
+	h.files.set(f.path, f);
 	h.integrations["nldates-obsidian"] = { parseDate: () => {
 		const date = moment("2026-09-13"); return { date: date.toDate(), moment: date, formattedString: "2026-09-13" };
 	} };
@@ -303,6 +304,30 @@ test("Date actions keep distinct operative output aliases for the same date", as
 		expect(h.generate).toHaveBeenLastCalledWith(f, ctx.file.path, undefined, alias);
 	}
 	expect(getPeriodicNote).toHaveBeenCalledTimes(2);
+});
+
+test.each(["undefined", "reject", "missing-template"])("real recipe selection leaves the sentence untouched on %s creation", async failure => {
+	const h = harness(), template = file("Templates/Person.md");
+	const root = Object.assign(new TFolder(), { path: "/" });
+	Object.assign(h.app.vault, { getRoot: () => root });
+	if (failure !== "missing-template") h.files.set(template.path, template);
+	const create = jest.fn(async () => {
+		if (failure === "reject") throw new Error("engine failed");
+		return undefined;
+	});
+	h.integrations["templater-obsidian"] = { templater: { create_new_note_from_template: create } };
+	h.use(new FolderEntityProvider(h.plugin, {
+		providerInstanceId: "recipe", path: "People",
+		entityCreationTemplates: [{ engine: "templater", templatePath: template.path, entityName: "Person" }],
+	}));
+	const ctx = context("@Alice");
+	jest.mocked(prepareFuzzySearch).mockImplementation(() => () => ({ score: 10, matches: [] }));
+	const row = h.suggestor.getSuggestions(ctx).find(item => item.target.kind === "action")!;
+	h.suggestor.selectSuggestion(row, {} as MouseEvent);
+	for (let i = 0; i < 8; i++) await Promise.resolve();
+	expect(ctx.editor.replaceRange).not.toHaveBeenCalled();
+	expect(ctx.editor.setCursor).not.toHaveBeenCalled();
+	expect(h.generate).not.toHaveBeenCalled();
 });
 
 test("Date no-create rows carry explicit unresolved linkpath/alias and preserve wikilink output", () => {

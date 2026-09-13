@@ -1,4 +1,4 @@
-import { App, Plugin, TFile, moment } from "obsidian";
+import { App, Plugin, TFile, TFolder, moment } from "obsidian";
 import { ConfiguredProviderSettings } from "./Providers/EntityProvider";
 
 export enum TriggerCharacter {
@@ -49,7 +49,7 @@ export interface TemplaterPlugin {
 	templater?: {
 		create_new_note_from_template?: (
 			file: TFile | string,
-			folderSetting: string,
+			folderSetting: TFolder | string,
 			newTemplateName: string,
 			openNewNote: boolean
 		) => Promise<TFile | undefined>;
@@ -85,7 +85,7 @@ export interface PeriodicNotesPlugin extends Plugin {
 	createPeriodicNote?: (
 		granularity: PeriodicNotesGranularity,
 		date: moment.Moment
-	) => Promise<TFile>;
+	) => Promise<TFile | undefined>;
 	getPeriodicNote?: (
 		granularity: PeriodicNotesGranularity,
 		date: moment.Moment

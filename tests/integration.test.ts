@@ -491,3 +491,5 @@ describe("Integration: Suggestion selection", () => {
 		expect(actionMock).toHaveBeenCalledWith(result, { ...context, query: "@" });
 	});
 });
+
+jest.mock("../src/userComponents", () => ({ EntitiesNotice: jest.fn() }));

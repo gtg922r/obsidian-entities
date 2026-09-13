@@ -42,6 +42,8 @@ export function entityTemplateStatusLabel(
 ): string {
 	if (entityCreationTemplates.length === 0) {
 		return "Set template";
+	} else if (entityCreationTemplates[0].engine === "core") {
+		return "Core unsupported (recipe preserved)";
 	} else if (
 		entityCreationTemplates.length === 1 &&
 		entityCreationTemplates[0].engine !== "disabled"
@@ -83,9 +85,9 @@ export function buildTemplateCreationSetting<T extends { entityCreationTemplates
 					initialSettings[0]
 				);
 				if (templateDetails) {
-					settings.entityCreationTemplates = [templateDetails];
+					settings.entityCreationTemplates = [{ ...initialSettings[0], ...templateDetails }, ...initialSettings.slice(1)];
 					button.setButtonText(
-						entityTemplateStatusLabel([templateDetails])
+						entityTemplateStatusLabel(settings.entityCreationTemplates)
 					);
 					onShouldSave(settings);
 				}

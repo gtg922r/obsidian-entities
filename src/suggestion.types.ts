@@ -11,7 +11,7 @@ export type SuggestionTarget =
 export type SuggestionAction = (
 	item: EntitySuggestionItem,
 	context: EditorSuggestContext | null
-) => Promise<string> | string | void;
+) => Promise<string | void> | string | void;
 
 /** Searchable presentation paired with a required, unambiguous target. */
 export interface EntitySuggestionItem {
