@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { cli, REPOSITORY, run, validateRepository, validateToolchain, version } from "./release-utils.mjs";
-import { acceptance, ancestor, api, candidate, refs, releaseState, remoteFile, unchanged, verifyDownloads, verifyMetadata } from "./promotion-utils.mjs";
+import { acceptance, ancestor, api, candidate, refs, releaseState, remoteFile, unchanged, verifyDownloads, verifyMetadata, verifyPromotedRelease } from "./promotion-utils.mjs";
 
 cli(() => {
 	const args = process.argv.slice(2);
@@ -38,11 +38,10 @@ cli(() => {
 			input: JSON.stringify({ prerelease: false, make_latest: "true" }), stdio: ["pipe", "pipe", "pipe"],
 		});
 		const updated = JSON.parse(result);
-		if (updated.id !== a.record.releaseId || updated.tag_name !== tag || updated.draft !== false || updated.prerelease !== false) throw new Error("Unexpected promotion response.");
+		verifyPromotedRelease(updated, c, a, initial, "Promotion response");
 		recheck(true, true);
 		recheck(true);
-		const latest = JSON.parse(api("releases/latest"));
-		if (latest.id !== a.record.releaseId || latest.tag_name !== tag || latest.draft !== false || latest.prerelease !== false) throw new Error("Latest release does not identify the promoted candidate.");
+		verifyPromotedRelease(JSON.parse(api("releases/latest")), c, a, initial, "Latest release");
 		process.stdout.write(`Promoted ${tag} from ${c.commit}; preserved release ${a.record.releaseId}, tag object ${a.record.tagObject}, asset IDs and downloaded bytes. Verified latest and default ${initialRefs.branch}@${initialRefs.head}.\n`);
 	} catch (error) {
 		throw new Error(`Promotion outcome uncertain; PATCH may already have succeeded. Inspect release ${a.record.releaseId}, latest, assets and refs manually before any further action. No retry, rollback, asset replacement or deletion attempted.\n${error.message}`);

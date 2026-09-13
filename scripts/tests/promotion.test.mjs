@@ -251,7 +251,7 @@ for (const [label, fault] of [
 	});
 }
 
-for (const mode of ["patchFailure", "latestFailure", "postcheck-bytes", "postcheck-tag", "postcheck-assets", "postcheck-body", "postcheck-latest-other"]) {
+for (const mode of ["patchFailure", "latestFailure", "postcheck-bytes", "postcheck-tag", "postcheck-assets", "postcheck-body", "postcheck-latest-other", "postcheck-latest-body", "postcheck-latest-assets", "patch-response-body"]) {
 	test(`uncertain mutation ${mode} is reported with exactly one PATCH and no retry`, t => {
 		const f = fixture(t);
 		if (mode === "patchFailure" || mode === "latestFailure") f.state[mode] = true;
@@ -260,6 +260,9 @@ for (const mode of ["patchFailure", "latestFailure", "postcheck-bytes", "postche
 		if (mode === "postcheck-assets") f.state.faults = [{ endpoint: assetEndpoint, count: 4, response: [[]] }];
 		if (mode === "postcheck-body") f.state.faults = [{ endpoint: listEndpoint, count: 4, change: { release: { ...f.state.release, prerelease: false, body: "changed" } } }];
 		if (mode === "postcheck-latest-other") f.state.faults = [{ endpoint: `${prefix}/releases/latest`, count: 1, response: { id: 999, tag_name: "0.4.5", draft: false, prerelease: false } }];
+		if (mode === "patch-response-body") f.state.faults = [{ endpoint: `${prefix}/releases/42`, count: 4, mutation: true, response: { ...f.state.release, prerelease: false, body: "changed" } }];
+		if (mode === "postcheck-latest-body") f.state.faults = [{ endpoint: `${prefix}/releases/latest`, count: 1, response: { ...f.state.release, prerelease: false, body: "changed" } }];
+		if (mode === "postcheck-latest-assets") f.state.faults = [{ endpoint: `${prefix}/releases/latest`, count: 1, response: { ...f.state.release, prerelease: false, assets: f.state.release.assets.map(a => ({ ...a, id: a.id + 1000 })) } }];
 		f.save();
 		failed(runPromotion(f), /Promotion outcome uncertain/); assert.equal(patches(f).length, 1);
 		if (mode === "patchFailure") {

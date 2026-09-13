@@ -149,6 +149,10 @@ function assetIdentity(asset) {
 	return [asset.name, asset.id, asset.size, asset.state, asset.digest ?? null, asset.created_at ?? null, asset.updated_at ?? null];
 }
 
+function releaseIdentity(value) {
+	return [value.id, value.tag_name, value.name, value.body, value.target_commitish, value.created_at, value.published_at, value.immutable ?? null];
+}
+
 /** Read complete inventories and reject stale candidates or any observed identity drift. */
 export function releaseState(c, a, stable = false) {
 	const releases = pages("releases?per_page=100");
@@ -184,9 +188,8 @@ export function releaseState(c, a, stable = false) {
 		if (JSON.stringify(validateAssets(embedded)) !== JSON.stringify(assetSnapshot)) throw new Error("Remote asset inventories changed during verification.");
 	}
 	// Download counters may change through our own reads. Release updated_at may change on PATCH.
-	const identity = value => [value.id, value.tag_name, value.name, value.body, value.target_commitish, value.created_at, value.published_at, value.immutable ?? null];
-	if (JSON.stringify(identity(release)) !== JSON.stringify(identity(matches[0]))) throw new Error("Release changed during verification.");
-	return { assets, identity: identity(release), assetSnapshot, others: others.map(value => [value.id, value.tag_name, value.published_at]).sort((left, right) => left[0] - right[0]), updatedAt: release.updated_at ?? null };
+	if (JSON.stringify(releaseIdentity(release)) !== JSON.stringify(releaseIdentity(matches[0]))) throw new Error("Release changed during verification.");
+	return { assets, identity: releaseIdentity(release), assetSnapshot, others: others.map(value => [value.id, value.tag_name, value.published_at]).sort((left, right) => left[0] - right[0]), updatedAt: release.updated_at ?? null };
 }
 
 /** Download by ID every time, including the remote receipt; local evidence alone is insufficient. */
@@ -199,4 +202,11 @@ export function verifyDownloads(state, c) {
 
 export function unchanged(actual, expected, label) {
 	if (JSON.stringify(actual) !== JSON.stringify(expected)) throw new Error(`${label} changed during verification.`);
+}
+
+/** Check every preserved field also when a mutation/latest response exposes a concurrent change. */
+export function verifyPromotedRelease(release, c, a, initial, label) {
+	if (release.id !== a.record.releaseId || release.tag_name !== c.tag || release.draft !== false || release.prerelease !== false || !Array.isArray(release.assets)) throw new Error(`${label} does not identify the promoted candidate.`);
+	unchanged(releaseIdentity(release), initial.identity, `${label} identity`);
+	unchanged(release.assets.map(assetIdentity).sort((left, right) => left[0].localeCompare(right[0])), initial.assetSnapshot, `${label} asset inventory`);
 }
