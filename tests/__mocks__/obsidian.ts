@@ -59,3 +59,20 @@ export class TFolder extends TAbstractFile {
 export class Component {
     registerEvent() {}
 }
+
+/** Scope ordering mirrors the separately executed native method fixture; no DOM routing is simulated here. */
+export class Scope {
+	private handlers: { key: string; callback: (event: KeyboardEvent) => unknown }[] = [];
+	constructor(private parent?: Scope) {}
+	register(modifiers: string[], key: string, callback: (event: KeyboardEvent) => unknown) {
+		this.handlers.push({ key, callback });
+	}
+	handleKey(event: KeyboardEvent): unknown {
+		const handler = this.handlers.find(handler => handler.key === event.key);
+		return handler ? handler.callback(event) : this.parent?.handleKey(event);
+	}
+}
+
+export function pressScopeKey(scope: unknown, key: string, isComposing = false): unknown {
+	return (scope as Scope).handleKey(new KeyboardEvent("keydown", { key, isComposing }));
+}

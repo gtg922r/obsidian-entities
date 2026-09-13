@@ -1,3 +1,5 @@
+import { EditorState } from "@codemirror/state";
+import { ViewUpdate } from "@codemirror/view";
 import Entities from "./main";
 import {
 	EditorSuggest,
@@ -8,17 +10,23 @@ import {
 	setIcon,
 	prepareFuzzySearch,
 	EditorSuggestTriggerInfo,
+	Scope,
 } from "obsidian";
 import ProviderRegistry from "./Providers/ProviderRegistry";
 import { EntityProvider, EntityProviderUserSettings, RefreshBehavior } from "./Providers/EntityProvider";
 import { ActionCoordinator } from "./actionCoordinator";
-import { EditorBindings } from "./editorBindings";
+import { EditorBindings, EditorBindingSnapshot } from "./editorBindings";
 import { TriggerCharacter } from "./entities.types";
 import { EntitySuggestionItem } from "./suggestion.types";
 import { readSuggestionTarget, suggestionTargetKey } from "./suggestionTargets";
 
-// Pre-compiled whitespace matcher to avoid recreating a RegExp per character
-const WHITESPACE_RE = /\s/;
+import { triggerCandidate, triggerSyntax } from "./triggerContext";
+
+interface TriggerSession {
+	readonly binding: EditorBindingSnapshot;
+	readonly context: EditorSuggestContext;
+	state: EditorState;
+}
 
 type Provider = EntityProvider<EntityProviderUserSettings>;
 type ProviderStage = "policy" | "ordinary" | "creation" | "item" | "action";
@@ -55,107 +63,102 @@ export class EntitiesSuggestor extends EditorSuggest<EntitySuggestionItem> {
 	private readonly actions: ActionCoordinator;
 	private readonly removeRegistryListener: () => void;
 
-	// Track the last dismissed query
-	private lastDismissedQuery: EditorPosition | null = null;
+	private liveTrigger?: TriggerSession;
+	private dismissed?: TriggerSession;
+	private readonly removeBindingListener: () => void;
 
 	private lastSuggestionCount = 0;
 
-	//empty constructor
-	constructor(plugin: Entities, registry: ProviderRegistry, bindings = new EditorBindings(plugin.app)) {
+	constructor(plugin: Entities, registry: ProviderRegistry, private readonly bindings = new EditorBindings(plugin.app)) {
 		super(plugin.app);
 		this.plugin = plugin;
 		this.actions = new ActionCoordinator(plugin.app, bindings);
 		this.providerRegistry = registry;
 		this.removeRegistryListener = registry.onChange(() => this.invalidateProviders());
+		this.removeBindingListener = bindings.onChange(update => this.validateSessions(update));
+		// Native Escape runs first in its own scope. A public child scope captures it
+		// before native close clears context; every other key retains the native parent.
+		this.scope = new Scope(this.scope);
+		this.scope.register([], "Escape", event => {
+			if (event.isComposing || this.liveTrigger?.binding.binding.view.composing) return;
+			this.dismissByEscape();
+			this.close();
+			return false;
+		});
 	}
 
-	/**
-	 * This function is triggered when the user starts typing in the editor. It checks...
-	 * If these conditions are met, it returns an object with the start and end positions
-	 * of the word and the word itself as the query. If not, it returns null.
-	 *
-	 * @param cursor - The current position of the cursor in the editor.
-	 * @param editor - The current editor instance.
-	 * @param file - The current file being edited.
-	 * @returns An object with the start and end positions of the word and the word itself as the query, or null if the conditions are not met.
-	 */
-	onTrigger(
-		cursor: EditorPosition,
-		editor: Editor,
-		file: TFile
-	): EditorSuggestTriggerInfo | null {
+	/** Use only the supplied live editor and the newest deliberate starter on its current line. */
+	onTrigger(cursor: EditorPosition, editor: Editor, file: TFile | null): EditorSuggestTriggerInfo | null {
 		if (this.disposed) return null;
-		const currentLine = cursor.line;
-		const currentLineToCursor = editor.getLine(currentLine).slice(0, cursor.ch);
-
-		// Returns true if any non-whitespace character exists after `idx` before the cursor,
-		// or if `idx` is the last character (lone trigger at EOL allowed). This prevents
-		// opening suggestions for spans like "@   " while still allowing "@" at EOL and
-		// multi-word phrases like "@bob ho".
-		// Defined inline for locality; recreated per keystroke but trivial cost.
-		const hasNonWhitespaceAfter = (idx: number): boolean => {
-			if (idx < 0) return false; // invalid index
-			if (idx + 1 >= currentLineToCursor.length) return true; // trigger at EOL
-			for (let i = idx + 1; i < currentLineToCursor.length; i++) {
-				const ch = currentLineToCursor.charAt(i);
-				if (!WHITESPACE_RE.test(ch)) return true; // early-exit on first non-space
-			}
-			return false; // only spaces remain
-		};
-
-		// Phrase-scoped '@': prefer any valid '@' anywhere before cursor
-		const lastAt = currentLineToCursor.lastIndexOf("@");
-		const atValid = lastAt >= 0 && hasNonWhitespaceAfter(lastAt);
-
-		// Token start detection for ':' and '/'
-		let tokenStart = currentLineToCursor.length - 1;
-		while (tokenStart >= 0 && !/\s/.test(currentLineToCursor.charAt(tokenStart))) tokenStart--;
-		tokenStart += 1;
-		const tokenStartChar = currentLineToCursor.charAt(tokenStart) ?? "";
-		const colonValid = tokenStartChar === ":" && hasNonWhitespaceAfter(tokenStart);
-
-		// Slash trigger: find the last '/' within the current token so that
-		// typing e.g. "word/command" still activates the suggestor.
-		const tokenSlice = currentLineToCursor.slice(tokenStart);
-		const lastSlashInToken = tokenSlice.lastIndexOf("/");
-		const slashIndex = lastSlashInToken >= 0 ? tokenStart + lastSlashInToken : -1;
-		const slashValid = slashIndex >= 0 && hasNonWhitespaceAfter(slashIndex);
-
-		let triggerIndex = -1;
-		let triggerChar: string | null = null;
-		if (atValid) {
-			triggerIndex = lastAt;
-			triggerChar = "@";
-		} else if (colonValid) {
-			triggerIndex = tokenStart;
-			triggerChar = ":";
-		} else if (slashValid) {
-			triggerIndex = slashIndex;
-			triggerChar = "/";
-		}
-
-		if (triggerIndex === -1 || !triggerChar) {
+		const request = this.readTrigger(cursor, editor, file);
+		if (!request || request.syntax === "blocked") {
+			this.liveTrigger = this.dismissed = undefined;
 			return null;
 		}
+		if (this.dismissed && (this.dismissed.context.editor !== editor || this.dismissed.context.file !== file ||
+			!this.bindings.isSessionCurrent(this.dismissed.binding) || (request.session && !this.sameSession(this.dismissed, request.session)))) this.dismissed = undefined;
+		this.liveTrigger = undefined;
+		if (request.syntax === "unavailable" || !request.session || this.dismissed) return null;
+		this.liveTrigger = request.session;
+		const { start, end, query } = request.session.context;
+		return { start, end, query };
+	}
 
-		const start = triggerIndex + 1;
-		const query = currentLineToCursor.slice(triggerIndex);
+	private readTrigger(cursor: EditorPosition, editor: Editor, file: TFile | null) {
+		try {
+			if (!file) return { syntax: "unavailable" as const };
+			const binding = this.bindings.capture(editor, file);
+			if (!binding) return { syntax: "unavailable" as const };
+			const state = binding.binding.view.state;
+			if (!Number.isInteger(cursor.line) || cursor.line < 0 || cursor.line >= state.doc.lines) return { syntax: "unavailable" as const };
+			const line = state.doc.line(cursor.line + 1);
+			if (!Number.isInteger(cursor.ch) || cursor.ch < 0 || cursor.ch > line.length || editor.getLine(cursor.line) !== line.text ||
+				state.selection.main.head !== line.from + cursor.ch || !state.selection.main.empty) return { syntax: "unavailable" as const };
+			const candidate = triggerCandidate(line.text, cursor);
+			if (!candidate) return null;
+			const from = { line: cursor.line, ch: candidate.start.ch - 1 };
+			if (editor.posToOffset(from) !== line.from + from.ch || editor.posToOffset(cursor) !== line.from + cursor.ch) return { syntax: "unavailable" as const };
+			const context = { ...candidate, editor, file };
+			const syntax = triggerSyntax(state, line.from + from.ch, line.from + cursor.ch);
+			if (binding.binding.view.state !== state || !this.bindings.isSessionCurrent(binding)) return { syntax: "unavailable" as const };
+			return { syntax, session: { binding, context, state } };
+		} catch { return { syntax: "unavailable" as const }; }
+	}
 
-		// Respect last dismissed query span
-		if (
-			this.lastDismissedQuery &&
-			this.lastDismissedQuery.line === cursor.line &&
-			this.lastDismissedQuery.ch === start
-		) {
-			return null;
-		}
-		this.lastDismissedQuery = null;
+	private sameSession(a: TriggerSession, b?: TriggerSession): boolean {
+		return !!b && this.bindings.isSessionCurrent(a.binding) && a.binding.binding === b.binding.binding &&
+			a.context.start.line === b.context.start.line && a.context.start.ch === b.context.start.ch &&
+			a.context.query[0] === b.context.query[0];
+	}
 
-		return {
-			start: { line: currentLine, ch: start },
-			query,
-			end: cursor,
+	private validateSessions(update?: ViewUpdate): void {
+		const valid = (session: TriggerSession) => {
+			if (!this.bindings.isSessionCurrent(session.binding)) return false;
+			const view = session.binding.binding.view;
+			if (!update || update.view !== view || session.state === update.state) return true;
+			const { start } = session.context;
+			if (start.line >= update.startState.doc.lines) return false;
+			const mark = update.startState.doc.line(start.line + 1).from + start.ch - 1;
+			let replaced = false;
+			update.changes.iterChangedRanges((from, to) => { if (from <= mark && to >= mark) replaced = true; });
+			if (replaced) return false;
+			const selection = view.state.selection.main, line = view.state.doc.lineAt(selection.head);
+			const candidate = triggerCandidate(line.text, { line: line.number - 1, ch: selection.head - line.from });
+			session.state = update.state;
+			return selection.empty && !!candidate && candidate.start.line === start.line && candidate.start.ch === start.ch &&
+				candidate.query[0] === session.context.query[0] && triggerSyntax(view.state, line.from + start.ch - 1, selection.head) !== "blocked";
 		};
+		if (this.liveTrigger && !valid(this.liveTrigger)) this.liveTrigger = undefined;
+		if (this.dismissed && !valid(this.dismissed)) this.dismissed = undefined;
+	}
+
+	private dismissByEscape(): void {
+		const session = this.liveTrigger, context = this.context;
+		if (!session || !context || !this.lastSuggestionCount || context.editor !== session.context.editor || context.file !== session.context.file ||
+			context.query !== session.context.query || context.start.line !== session.context.start.line || context.start.ch !== session.context.start.ch ||
+			context.end.line !== session.context.end.line || context.end.ch !== session.context.end.ch) return;
+		const request = this.readTrigger(context.end, context.editor, context.file);
+		if (request?.syntax === "allowed" && this.sameSession(session, request.session) && request.session.context.query === context.query) this.dismissed = request.session;
 	}
 
 	/** Refresh on the next request while keeping displayed results selectable. */
@@ -170,7 +173,7 @@ export class EntitiesSuggestor extends EditorSuggest<EntitySuggestionItem> {
 		this.resultEpoch++;
 		this.close();
 		this.context = null;
-		this.lastDismissedQuery = null;
+		this.liveTrigger = this.dismissed = undefined;
 		this.lastSuggestionCount = 0;
 	}
 
@@ -180,6 +183,7 @@ export class EntitiesSuggestor extends EditorSuggest<EntitySuggestionItem> {
 		this.disposed = true;
 		this.actions.dispose();
 		this.removeRegistryListener();
+		this.removeBindingListener();
 		this.invalidateProviders();
 	}
 
@@ -346,9 +350,8 @@ export class EntitiesSuggestor extends EditorSuggest<EntitySuggestionItem> {
 	}
 
 	close(): void {
-		if (this.context && this.lastSuggestionCount > 0) {
-			this.lastDismissedQuery = this.context.start;
-		}
+		this.liveTrigger = undefined;
+		this.lastSuggestionCount = 0;
 		super.close();
 	}
 }

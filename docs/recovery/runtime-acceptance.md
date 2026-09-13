@@ -221,3 +221,26 @@ Do not deploy migrated builds into a real vault from this kit. Coordinator
 acceptance must resolve settings loss, wrong targets, stale editor writes and
 misleading creation success before release, then record actual desktop/mobile
 dogfood sessions separately.
+
+## R4c trigger and dismissal gates
+
+Every case in this section remains **NOT RUN** until the coordinator records
+live results on the exact candidate. Unit fixtures replay token names/ranges
+emitted by extracted 1.12.7 and 1.14.1 Catalyst methods into synthetic Lezer trees;
+extracted Scope methods also verify handler order. Neither establishes full
+native tree construction, incremental parser timing, actual popup arbitration,
+IME, the declared 1.7.2 floor, proposed 1.13.4 floor, or current public hosts.
+The manifest floor remains unchanged.
+
+| Case | Manual input/action | Required result |
+| --- | --- | --- |
+| T1: deliberate starters | Lone `@`, `:`, `/`; `Hello @Bob Hope`, `@8/17`, `@folder/name`, `@Zoë 東京`; headings and spaced list/quote markers | Provider menus retain the intended query. Test mid-line cursor and insertion replacing only mark-to-cursor. |
+| T2: new trigger precedence | `@Bob /todo`, `@Bob :cat`, then trailing whitespace or `/usr/local` on the newer slash query | Newer standalone starter owns the query; an invalid newer query never revives the old entity phrase. |
+| T3: literals | Email, HTTPS/port, Windows/relative/multi-component absolute paths, `word/command`, `a/b/c`, escaped marks; then whitespace and a fresh `/todo` | Literal text stays quiet; the new boundary trigger works. `/usr` remains an intentional ambiguous slash query. |
+| T4: native syntax | Single/multiple-backtick inline code, backtick/tilde fences, indented code versus indented paragraph continuation, complete/open wiki targets/aliases/embeds, partly closed wiki syntax | Native recognized spans exclude Entities. Test trigger origin, cursor before closing delimiters, and a later new starter after closed syntax. |
+| T5: Markdown boundaries | `[label]( @Bob`, `[label]( @Bob)`, `[ @Bob](target)`, `[label] ( @Bob`, ordinary `( @Bob`, `[label](nested(a) @Bob` | Destinations and the anchored unfinished tail stay quiet; labels and ordinary prose remain eligible. Follow native completion at its first recognized closing delimiter in the nested example. This is not universal malformed-Markdown exclusion. |
+| T6: Escape session | Dismiss `@Bob`, extend it, trigger metadata/data refresh; switch to same coordinates in another note/editor; delete/retype/change the mark; leave/re-enter span | Same phrase remains dismissed through data refresh. Each new interaction works independently. Registry replacement and unload clear dismissal. |
+| T7: other closes | Select a row, cancel creation through its name modal's Escape, then replace final character at the same span; test empty results and programmatic closure | No persistent suggestion dismissal; `/Person` can reopen after cancelled creation. Name-modal Escape belongs to that modal. Retained selectable rows still obey R4b guards and native close-before-selection. |
+| T8: parser freshness | Edit opening/closing fences without saving, type far down a large note, and allow viewport parsing to catch up | Current context governs eligibility; unavailable syntax stays quiet and a later normal request retries. No stale context or fabricated Escape; no polling/reopening scheduler. Persistent ordinary-typing suppression is a compatibility failure. |
+| T9: native arbitration | Open native wiki completion, press Escape, continue inside wiki target/alias; test core slash commands enabled/disabled and record registration order | Entities does not steal wiki completion or appear as a substitute after native Escape. Record visible manager behavior separately from direct onTrigger results. |
+| T10: modes and input | Repeat on Source/Live Preview, main/popout, mobile and real IME; composing Escape/Enter, ordinary Escape, navigation, destruction/reuse of editor views | Composition does not dismiss/commit early; parent native key handling remains functional; no leaked binding/session after lifecycle changes. |

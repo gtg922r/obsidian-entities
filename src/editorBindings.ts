@@ -1,5 +1,5 @@
 import { App, Editor, MarkdownFileInfo, Plugin, TAbstractFile, TFile, editorInfoField } from "obsidian";
-import { EditorView, ViewPlugin } from "@codemirror/view";
+import { EditorView, ViewPlugin, ViewUpdate } from "@codemirror/view";
 
 interface Binding {
 	readonly editor: Editor;
@@ -28,6 +28,7 @@ export class EditorBindings {
 	private activation = 0;
 	private focused?: Binding;
 	private disposed = false;
+	private listeners = new Set<(update?: ViewUpdate) => void>();
 	readonly extension;
 
 	constructor(private readonly app: App) {
@@ -63,7 +64,7 @@ export class EditorBindings {
 					owner.live.add(this.binding);
 				}
 			}
-			update() { this.refresh(); }
+			update(update: ViewUpdate) { this.refresh(); owner.notify(update); }
 			destroy() { if (this.binding) owner.remove(this.binding); }
 		}, {
 			eventHandlers: {
@@ -82,7 +83,7 @@ export class EditorBindings {
 		plugin.registerEvent(this.app.workspace.on("editor-change", editor => {
 			this.revisions.set(editor, (this.revisions.get(editor) ?? 0) + 1);
 		}));
-		const activate = () => { this.activation++; };
+		const activate = () => { this.activation++; this.notify(); };
 		plugin.registerEvent(this.app.workspace.on("active-leaf-change", activate));
 		plugin.registerEvent(this.app.workspace.on("file-open", activate));
 		plugin.registerEvent(this.app.workspace.on("layout-change", () => {
@@ -106,12 +107,14 @@ export class EditorBindings {
 		if (this.focused !== binding) {
 			this.activation++;
 			this.focused = binding;
+			this.notify();
 		}
 	}
 
 	private remove(binding: Binding): void {
 		if (this.current.get(binding.editor) === binding) this.current.delete(binding.editor);
 		this.live.delete(binding);
+		this.notify();
 	}
 
 	private attached(binding: Binding): boolean {
@@ -131,11 +134,23 @@ export class EditorBindings {
 
 	/** Final checks supplement delivered events; invisible programmatic history is not observable. */
 	isCurrent(snapshot: EditorBindingSnapshot): boolean {
+		return this.isSessionCurrent(snapshot) && snapshot.revision === (this.revisions.get(snapshot.binding.editor) ?? 0);
+	}
+
+	/** Trigger sessions survive typing, but never a different binding or observed activation. */
+	isSessionCurrent(snapshot: EditorBindingSnapshot): boolean {
 		const { binding } = snapshot;
 		return !this.disposed && snapshot.activation === this.activation &&
-			snapshot.revision === (this.revisions.get(binding.editor) ?? 0) &&
 			this.app.workspace.activeEditor === binding.info && this.attached(binding);
 	}
+
+	/** Reuse the existing view/lifecycle observer for session invalidation; this never requests a popup. */
+	onChange(listener: (update?: ViewUpdate) => void): () => void {
+		this.listeners.add(listener);
+		return () => this.listeners.delete(listener);
+	}
+
+	private notify(update?: ViewUpdate): void { this.listeners.forEach(listener => listener(update)); }
 
 	/** Invalidate all snapshots without disturbing another plugin's views or listeners. */
 	dispose(): void {
@@ -143,5 +158,7 @@ export class EditorBindings {
 		this.current = new WeakMap();
 		this.live.clear();
 		this.focused = undefined;
+		this.notify();
+		this.listeners.clear();
 	}
 }

@@ -1,3 +1,4 @@
+import { pressScopeKey } from "./__mocks__/obsidian";
 import { destroyTestEditors, mountTestEditor } from "./editorTestHarness";
 import type { EditorBindings } from "../src/editorBindings";
 import { App, Editor, EditorSuggestContext, Events, Plugin, PluginManifest, TFile } from "obsidian";
@@ -266,8 +267,9 @@ test.each(["delete", "disable", "edit", "reorder", "trigger", "reload"])("config
 	const action = jest.fn(() => "action result");
 	jest.spyOn(r.registry.getProviders()[0], "getEntityList").mockReturnValue([{ suggestionText: "Action", target: { kind: "action" as const, id: "test-action", callback: action }, }, { suggestionText: "Link", target: { kind: "unresolved-link" as const, linkpath: "Link" } }]);
 	const old = r.suggestor.getSuggestions(ctx);
+	expect(r.suggestor.onTrigger(ctx.end, ctx.editor, ctx.file)).not.toBeNull();
 	r.suggestor.context = ctx;
-	await r.suggestor.close();
+	pressScopeKey(r.suggestor.scope, "Escape");
 	expect(r.suggestor.onTrigger({ line: 0, ch: 1 }, ctx.editor, ctx.file)).toBeNull();
 	const close = jest.spyOn(r.suggestor, "close");
 	if (change === "delete") r.plugin.settingsStore.deleteProvider("a");

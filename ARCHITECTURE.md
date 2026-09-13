@@ -53,9 +53,13 @@ This document explains the overall layout and flow of the **Entities** Obsidian 
    - On unload, drains pending saves, disposes suggestions, and resets providers.
 
 2. **`EntitiesSuggestor`** – Implements `EditorSuggest`:
-   - `onTrigger` detects trigger characters (`@`, `:`, `/`). `@` is phrase-scoped
-     (spans spaces), while `:` and `/` are token-scoped (stop at whitespace).
-     `@` takes priority when multiple triggers are present.
+   - `onTrigger` chooses the newest `@`, `:`, or `/` at line start or after
+     whitespace before validating it. `@` spans spaces; `:` and `/` stop at
+     whitespace, and a second slash invalidates a slash query. There is no
+     fallback to an earlier starter. `triggerContext.ts` checks the full
+     mark-to-cursor span in the supplied editor's current native syntax tree.
+     Missing/stale/incomplete public binding or syntax state quietly retries on
+     a later normal request; providers remain synchronous.
    - `getSuggestions` queries providers matching the trigger, applies caching
      based on each provider's `RefreshBehavior`, runs Obsidian's built-in fuzzy
      search, and deduplicates results.
@@ -280,3 +284,23 @@ insertion is always unavailable through Entities; preserved rows/settings explai
 the manual native command. No append, parser, command dispatch or alternate
 creation is attempted. Live Source/Live Preview, popout, undo/redo and mobile
 acceptance remain NOT RUN; see the runtime acceptance matrix.
+
+Trigger dismissal uses a constructor-created public child `Scope` so explicit
+non-composing Escape is captured before native close clears context. The parent
+retains native navigation and selection handlers. An exact editor/file/binding
+session survives continued typing and data invalidation; the existing binding
+view extension invalidates it on starter replacement, ineligible candidates,
+selection departure and lifecycle changes. No second observer or popup scheduler
+is registered. Ordinary close never creates a dismissal or invalidates selection
+provenance, preserving close-before-selection and cancelled creation retries.
+
+Native code/link marker names and the narrow unfinished Markdown destination
+exception live only in `triggerContext.ts`. Compound names are compared by exact
+parts; open wiki syntax requires a native formatting opener at actual `[[` text
+and its contiguous bare-link run. Unfinished destinations require a native
+non-bare link-label `]` followed by an unclassified `(` and same-line tail;
+classified tokens end that tail. Generic link labels, strings and unknown token
+names are not blanket exclusions. CodeMirror language/state/view and Lezer stay
+host-external. The replay fixtures model native emitted boundaries, not full
+live parser scheduling or supported-runtime acceptance; see the
+[runtime matrix](docs/recovery/runtime-acceptance.md).
