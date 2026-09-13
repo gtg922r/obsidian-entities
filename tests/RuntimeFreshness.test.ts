@@ -281,6 +281,41 @@ test("new result epoch rejects a retained old query item while close-before-sele
 	expect(ctx.editor.replaceRange).toHaveBeenCalledWith("[[Test]]", { line: 0, ch: 0 }, ctx.end);
 });
 
+test.each([
+	["default link", "vault", "create"],
+	["default link", "metadataCache", "changed"],
+	["default link", "metadataCache", "dataview:metadata-change"],
+	["action", "vault", "create"],
+	["action", "metadataCache", "changed"],
+	["action", "metadataCache", "dataview:metadata-change"],
+] as const)("displayed %s remains selectable after %s %s without another retrieval", async (kind, source, event) => {
+	const r = await runtime([config("source", { mode: RefreshBehavior.Never })]);
+	const action = jest.fn(async () => {
+		r.vault.trigger("create");
+		r.metadataCache.trigger("changed");
+		return "Action return";
+	});
+	const retrieve = jest.spyOn(r.registry.getProviders()[0], "getEntityList").mockReturnValue([
+		{ suggestionText: "Displayed", ...(kind === "action" ? { action } : {}) },
+	]);
+	const ctx = context();
+	const [displayed] = r.suggestor.getSuggestions(ctx);
+	r.suggestor.context = ctx;
+	const close = jest.spyOn(r.suggestor, "close");
+	retrieve.mockReturnValue([{ suggestionText: "Updated" }]);
+	r[source].trigger(event);
+	expect(close).not.toHaveBeenCalled();
+	r.suggestor.selectSuggestion(displayed, {} as MouseEvent);
+	await Promise.resolve();
+	expect(retrieve).toHaveBeenCalledTimes(1);
+	expect(action).toHaveBeenCalledTimes(kind === "action" ? 1 : 0);
+	expect(ctx.editor.replaceRange).toHaveBeenCalledWith(kind === "action" ? "Action return" : "[[Displayed]]", { line: 0, ch: 0 }, ctx.end);
+	expect(close).toHaveBeenCalledTimes(1);
+	// Data is still dirty: the next request refreshes even under Never.
+	expect(labels(r.suggestor.getSuggestions(ctx))).toEqual(["Updated"]);
+	expect(retrieve).toHaveBeenCalledTimes(2);
+});
+
 test.each(["replace", "unload", "close", "data"])("awaited action return after %s respects only generation/unload validity", async change => {
 	const r = await runtime([config("source")]);
 	let finish!: (value: string) => void;

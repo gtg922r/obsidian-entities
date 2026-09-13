@@ -166,11 +166,10 @@ export class EntitiesSuggestor extends EditorSuggest<EntitySuggestionItem> {
 		};
 	}
 
-	/** Invalidate data without disrupting the open popover on every index event. */
+	/** Refresh on the next request while keeping displayed results selectable. */
 	invalidateData(): void {
 		if (this.disposed) return;
 		this.dataRevision++;
-		this.resultEpoch++;
 	}
 
 	/** Configuration replacement closes old results and permits the same span to reopen. */

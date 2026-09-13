@@ -170,8 +170,10 @@ old entry and retries on the next request, including under `Never`.
 
 Vault create/rename/delete, metadata changed/deleted/resolved, layout readiness,
 and the verified Dataview/Metadata Menu metadata events invalidate data. This
-marks results dirty without closing a popover on every index event. Configuration
-replacement closes it immediately and permits the same span to reopen. The
+marks caches dirty while keeping displayed results selectable, without closing
+the popover or advancing its result epoch. The next request refreshes data and
+replaces the result epoch. Configuration replacement closes the popover
+immediately and permits the same span to reopen. The
 200ms fallback remains because integration settings/index lifecycles are not all
 observable. There are no runtime provider timers or background queries.
 

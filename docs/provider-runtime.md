@@ -46,8 +46,10 @@ dismissal span, so the same text can reopen with current settings.
   `dataview:index-ready`, `dataview:api-ready`, `metadata-menu:indexed`,
   `metadata-menu:fileclass-indexed`, `metadata-menu:fields-changed`.
 
-Data/index events mark the cache dirty and invalidate retained results without
-closing the menu on every event. The next request evaluates current data.
+Data/index events advance only the data revision, marking the cache dirty while
+keeping the displayed results selectable. They neither close the menu nor
+advance its result epoch. The next request evaluates current data and replaces
+the result epoch, making callbacks from the previous batch obsolete.
 Layout readiness uses the same invalidation path with an unload/instance guard.
 Obsidian lifecycle cleanup releases listeners; unload also disposes the suggestor
 immediately. Deferred callbacks cannot revive it. No generic plugin-enable event
