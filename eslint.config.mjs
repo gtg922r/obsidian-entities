@@ -1,4 +1,5 @@
 import js from "@eslint/js";
+import { defineConfig } from "eslint/config";
 import globals from "globals";
 import obsidianmd from "eslint-plugin-obsidianmd";
 import tseslint from "typescript-eslint";
@@ -46,11 +47,13 @@ const obsidianAdvisoryRules = {
 	"obsidianmd/ui/sentence-case": "error",
 };
 
-export default tseslint.config(
+export default defineConfig(
 	{
 		ignores: [
-			"node_modules/",
-			".agents/",
+			"**/node_modules/",
+			"**/.worktrees/",
+			"**/.agents/",
+			"**/.codex/",
 			"main.js",
 			"dist/",
 			"coverage/",
@@ -63,10 +66,9 @@ export default tseslint.config(
 			"package-lock.json",
 		],
 	},
-	js.configs.recommended,
-	...tseslint.configs.recommended,
 	{
 		files: [...sourceFiles, ...testFiles, ...scriptFiles],
+		extends: [js.configs.recommended, ...tseslint.configs.recommended],
 		languageOptions: {
 			parser: tseslint.parser,
 			parserOptions: {

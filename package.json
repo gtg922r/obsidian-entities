@@ -3,13 +3,17 @@
 	"version": "0.4.4",
 	"description": "Adds autocomplete of \"Entities\" like files or templates in a specific folder or a from a dataview query.",
 	"main": "main.js",
+	"engines": {
+		"node": "24.21.0",
+		"npm": "11.19.0"
+	},
 	"scripts": {
 		"dev": "node esbuild.config.mjs",
 		"build": "tsc -noEmit -skipLibCheck && node esbuild.config.mjs production",
 		"version": "node version-bump.mjs && node scripts/update-changelog.mjs && git add manifest.json versions.json package.json package-lock.json CHANGELOG.md",
 		"test": "jest",
-		"lint": "eslint . --max-warnings=0",
-		"lint:fix": "eslint . --fix",
+		"lint": "eslint src tests scripts \"*.config.{js,mjs}\" version-bump.mjs --max-warnings=0",
+		"lint:fix": "eslint src tests scripts \"*.config.{js,mjs}\" version-bump.mjs --fix",
 		"check": "npm run lint && npm test && npm run build",
 		"release:check": "npm run check",
 		"release:assets": "node scripts/prepare-release-assets.mjs",
@@ -28,7 +32,7 @@
 		"@types/jest": "^29.5.12",
 		"@types/node": "^16.18.104",
 		"builtin-modules": "3.3.0",
-		"esbuild": "0.17.3",
+		"esbuild": "0.25.12",
 		"eslint": "^9.39.4",
 		"eslint-plugin-obsidianmd": "^0.3.0",
 		"globals": "^17.6.0",
