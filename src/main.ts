@@ -1,4 +1,4 @@
-import { Notice, Plugin } from "obsidian";
+import { Events, Notice, Plugin } from "obsidian";
 import { EntitiesSettingTab } from "./EntitiesSettings";
 import { EntitiesSettings } from "./entities.types";
 import { EntitiesSuggestor } from "./EntitiesSuggestor";
@@ -57,12 +57,32 @@ export default class Entities extends Plugin {
 		this.addSettingTab(this.settingsTab);
 		this.suggestor = new EntitiesSuggestor(this, this.providerRegistry);
 		this.registerEditorSuggest(this.suggestor);
+		const suggestor = this.suggestor;
+		this.register(() => suggestor.dispose());
+		const invalidateData = () => {
+			if (!this.unloaded && this.suggestor === suggestor) suggestor.invalidateData();
+		};
+		this.registerEvent(this.app.vault.on("create", invalidateData));
+		this.registerEvent(this.app.vault.on("rename", invalidateData));
+		this.registerEvent(this.app.vault.on("delete", invalidateData));
+		this.registerEvent(this.app.metadataCache.on("changed", invalidateData));
+		this.registerEvent(this.app.metadataCache.on("deleted", invalidateData));
+		this.registerEvent(this.app.metadataCache.on("resolved", invalidateData));
+		// These integration events are emitted on MetadataCache, outside Obsidian's typed overloads.
+		for (const event of [
+			"dataview:metadata-change", "dataview:index-ready", "dataview:api-ready",
+			"metadata-menu:indexed", "metadata-menu:fileclass-indexed", "metadata-menu:fields-changed",
+		]) {
+			this.registerEvent((this.app.metadataCache as Events).on(event, invalidateData));
+		}
+		this.app.workspace.onLayoutReady(invalidateData);
 	}
 
 	onunload() {
 		this.unloaded = true;
 		// Obsidian does not await this hook. Start draining immediately and report failures.
 		void this.settingsStore?.close();
+		this.suggestor?.dispose();
 		this.providerRegistry?.resetProviders();
 	}
 
@@ -78,7 +98,7 @@ export default class Entities extends Plugin {
 	}
 
 	loadEntityProviders() {
-		this.providerRegistry.resetProviders();
+		if (this.unloaded) return;
 		this.providerRegistry.instantiateProvidersFromSettings(
 			this.settings.providerSettings
 		);

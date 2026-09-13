@@ -11,12 +11,13 @@ import {
 	EditorSuggestTriggerInfo,
 } from "obsidian";
 import ProviderRegistry from "./Providers/ProviderRegistry";
-import { RefreshBehavior } from "./Providers/EntityProvider";
+import { EntityProvider, EntityProviderUserSettings, RefreshBehavior } from "./Providers/EntityProvider";
 import { TriggerCharacter } from "./entities.types";
 
 // Pre-compiled whitespace matcher to avoid recreating a RegExp per character
 const WHITESPACE_RE = /\s/;
 
+/** A renderable suggestion with an optional insertion/action override. */
 export interface EntitySuggestionItem {
 	suggestionText: string;
 	replacementText?: string;
@@ -30,22 +31,38 @@ export interface EntitySuggestionItem {
 	) => Promise<string> | string | void;
 }
 
+type Provider = EntityProvider<EntityProviderUserSettings>;
+type ProviderStage = "policy" | "ordinary" | "creation" | "item" | "action";
+
+interface SuggestionCacheEntry {
+	provider: Provider;
+	query: string | undefined;
+	timestamp: number;
+	registryRevision: number;
+	dataRevision: number;
+	items: EntitySuggestionItem[];
+}
+
+interface SuggestionProvenance {
+	provider: Provider;
+	registryRevision: number;
+	epoch: number;
+	context: EditorSuggestContext;
+}
+
+/** Collects synchronous provider results and guards selection against runtime replacement. */
 export class EntitiesSuggestor extends EditorSuggest<EntitySuggestionItem> {
 	plugin: Entities;
 
 	private providerRegistry: ProviderRegistry;
 
-	/**
-	 * Time of last suggestion list update
-	 * @type {number | undefined}
-	 * @private */
-	private lastSuggestionListUpdate: number | undefined = undefined;
-
-	/**
-	 * List of possible suggestions based on current code block
-	 * @type {EntitySuggestionItem[]}
-	 * @private */
-	private localSuggestionCache: EntitySuggestionItem[] = [];
+	private providerSuggestions = new Map<string, SuggestionCacheEntry>();
+	private provenance = new WeakMap<EntitySuggestionItem, SuggestionProvenance>();
+	private diagnostics = new WeakMap<Provider, Set<ProviderStage>>();
+	private dataRevision = 0;
+	private resultEpoch = 0;
+	private disposed = false;
+	private readonly removeRegistryListener: () => void;
 
 	// Track the last dismissed query
 	private lastDismissedQuery: EditorPosition | null = null;
@@ -57,6 +74,7 @@ export class EntitiesSuggestor extends EditorSuggest<EntitySuggestionItem> {
 		super(plugin.app);
 		this.plugin = plugin;
 		this.providerRegistry = registry;
+		this.removeRegistryListener = registry.onChange(() => this.invalidateProviders());
 	}
 
 	/**
@@ -74,6 +92,7 @@ export class EntitiesSuggestor extends EditorSuggest<EntitySuggestionItem> {
 		editor: Editor,
 		file: TFile
 	): EditorSuggestTriggerInfo | null {
+		if (this.disposed) return null;
 		const currentLine = cursor.line;
 		const currentLineToCursor = editor.getLine(currentLine).slice(0, cursor.ch);
 
@@ -147,90 +166,136 @@ export class EntitiesSuggestor extends EditorSuggest<EntitySuggestionItem> {
 		};
 	}
 
-	private providerSuggestions: Map<string, EntitySuggestionItem[]> =
-		new Map();
-	private lastRefreshTime: Map<string, number> = new Map();
+	/** Refresh on the next request while keeping displayed results selectable. */
+	invalidateData(): void {
+		if (this.disposed) return;
+		this.dataRevision++;
+	}
 
-	getSuggestions(
-		context: EditorSuggestContext
-	): EntitySuggestionItem[] | Promise<EntitySuggestionItem[]> {
-		const currentTime = performance.now();
-		const refreshThreshold = 200; // milliseconds
+	/** Configuration replacement closes old results and permits the same span to reopen. */
+	private invalidateProviders(): void {
+		this.providerSuggestions.clear();
+		this.resultEpoch++;
+		this.close();
+		this.context = null;
+		this.lastDismissedQuery = null;
+		this.lastSuggestionCount = 0;
+	}
 
-		const allSuggestions: EntitySuggestionItem[] = [];
-		const trigger =
-			(context.query.charAt(0) as TriggerCharacter) ||
-			TriggerCharacter.At; // Default to '@' if trigger is not specified
-		const searchQuery = context.query.slice(1);
+	/** Close runtime state and release the registry subscription; safe to call repeatedly. */
+	dispose(): void {
+		if (this.disposed) return;
+		this.disposed = true;
+		this.removeRegistryListener();
+		this.invalidateProviders();
+	}
 
-		this.providerRegistry
-			.getProvidersForTrigger(trigger)
-			.forEach((provider) => {
-				const providerId = provider.constructor.name;
-				const refreshBehavior = provider.getRefreshBehavior();
-				const lastRefresh = this.lastRefreshTime.get(providerId) || 0;
-				//TODO: Support multiple trigger types from a provider with suggestion cacheing
-				let providerSuggestions: EntitySuggestionItem[];
+	private reportFailure(provider: Provider, stage: ProviderStage, error: unknown): void {
+		let stages = this.diagnostics.get(provider);
+		if (!stages) {
+			stages = new Set();
+			this.diagnostics.set(provider, stages);
+		}
+		if (stages.has(stage)) return;
+		stages.add(stage);
+		console.error(`Entities: provider ${provider.providerInstanceId} ${stage} failed.`, error);
+	}
 
-				const shouldRefresh =
-					refreshBehavior === RefreshBehavior.ShouldRefresh ||
-					!this.providerSuggestions.has(providerId) ||
-					(refreshBehavior === RefreshBehavior.Default &&
-						currentTime - lastRefresh > refreshThreshold);
-
-				if (shouldRefresh) {
-					providerSuggestions = provider.getEntityList(
-						searchQuery,
-						trigger
-					);
-					this.providerSuggestions.set(
-						providerId,
-						providerSuggestions
-					);
-					this.lastRefreshTime.set(providerId, currentTime);
-				} else {
-					providerSuggestions =
-						this.providerSuggestions.get(providerId) ?? [];
+	/** Reject unrenderable items individually, without normalizing provider metadata. */
+	private readItems(value: unknown, provider: Provider): { items: EntitySuggestionItem[]; malformed: boolean } {
+		if (!Array.isArray(value)) throw new Error("Expected a synchronous suggestion array.");
+		const items: EntitySuggestionItem[] = [];
+		let malformed = false;
+		for (const item of value) {
+			try {
+				if (!item || typeof item !== "object") throw new Error("Invalid suggestion.");
+				const copy = { ...item } as EntitySuggestionItem;
+				if (typeof copy.suggestionText !== "string" || !copy.suggestionText.length ||
+					[copy.replacementText, copy.icon, copy.flair, copy.noteText].some(field => field !== undefined && typeof field !== "string") ||
+					(copy.action !== undefined && typeof copy.action !== "function")) {
+					throw new Error("Invalid suggestion fields.");
 				}
+				if (copy.match !== undefined) {
+					if (!Number.isFinite(copy.match?.score) || !Array.isArray(copy.match.matches)) throw new Error("Invalid suggestion match.");
+					copy.match = { ...copy.match, matches: copy.match.matches.map(range => [...range]) };
+				}
+				items.push(copy);
+			} catch (error) {
+				malformed = true;
+				this.reportFailure(provider, "item", error);
+			}
+		}
+		return { items, malformed };
+	}
 
-				allSuggestions.push(...providerSuggestions);
-			});
-
-		// Prepare the fuzzy search callback
+	getSuggestions(context: EditorSuggestContext): EntitySuggestionItem[] {
+		if (this.disposed) return [];
+		const currentTime = performance.now();
+		const registryRevision = this.providerRegistry.revision;
+		const dataRevision = this.dataRevision;
+		const epoch = ++this.resultEpoch;
+		const trigger = (context.query.charAt(0) as TriggerCharacter) || TriggerCharacter.At;
+		const searchQuery = context.query.slice(1);
 		const fuzzyMatch = prepareFuzzySearch(searchQuery);
+		const ordinary: EntitySuggestionItem[] = [];
+		const creation: EntitySuggestionItem[] = [];
+		const providers = this.providerRegistry.getProvidersForTrigger(trigger);
+		const remember = (item: EntitySuggestionItem, provider: Provider): EntitySuggestionItem => {
+			const copy = { ...item };
+			this.provenance.set(copy, { provider, registryRevision, epoch, context });
+			return copy;
+		};
 
-		// Perform fuzzy search on the cached suggestions
-		const fuzzySearchResults: EntitySuggestionItem[] =
-			allSuggestions.flatMap((suggestionItem) => {
-				const match: SearchResult | null = fuzzyMatch(
-					suggestionItem.suggestionText
-				);
-				return match ? [{ ...suggestionItem, match }] : [];
-			});
-
-		// Only fetch template suggestions if the trigger is '@'
-		if (trigger === TriggerCharacter.At) {
-			this.providerRegistry
-				.getProvidersForTrigger(trigger)
-				.forEach((provider) => {
-					const templateSuggestions =
-						provider.getTemplateCreationSuggestions(searchQuery);
-					fuzzySearchResults.push(...templateSuggestions);
-				});
+		for (const provider of providers) {
+			const key = JSON.stringify([provider.providerInstanceId, trigger]);
+			let policy: { behavior: RefreshBehavior; query: string | undefined } | undefined;
+			try {
+				policy = { behavior: provider.getRefreshBehavior(), query: provider.isQueryDependent ? searchQuery : undefined };
+			} catch (error) {
+				this.providerSuggestions.delete(key);
+				this.reportFailure(provider, "policy", error);
+			}
+			if (policy) {
+				try {
+					let cached = this.providerSuggestions.get(key);
+					if (!cached || cached.provider !== provider || cached.query !== policy.query ||
+						cached.registryRevision !== registryRevision || cached.dataRevision !== dataRevision ||
+						policy.behavior === RefreshBehavior.ShouldRefresh ||
+						(policy.behavior !== RefreshBehavior.Never && currentTime - cached.timestamp > 200)) {
+						// A failed refresh must never fall back to an older success, even under Never.
+						this.providerSuggestions.delete(key);
+						const { items, malformed } = this.readItems(provider.getEntityList(searchQuery, trigger), provider);
+						cached = { provider, query: policy.query, timestamp: currentTime, registryRevision, dataRevision, items };
+						if (!malformed) this.providerSuggestions.set(key, cached);
+					}
+					for (const item of cached.items) {
+						const match = fuzzyMatch(item.suggestionText);
+						if (match) ordinary.push(remember({ ...item, match }, provider));
+					}
+				} catch (error) {
+					this.providerSuggestions.delete(key);
+					this.reportFailure(provider, "ordinary", error);
+				}
+			}
+			// Creation remains query-sensitive and independent of ordinary retrieval/policy failures.
+			if (trigger === TriggerCharacter.At) {
+				try {
+					const { items } = this.readItems(provider.getTemplateCreationSuggestions(searchQuery), provider);
+					creation.push(...items.map(item => remember(item, provider)));
+				} catch (error) {
+					this.reportFailure(provider, "creation", error);
+				}
+			}
 		}
 
 		const uniqueSuggestions = new Map<string, EntitySuggestionItem>();
-		fuzzySearchResults.forEach((result) => {
-			if (!uniqueSuggestions.has(result.suggestionText)) {
-				uniqueSuggestions.set(result.suggestionText, result);
-			}
-		});
+		for (const result of [...ordinary, ...creation]) {
+			if (!uniqueSuggestions.has(result.suggestionText)) uniqueSuggestions.set(result.suggestionText, result);
+		}
 		const sortedSuggestions = Array.from(uniqueSuggestions.values()).sort(
 			(a, b) => (b.match?.score ?? -10) - (a.match?.score ?? -10)
 		);
-
 		this.lastSuggestionCount = sortedSuggestions.length;
-
 		return sortedSuggestions;
 	}
 
@@ -260,37 +325,30 @@ export class EntitiesSuggestor extends EditorSuggest<EntitySuggestionItem> {
 		}
 	}
 
-	selectSuggestion(
-		value: EntitySuggestionItem,
-		evt: MouseEvent | KeyboardEvent
-	): void {
-		// console.log("context entering select:", this.context);
-		if (!this.context) {
-			console.error("No context found for suggestion selection");
-			return;
-		}
-		const originalContext = this.context;
-		if (value.action) {
-			const actionResult = value.action(value, originalContext);
-			Promise.resolve(actionResult).then((result) => {
-				// console.log("Action result:", result);
-				// console.log("Action context:", this.context);
-				if (result != undefined) {
-					this.replaceTextAtContext(result, originalContext);
-				}
-			});
-		} else {
-			this.insertText(
-				`[[${value.replacementText ?? value.suggestionText}]]`
-			);
-		}
+	private isCurrentProvider(source: SuggestionProvenance): boolean {
+		return !this.disposed && source.registryRevision === this.providerRegistry.revision &&
+			this.providerRegistry.getProviders().includes(source.provider);
 	}
 
-	private insertText(text: string): void {
-		// console.log("Inserting text:", text);
-		// console.log("Inserting using Context:", this.context);
-		if (this.context) {
-			this.replaceTextAtContext(text, this.context);
+	selectSuggestion(value: EntitySuggestionItem, evt: MouseEvent | KeyboardEvent): void {
+		const source = this.provenance.get(value);
+		if (!source || source.epoch !== this.resultEpoch || !this.isCurrentProvider(source)) return;
+		// Obsidian may close before selection. Provenance retains this result's context.
+		const originalContext = source.context;
+		if (value.action) {
+			try {
+				const actionResult = value.action(value, originalContext);
+				Promise.resolve(actionResult).then((result) => {
+					// This only guards configuration/unload, not action side effects or editor/range safety (R4).
+					if (result != undefined && this.isCurrentProvider(source)) {
+						this.replaceTextAtContext(result, originalContext);
+					}
+				}).catch(error => this.reportFailure(source.provider, "action", error));
+			} catch (error) {
+				this.reportFailure(source.provider, "action", error);
+			}
+		} else {
+			this.replaceTextAtContext(`[[${value.replacementText ?? value.suggestionText}]]`, originalContext);
 		}
 	}
 

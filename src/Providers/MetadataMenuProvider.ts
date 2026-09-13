@@ -1,7 +1,7 @@
 import { cloneSettings } from "../settingsData";
 import { ExtraButtonComponent, Plugin, SearchResult, Setting, TFile } from "obsidian";
 import { EntitySuggestionItem } from "src/EntitiesSuggestor";
-import { EntityProvider, EntityProviderUserSettings, ProviderSettingsInput } from "./EntityProvider";
+import { EntityProvider, EntityProviderUserSettings } from "./EntityProvider";
 import { AppWithPlugins } from "src/entities.types";
 import { createNewNoteFromTemplate } from "src/entitiesUtilities";
 import { setValidationStatus } from "src/ui/validationStatus";
@@ -40,6 +40,10 @@ const defaultNewProviderUserSettings: MetadataMenuProviderUserSettings = {
 };
 
 export class MetadataMenuProvider extends EntityProvider<MetadataMenuProviderUserSettings> {
+	get isQueryDependent(): boolean {
+		return false;
+	}
+
 	static readonly providerTypeID: string = newProviderTypeID;
 	private mdmPlugin: MetadataMenuPlugin | undefined;
 
@@ -63,18 +67,9 @@ export class MetadataMenuProvider extends EntityProvider<MetadataMenuProviderUse
 		return MetadataMenuProvider.getDefaultSettings();
 	}
 
-	constructor(
-		plugin: Plugin,
-		settings: ProviderSettingsInput<MetadataMenuProviderUserSettings>
-	) {
-		super(plugin, settings);
-		this.initialize();
-		// Initialize any additional properties or methods here
-	}
-
-	private initialize() {
+	private resolveCapabilities() {
 		const appWithPlugins = this.plugin.app as AppWithPlugins;
-		this.mdmPlugin = appWithPlugins.plugins?.getPlugin(
+		this.mdmPlugin = appWithPlugins.plugins?.getPlugin?.(
 			"metadata-menu"
 		) as MetadataMenuPlugin;
 
@@ -94,6 +89,7 @@ export class MetadataMenuProvider extends EntityProvider<MetadataMenuProviderUse
 	 * @returns An array of suggestions for entity creation.
 	 */
 	getTemplateCreationSuggestions(query: string): EntitySuggestionItem[] {
+		this.resolveCapabilities();
 		if (!this.mdmPlugin || !this.mdmPlugin.fieldIndex) return [];
 
 		const mdmPathsAndFileClasses: [string, MDMFileClass][] = Array.from(

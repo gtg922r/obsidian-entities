@@ -7,7 +7,7 @@ import {
 	moment,
 } from "obsidian";
 import { EntitySuggestionItem } from "src/EntitiesSuggestor";
-import { EntityProvider, EntityProviderUserSettings, ProviderSettingsInput } from "./EntityProvider";
+import { EntityProvider, EntityProviderUserSettings } from "./EntityProvider";
 import {
 	AppWithPlugins,
 	PeriodicNotesGranularity,
@@ -82,14 +82,9 @@ export class DateEntityProvider extends EntityProvider<DatesProviderUserSettings
 		return DateEntityProvider.getDefaultSettings();
 	}
 
-	constructor(plugin: Plugin, settings: ProviderSettingsInput<DatesProviderUserSettings>) {
-		super(plugin, settings);
-		this.initialize();
-	}
-
-	private initialize() {
+	private resolveCapabilities() {
 		const appWithPlugins = this.plugin.app as AppWithPlugins;
-		const nlpPlugin = appWithPlugins.plugins?.getPlugin(
+		const nlpPlugin = appWithPlugins.plugins?.getPlugin?.(
 			"nldates-obsidian"
 		) as Partial<NLPlugin> | undefined;
 		if (!nlpPlugin || typeof nlpPlugin.parseDate !== "function") {
@@ -98,7 +93,7 @@ export class DateEntityProvider extends EntityProvider<DatesProviderUserSettings
 			this.nlpPlugin = nlpPlugin as NLPlugin;
 		}
 
-		const periodicNotesPlugin = appWithPlugins.plugins?.getPlugin(
+		const periodicNotesPlugin = appWithPlugins.plugins?.getPlugin?.(
 			"periodic-notes"
 		) as Partial<PeriodicNotesPlugin> | undefined;
 		if (
@@ -113,6 +108,7 @@ export class DateEntityProvider extends EntityProvider<DatesProviderUserSettings
 	}
 
 	getEntityList(query: string): EntitySuggestionItem[] {
+		this.resolveCapabilities();
 		if (!this.nlpPlugin) {
 			return [];
 		}

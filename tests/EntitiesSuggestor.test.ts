@@ -39,6 +39,8 @@ describe("onTrigger tests", () => {
 
 	beforeEach(() => {
 		registry = {
+			onChange: jest.fn().mockReturnValue(() => {}),
+			revision: 1,
 			getProviders: jest.fn(),
 			getProvidersForTrigger: jest.fn(),
 		} as unknown as jest.Mocked<ProviderRegistry>;
@@ -466,7 +468,9 @@ describe("getSuggestions tests", () => {
     beforeEach(() => {
         // Mocking the ProviderRegistry
         mockRegistry = {
-            getProviders: jest.fn(),
+            onChange: jest.fn().mockReturnValue(() => {}),
+			revision: 1,
+			getProviders: jest.fn(),
 			getProvidersForTrigger: jest.fn(),
         } as unknown as jest.Mocked<ProviderRegistry>;
 
@@ -482,7 +486,9 @@ describe("getSuggestions tests", () => {
 
         // Mocking EntityProvider
         mockEntityProvider = {
-            getEntityList: jest.fn(),
+            providerInstanceId: "mock-instance",
+			isQueryDependent: true,
+			getEntityList: jest.fn(),
             getTemplateCreationSuggestions: jest.fn(),
 			getRefreshBehavior: jest.fn(),
         } as unknown as jest.Mocked<EntityProvider<EntityProviderUserSettings>>;
@@ -565,7 +571,7 @@ describe("getSuggestions tests", () => {
 });
 describe("replaceTextAtContext tests", () => {
     test("cursor position accounts for multi-line insertions", () => {
-        const registry = {} as unknown as jest.Mocked<ProviderRegistry>;
+        const registry = { onChange: () => () => {} } as unknown as jest.Mocked<ProviderRegistry>;
         const suggestor = new EntitiesSuggestor(mockPlugin, registry);
         const mockEditor = {
             replaceRange: jest.fn(),

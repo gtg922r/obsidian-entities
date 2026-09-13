@@ -40,6 +40,10 @@ const defaultFolderProviderUserSettings: FolderProviderUserSettings = {
 };
 
 export class FolderEntityProvider extends EntityProvider<FolderProviderUserSettings> {
+	get isQueryDependent(): boolean {
+		return false;
+	}
+
 	static readonly providerTypeID: string = folderProviderTypeID;
 
 	static getDefaultSettings(): FolderProviderUserSettings {
