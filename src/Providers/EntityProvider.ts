@@ -30,7 +30,7 @@ export interface EntityProviderUserSettings extends EntityProviderID {
 export enum RefreshBehavior {
   ShouldRefresh = "shouldRefresh",
   Default = "default",
-  Never = "never", // New refresh behavior
+  Never = "never", // Skips age expiry; query and explicit invalidation still apply.
 }
 
 /**
@@ -45,7 +45,12 @@ export abstract class EntityProvider<T extends EntityProviderUserSettings> {
 	abstract getDefaultSettings(): T;
 	abstract getEntityList(query: string, trigger: TriggerCharacter): EntitySuggestionItem[];
 
-	// New method to determine refresh behavior
+	/** Whether ordinary retrieval depends on the typed query. Creation is always uncached. */
+	get isQueryDependent(): boolean {
+		return true;
+	}
+
+	/** Ordinary-list freshness policy; Default retains a bounded 200ms fallback. */
 	getRefreshBehavior(): RefreshBehavior {
 		return RefreshBehavior.Default;
 	}

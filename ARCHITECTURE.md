@@ -45,7 +45,8 @@ This document explains the overall layout and flow of the **Entities** Obsidian 
    - Registers all provider classes.
    - Instantiates provider instances from saved settings.
    - Creates an `EntitiesSuggestor` and registers it with Obsidian.
-   - On unload, cleans up pending saves and resets providers.
+   - Registers data/index listeners once through Obsidian lifecycle cleanup.
+   - On unload, drains pending saves, disposes suggestions, and resets providers.
 
 2. **`EntitiesSuggestor`** – Implements `EditorSuggest`:
    - `onTrigger` detects trigger characters (`@`, `:`, `/`). `@` is phrase-scoped
@@ -75,7 +76,8 @@ This document explains the overall layout and flow of the **Entities** Obsidian 
 4. **Providers** – Each provider:
    - Extends `EntityProvider<T>` with strongly-typed settings.
    - Implements `getEntityList(query, trigger)` synchronously.
-   - Declares supported triggers via the `triggers` getter.
+   - Declares supported triggers via the `triggers` getter and query dependence
+     via `isQueryDependent` (safe default: `true`).
    - Optionally overrides `getRefreshBehavior()` and
      `getTemplateCreationSuggestions(query)`.
    - Disabled providers (where `enabled === false`) are automatically excluded.
@@ -122,11 +124,15 @@ Shared UI builders eliminating duplication across provider settings:
 - **`ProviderRegistry`** (singleton)
   - Manages registered provider classes and instantiated providers.
   - `getProvidersForTrigger(trigger)` returns enabled providers matching a trigger.
-  - `registerProviderType(cls)` / `instantiateProvider(settings)` for lifecycle.
-  - `resetProviders()` clears instances (called during unload and settings changes).
+  - `instantiateProvidersFromSettings()` constructs rows independently and atomically
+    replaces the runtime snapshot. Unknown/failed rows stay preserved in settings.
+  - Every replacement/reset increments `revision` and notifies `onChange` subscribers.
+    The suggestor immediately closes obsolete menus and clears dismissal state.
 
 - **`EntitiesSuggestor`** (extends `EditorSuggest`)
-  - Collects and caches suggestions per provider with configurable refresh.
+  - Caches raw items by persisted provider instance ID and trigger, with one current
+    query entry per pair. Each request filters fresh clones and records private
+    provider/revision/result provenance for selection.
   - Performs fuzzy search and deduplication.
   - Handles text insertion and provider actions.
 
@@ -152,21 +158,47 @@ Providers control caching via `getRefreshBehavior()`:
 
 | Behavior | Description |
 |----------|-------------|
-| `Default` | Refreshes when >200ms since last fetch |
-| `ShouldRefresh` | Refreshes on every keystroke |
-| `Never` | Fetched once, cached indefinitely |
+| `Default` | Refreshes when >200ms since last fetch, or when invalidated |
+| `ShouldRefresh` | Evaluates on every request |
+| `Never` | Skips age expiry; respects query, trigger, identity and explicit invalidation |
+
+`isQueryDependent` defaults to `true`. Character and Date depend on the typed
+query. Folder, Dataview, Template, Helper and Metadata Menu ordinary lists are
+query-independent (Metadata Menu's ordinary list is empty). Creation suggestions
+are always requested separately and remain uncached. Failed retrieval removes the
+old entry and retries on the next request, including under `Never`.
+
+Vault create/rename/delete, metadata changed/deleted/resolved, layout readiness,
+and the verified Dataview/Metadata Menu metadata events invalidate data. This
+marks results dirty without closing a popover on every index event. Configuration
+replacement closes it immediately and permits the same span to reopen. The
+200ms fallback remains because integration settings/index lifecycles are not all
+observable. There are no runtime provider timers or background queries.
+
+Selection checks private provenance before action execution or default link
+insertion. Menu close alone does not invalidate valid selection or its captured
+context. After awaiting an action, a second provider-generation/unload check
+prevents a returned string from inserting after replacement. This does **not**
+cancel action side effects or provide document/editor/range safety; those remain
+R4. See [provider runtime contract](docs/provider-runtime.md) for authoring details.
 
 ## External Plugin Dependencies
 
 Several providers integrate with optional external plugins:
 
-- **Dataview** – `DataviewEntityProvider` uses the Dataview API with retry logic.
+- **Dataview** – `DataviewEntityProvider` synchronously resolves the current API
+  on each evaluation; the separate settings UI retry helper is unchanged.
 - **Natural Language Dates** – `DateEntityProvider` uses `nldates-obsidian`.
 - **Templater** – Template creation in `EntityProvider` base and `TemplateEntityProvider`.
 - **Metadata Menu** – `MetadataMenuProvider` reads file class definitions.
 
-All dependencies are guarded: providers return empty results when their
-dependency is missing.
+Dataview, Metadata Menu and Date re-resolve their current plugin/API/index
+capabilities during evaluation, recovering from absent, removed or replaced
+integrations. Template scans its existing shallow folder selection during
+evaluation, so file events refresh its list. Missing capabilities return empty
+results. The registry and suggestor isolate constructor, eligibility, cache-policy,
+ordinary retrieval and creation retrieval failures per provider. Malformed items
+are skipped individually and diagnostics are bounded per provider/stage.
 
 ## Testing
 

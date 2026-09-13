@@ -1,6 +1,6 @@
 import { cloneSettings } from "../settingsData";
 import { EntitySuggestionItem } from "src/EntitiesSuggestor";
-import { EntityProvider, EntityProviderUserSettings, ProviderSettingsInput } from "./EntityProvider";
+import { EntityProvider, EntityProviderUserSettings } from "./EntityProvider";
 import { Plugin, Setting, TFile, TFolder } from "obsidian";
 import { EntitiesModalInput } from "src/userComponents";
 import {
@@ -30,8 +30,11 @@ const defaultTemplateProviderUserSettings: TemplateProviderUserSettings = {
 };
 
 export class TemplateEntityProvider extends EntityProvider<TemplateProviderUserSettings> {
+	get isQueryDependent(): boolean {
+		return false;
+	}
+
 	static readonly providerTypeID: string = templateProviderTypeID;
-	private files: TFile[];
 
 	static getDescription(settings?: TemplateProviderUserSettings): string {
 		if (settings) {
@@ -52,15 +55,9 @@ export class TemplateEntityProvider extends EntityProvider<TemplateProviderUserS
 		return TemplateEntityProvider.getDefaultSettings();
 	}
 
-    constructor(plugin: Plugin, settings: ProviderSettingsInput<TemplateProviderUserSettings>) {
-		super(plugin, settings);
-        this.files = this.getTemplateFiles(this.settings.path);
-    }
-
     private getTemplateFiles(path: string | string[]): TFile[] {
 		// TODO - add support for multiple paths
 		// TODO - add support for subfolders
-		// TODO - add a recurring check for new files in the template folder (or callback)
         
 		const templateFolders = Array.isArray(path) ? path : [path];
         const folders: TFolder[] = templateFolders
@@ -79,7 +76,7 @@ export class TemplateEntityProvider extends EntityProvider<TemplateProviderUserS
 	}
 
     getEntityList(): EntitySuggestionItem[] {
-        return this.files.map((file) => ({
+        return this.getTemplateFiles(this.settings.path).map((file) => ({
             suggestionText: file.basename,
             icon: this.settings.actionType === "create" ? "file-plus" : "stamp",
             action: () => this.actionFunction(file),

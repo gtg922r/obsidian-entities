@@ -411,7 +411,11 @@ describe("Integration: Suggestion selection", () => {
 			suggestionText: "TestNote",
 		};
 
-		suggestor.selectSuggestion(suggestion, {} as MouseEvent);
+		const provider = new AtTriggerProvider(mockPlugin, { providerInstanceId: "selected" }, [suggestion]);
+		jest.spyOn(registry, "getProviders").mockReturnValue([provider]);
+		jest.spyOn(registry, "getProvidersForTrigger").mockReturnValue([provider]);
+		const [result] = suggestor.getSuggestions({ ...context, query: "@" });
+		suggestor.selectSuggestion(result, {} as MouseEvent);
 
 		expect(mockEditor.replaceRange).toHaveBeenCalledWith(
 			"[[TestNote]]",
@@ -442,7 +446,11 @@ describe("Integration: Suggestion selection", () => {
 			replacementText: "Alice|Ali",
 		};
 
-		suggestor.selectSuggestion(suggestion, {} as MouseEvent);
+		const provider = new AtTriggerProvider(mockPlugin, { providerInstanceId: "selected" }, [suggestion]);
+		jest.spyOn(registry, "getProviders").mockReturnValue([provider]);
+		jest.spyOn(registry, "getProvidersForTrigger").mockReturnValue([provider]);
+		const [result] = suggestor.getSuggestions({ ...context, query: "@" });
+		suggestor.selectSuggestion(result, {} as MouseEvent);
 
 		expect(mockEditor.replaceRange).toHaveBeenCalledWith(
 			"[[Alice|Ali]]",
@@ -475,8 +483,12 @@ describe("Integration: Suggestion selection", () => {
 			action: actionMock,
 		};
 
-		suggestor.selectSuggestion(suggestion, {} as MouseEvent);
+		const provider = new AtTriggerProvider(mockPlugin, { providerInstanceId: "selected" }, [suggestion]);
+		jest.spyOn(registry, "getProviders").mockReturnValue([provider]);
+		jest.spyOn(registry, "getProvidersForTrigger").mockReturnValue([provider]);
+		const [result] = suggestor.getSuggestions({ ...context, query: "@" });
+		suggestor.selectSuggestion(result, {} as MouseEvent);
 
-		expect(actionMock).toHaveBeenCalledWith(suggestion, context);
+		expect(actionMock).toHaveBeenCalledWith(result, { ...context, query: "@" });
 	});
 });

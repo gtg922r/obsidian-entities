@@ -10,7 +10,7 @@ import {
 	TFolder,
 } from "obsidian";
 import { EntitySuggestionItem } from "src/EntitiesSuggestor";
-import { EntityProvider, EntityProviderUserSettings, ProviderSettingsInput } from "./EntityProvider";
+import { EntityProvider, EntityProviderUserSettings } from "./EntityProvider";
 import { TextInputSuggest, TextInputSuggestOptions } from "src/ui/suggest";
 import { AppWithPlugins, EntityFilter } from "src/entities.types";
 import { buildIconPickerSetting, buildTemplateCreationSetting } from "src/ui/providerSettingsComponents";
@@ -55,8 +55,11 @@ const defaultDataviewProviderUserSettings: DataviewProviderUserSettings = {
 };
 
 export class DataviewEntityProvider extends EntityProvider<DataviewProviderUserSettings> {
+	get isQueryDependent(): boolean {
+		return false;
+	}
+
 	static readonly providerTypeID: string = dataviewProviderTypeID;
-	protected dv: DataviewApi | undefined;
 
 	static getDescription(settings?: DataviewProviderUserSettings): string {
 		if (settings) {
@@ -77,25 +80,9 @@ export class DataviewEntityProvider extends EntityProvider<DataviewProviderUserS
 		return DataviewEntityProvider.getDefaultSettings();
 	}
 
-	constructor(
-		plugin: Plugin,
-		settings: ProviderSettingsInput<DataviewProviderUserSettings>
-	) {
-		super(plugin, settings);
-		this.initialize();
-	}
-
-	async initialize() {
-		this.dv = await DataviewEntityProvider.getDataviewApiWithRetry(
-			500,
-			2,
-			this.plugin.app
-		);
-
-	}
-
 	getEntityList(query: string): EntitySuggestionItem[] {
-		const dvQueryReults = this.dv?.pages(this.settings.query);
+		const dv = DataviewEntityProvider.getDataviewApi(this.plugin.app);
+		const dvQueryReults = dv?.pages(this.settings.query);
 		if (!dvQueryReults) {
 			return [];
 		}

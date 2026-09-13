@@ -91,6 +91,10 @@ const calloutTypes = [
 ];
 
 export class HelperEntityProvider extends EntityProvider<HelperProviderUserSettings> {
+	get isQueryDependent(): boolean {
+		return false;
+	}
+
 	static readonly providerTypeID: string = helperProviderTypeID;
 
 	static getDescription(settings?: HelperProviderUserSettings): string {

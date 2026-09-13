@@ -567,3 +567,32 @@ describe("DateEntityProvider", () => {
 		expect(suggestion?.action).toBeUndefined();
 	});
 });
+
+test("re-resolves NLP and Periodic Notes capabilities on each evaluation", () => {
+	const integrations: Record<string, unknown> = {};
+	const provider = new DateEntityProvider(createPluginWithPlugins(integrations), { providerInstanceId: "late-date" });
+	expect(provider.getEntityList("today")).toEqual([]);
+	const nlp = createNlDatesPlugin();
+	integrations["nldates-obsidian"] = nlp;
+	expect(provider.getEntityList("today").find(item => item.suggestionText === "today")?.replacementText).toBe("2026-05-17");
+	const periodic = (format: string) => ({
+		calendarSetManager: { getActiveGranularities: () => ["week"], getFormat: () => format },
+		getPeriodicNote: jest.fn(), createPeriodicNote: jest.fn(),
+	});
+	integrations["periodic-notes"] = periodic("[First week]");
+	let week = provider.getEntityList("today").find(item => item.suggestionText === "this week")!;
+	expect(week.replacementText).toBe("First week"); expect(week.action).toBeDefined();
+	integrations["periodic-notes"] = periodic("[Replacement week]");
+	week = provider.getEntityList("today").find(item => item.suggestionText === "this week")!;
+	expect(week.replacementText).toBe("Replacement week");
+	integrations["periodic-notes"] = {}; // Partial API is unavailable.
+	week = provider.getEntityList("today").find(item => item.suggestionText === "this week")!;
+	expect(week.action).toBeUndefined(); expect(week.replacementText).not.toBe("Replacement week");
+	const replacementNlp = createNlDatesPlugin();
+	integrations["nldates-obsidian"] = replacementNlp;
+	nlp.parseDate.mockClear();
+	provider.getEntityList("today");
+	expect(nlp.parseDate).not.toHaveBeenCalled(); expect(replacementNlp.parseDate).toHaveBeenCalled();
+	delete integrations["nldates-obsidian"];
+	expect(provider.getEntityList("today")).toEqual([]);
+});

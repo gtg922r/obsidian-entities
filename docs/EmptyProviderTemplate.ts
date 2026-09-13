@@ -54,6 +54,10 @@ export class NewEntityProvider extends EntityProvider<NewProviderUserSettings> {
 		// Initialize any additional properties or methods here
 	}
 
+	// isQueryDependent defaults to true. Override with false only when this ordinary
+	// list is independent of the typed query for fixed settings and trigger.
+	// Creation suggestions always stay uncached. Resolve optional APIs here,
+	// never by constructor timers. See provider-runtime.md.
 	getEntityList(query: string): EntitySuggestionItem[] {
 		// Implement logic to return a list of entity suggestions based on the query
 		return [];
