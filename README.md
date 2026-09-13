@@ -29,11 +29,18 @@ Each provider offers suggestions from a different source or performs actions:
 
 - 📁 **Folder** – notes from a specific folder
 - 📊 **Dataview** – results from a Dataview query
-- 📄 **Template** – create or insert using template files
+- 📄 **Template** – create notes from template files; insertion through Entities is temporarily unavailable
 - 📅 **Date** – natural language date completion (requires Natural Language Dates)
 - 🗂️ **Metadata Menu** – create notes from Metadata Menu file class templates
 - ⚡ **Helper Actions** – quick checkboxes and utilities triggered by `/`
 - 😀 **Character** – emoji and Font Awesome look‑ups triggered by `:`
+
+Template insertion providers remain configured and show “Insertion unavailable in Entities”.
+Selecting one leaves your text unchanged and runs no template engine. To insert manually,
+dismiss autocomplete, remove the trigger text, then use **Templater: Open insert template
+modal** or your existing template hotkey. That separate native operation is outside
+Entities' editor guard. Template-based note creation remains available.
+See [creation and action limits](docs/creation-recovery.md).
 
 See [ARCHITECTURE.md](ARCHITECTURE.md) for implementation details.
 

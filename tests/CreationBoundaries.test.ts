@@ -1,12 +1,11 @@
-import { App, EditorSuggestContext, Plugin, Setting, TFile, TFolder } from "obsidian";
+import { App, Plugin, Setting, TFile, TFolder } from "obsidian";
 import { EntityProvider, EntityProviderUserSettings } from "../src/Providers/EntityProvider";
 import { TemplateEntityProvider } from "../src/Providers/TemplateProvider";
 import { MetadataMenuProvider } from "../src/Providers/MetadataMenuProvider";
 import ProviderRegistry from "../src/Providers/ProviderRegistry";
 import { EntitiesModalInput, EntitiesNotice } from "../src/userComponents";
 import { createNewNoteFromTemplate, createOrReusePeriodicNote, TemplateCreationRequest } from "../src/entityCreation";
-import { creationResultLink } from "../src/creationFeedback";
-import { getAction } from "./suggestionTestHelpers";
+import { actionContext, getAction } from "./suggestionTestHelpers";
 
 const mockModals: EntitiesModalInput[] = [];
 const mockStatuses: string[] = [];
@@ -81,7 +80,7 @@ function fixture(templatePath = "Templates/Person.md") {
 		return registry.getProviders()[0] as TemplateEntityProvider;
 	};
 	const request: TemplateCreationRequest = { engine: "templater", template: template.path, destination: { kind: "explicit", path: "" }, name: "Alice" };
-	const context = { file: source } as EditorSuggestContext;
+	const context = actionContext(source);
 	return { plugin, app: plugin.app, create, root, folder, files, template, source, context, request, integrations, generate, getNewFileParent, registry, useTemplateProvider, unload: () => cleanups.forEach(cleanup => cleanup()) };
 }
 function submit(name = "Alice") {
@@ -93,7 +92,7 @@ function submit(name = "Alice") {
 function runTemplate(h: ReturnType<typeof fixture>) {
 	const provider = h.useTemplateProvider();
 	const item = provider.getEntityList()[0];
-	return getAction(item)!(item, h.context);
+	return getAction(item)!(h.context);
 }
 beforeEach(() => { mockModals.length = 0; mockStatuses.length = 0; jest.clearAllMocks(); });
 
@@ -112,7 +111,7 @@ test("IME confirmation keeps the prompt open; subsequent ordinary Enter submits 
 	expect(h.create).not.toHaveBeenCalled();
 	input.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter" }));
 	input.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter" }));
-	expect(await pending).toBe("native:Default/東京.md");
+	expect(await pending).toMatchObject({ status: "created", file: { path: "Default/東京.md" } });
 	expect(settled).toHaveBeenCalledTimes(1);
 	expect(settled).toHaveBeenCalledWith("東京");
 	expect(h.create).toHaveBeenCalledTimes(1);
@@ -124,9 +123,9 @@ test("an undefined engine result must not produce a guessed success link", async
 		{ engine: "templater", templatePath: h.template.path, entityName: "Person" },
 	] });
 	const item = provider.getTemplateCreationSuggestions("Alice")[0];
-	expect(await getAction(item)!(item, h.context)).toBeUndefined();
+	expect(await getAction(item)!(h.context)).toMatchObject({ status: "failed" });
 	expect(h.generate).not.toHaveBeenCalled();
-	expect(EntitiesNotice).toHaveBeenCalledWith(expect.stringContaining("Unable to create"), "alert-triangle", 8000);
+	expect(EntitiesNotice).not.toHaveBeenCalled();
 });
 test("creation capability does not depend on append capability", async () => {
 	const h = fixture();
@@ -231,9 +230,9 @@ test("native unique/renamed identity preserves an existing target and captured l
 	await Promise.resolve(); await Promise.resolve();
 	h.source.path = "Changed/Source.md";
 	const actual = file("Moved/Alice 1.md"); h.files.set(actual.path, actual); gate.resolve(actual);
-	expect(await pending).toBe("native:Moved/Alice 1.md");
+	expect(await pending).toEqual({ status: "created", file: actual });
 	expect(h.files.get(existing.path)).toBe(existing);
-	expect(h.generate).toHaveBeenCalledWith(actual, "Writing/Source.md", undefined, undefined);
+	expect(h.generate).not.toHaveBeenCalled();
 });
 test.each(["Templates/Meeting.canvas.md", "Templates/Drawing.canvas"])("default destination uses actual extension for %s before prompting", async path => {
 	const h = fixture(path), gate = deferred<TFile>(); h.create.mockImplementation(() => gate.promise);
@@ -245,12 +244,12 @@ test.each(["Templates/Meeting.canvas.md", "Templates/Drawing.canvas"])("default 
 	expect(h.create).toHaveBeenCalledWith(h.template, h.folder, "Made", false);
 	const actual = file(`Default/Made.${h.template.extension}`); h.files.set(actual.path, actual); gate.resolve(actual);
 	await pending;
-	expect(h.generate).toHaveBeenCalledWith(actual, "Writing/Source.md", undefined, actual.extension === "md" ? undefined : actual.name);
+	expect(h.generate).not.toHaveBeenCalled();
 });
 test("a resolved default folder replaced during the prompt prevents creation", async () => {
 	const h = fixture(), pending = runTemplate(h);
 	h.files.set(h.folder.path, Object.assign(new TFolder(), { path: h.folder.path })); submit();
-	expect(await pending).toBeUndefined(); expect(h.create).not.toHaveBeenCalled();
+	expect(await pending).toMatchObject({ status: "failed" }); expect(h.create).not.toHaveBeenCalled();
 });
 test.each(["close", "unload", "reconfigure", "submit-then-unload"])("prompt %s leaves creation unstarted", async mode => {
 	const h = fixture(), pending = runTemplate(h);
@@ -258,14 +257,14 @@ test.each(["close", "unload", "reconfigure", "submit-then-unload"])("prompt %s l
 	else if (mode === "unload") h.unload();
 	else if (mode === "reconfigure") h.registry.resetProviders();
 	else mockModals.at(-1)!.close();
-	expect(await pending).toBeUndefined(); expect(h.create).not.toHaveBeenCalled();
+	expect(await pending).toMatchObject({ status: "cancelled" }); expect(h.create).not.toHaveBeenCalled();
 });
 test("unload in the final promise continuation cannot start native work", async () => {
 	const h = fixture(), pending = runTemplate(h);
 	submit();
 	await Promise.resolve(); // The prompt wrapper has resolved; provider continuation is still queued.
 	h.unload();
-	expect(await pending).toBeUndefined(); expect(h.create).not.toHaveBeenCalled();
+	expect(await pending).toMatchObject({ status: "cancelled" }); expect(h.create).not.toHaveBeenCalled();
 });
 test("repeated provider rebuilds and prompts retain only one plugin cleanup and no registry listeners", async () => {
 	const h = fixture(), listeners = new Set<() => void>();
@@ -282,14 +281,6 @@ test("closing and submitting the modal settles once", async () => {
 	const settled = jest.fn(); void modal.getInput().then(settled);
 	modal.close(); submit("late"); await Promise.resolve();
 	expect(settled).toHaveBeenCalledTimes(1); expect(settled).toHaveBeenCalledWith(undefined);
-});
-test.each(["format", "delete"])("confirmed creation remains accurately reported when link %s fails", kind => {
-	const h = fixture(), actual = file("Created.md"); h.files.set(actual.path, actual);
-	if (kind === "format") h.generate.mockImplementation(() => { throw Error("cannot format"); });
-	else h.files.delete(actual.path);
-	expect(creationResultLink(h.app, { status: "created", file: actual }, "Writing/Source.md")).toBeUndefined();
-	expect(EntitiesNotice).toHaveBeenCalledWith(expect.stringContaining("was created, but its link"), "alert-triangle", 8000);
-	expect(h.create).not.toHaveBeenCalled();
 });
 test("periodic creation reuses a live target without requiring create capability", async () => {
 	const h = fixture(); h.integrations["periodic-notes"] = { getPeriodicNote: () => h.template };
@@ -308,12 +299,12 @@ test("Metadata Menu creation captures default source and awaits actual output", 
 	const cls = { name: "Person" };
 	h.integrations["metadata-menu"] = { fieldIndex: { fileClassesPath: new Map([["Classes/Person.md", cls]]), fileClassesName: new Map([["Person", cls]]) } };
 	const provider = new MetadataMenuProvider(h.plugin, { providerInstanceId: "metadata" });
-	const item = provider.getTemplateCreationSuggestions("Alice")[0], pending = getAction(item)!(item, h.context);
+	const item = provider.getTemplateCreationSuggestions("Alice")[0], pending = getAction(item)!(h.context);
 	expect(h.getNewFileParent).toHaveBeenCalledWith("Writing/Source.md", "Alice.canvas");
 	h.source.path = "Elsewhere.md";
 	const actual = file("Default/Alice 1.canvas"); h.files.set(actual.path, actual); gate.resolve(actual);
-	expect(await pending).toBe("native:Default/Alice 1.canvas");
-	expect(h.generate).toHaveBeenCalledWith(actual, "Writing/Source.md", undefined, actual.name);
+	expect(await pending).toEqual({ status: "created", file: actual });
+	expect(h.generate).not.toHaveBeenCalled();
 });
 
 
@@ -340,4 +331,18 @@ test("unloading after engine start does not undo or cancel its file creation", a
 	const actual = file("Created.md"); h.files.set(actual.path, actual); gate.resolve(actual);
 	await pending;
 	expect(h.files.get(actual.path)).toBe(actual);
+});
+
+test.each(["before prompt", "while prompt", "final continuation"])("source invalidation %s prevents native engine startup", async stage => {
+	const h = fixture();
+	let valid = stage !== "before prompt";
+	Object.assign(h.context, { canStartWork: () => valid });
+	const pending = runTemplate(h);
+	if (stage !== "before prompt") {
+		if (stage === "while prompt") valid = false;
+		submit();
+		if (stage === "final continuation") { await Promise.resolve(); valid = false; }
+	}
+	expect(await pending).toEqual({ status: "cancelled" });
+	expect(h.create).not.toHaveBeenCalled();
 });

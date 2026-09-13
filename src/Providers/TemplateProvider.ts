@@ -1,10 +1,8 @@
 import { cloneSettings } from "../settingsData";
-import { EntitySuggestionItem } from "src/suggestion.types";
+import { ActionContext, ActionResult, EntitySuggestionItem } from "src/suggestion.types";
 import { EntityProvider, EntityProviderUserSettings } from "./EntityProvider";
-import { EditorSuggestContext, Plugin, Setting, TFile, TFolder } from "obsidian";
-import { insertTemplateUsingTemplater } from "src/entitiesUtilities";
+import { Plugin, Setting, TFile, TFolder } from "obsidian";
 import { createNewNoteFromTemplate, creationFailure, resolveDefaultCreationDestination } from "../entityCreation";
-import { creationResultLink } from "../creationFeedback";
 import { promptForCreationName } from "../creationPrompt";
 import { buildIconPickerSetting, buildFolderPathSummarySetting } from "src/ui/providerSettingsComponents";
 import { TriggerCharacter } from "src/entities.types";
@@ -37,7 +35,7 @@ export class TemplateEntityProvider extends EntityProvider<TemplateProviderUserS
 
 	static getDescription(settings?: TemplateProviderUserSettings): string {
 		if (settings) {
-			return `📄 Template entity provider - ${settings.actionType} (${settings.path})`;
+			return `📄 Template entity provider - ${settings.actionType === "insert" ? "Insertion unavailable in Entities" : "create"} (${settings.path})`;
 		} else {
 			return `Template entity provider`;
 		}
@@ -78,8 +76,10 @@ export class TemplateEntityProvider extends EntityProvider<TemplateProviderUserS
         return this.getTemplateFiles(this.settings.path).map((file) => ({
             suggestionText: file.basename,
             icon: this.settings.actionType === "create" ? "file-plus" : "stamp",
-            noteText: `${this.settings.actionType === "create" ? "Create from" : "Insert"} ${file.path}`,
-            target: { kind: "action", id: JSON.stringify([this.settings.actionType, file.path]), callback: (_item, context) => this.actionFunction(file, context) },
+            noteText: `${this.settings.actionType === "create" ? "Create from" : "Insertion unavailable in Entities:"} ${file.path}`,
+            target: { kind: "action", id: JSON.stringify([this.settings.actionType, file.path]), callback: context => this.settings.actionType === "create" ? this.createFileFromTemplate(file, context) : ({
+				status: "unavailable", message: `Insertion unavailable in Entities. Dismiss autocomplete, remove the trigger text, then run “Templater: Open insert template modal” and choose ${file.path}, or use your existing template hotkey.`,
+			}) },
         }));
     }
 
@@ -103,10 +103,12 @@ export class TemplateEntityProvider extends EntityProvider<TemplateProviderUserS
 			
 		new Setting(settingContainer)
 			.setName("Action type")
-			.setDesc("Action to perform with the templates")
+			// eslint-disable-next-line obsidianmd/ui/sentence-case -- Product names and the exact native command title.
+			.setDesc("Template insertion is temporarily unavailable in Entities. Use Templater: Open insert template modal or your existing template hotkey manually. Note creation remains available.")
 			.addDropdown((dropdown) => {
 				dropdown.addOption("create", "Create a new note from template")
-				dropdown.addOption("insert", "Insert the template into the current note")
+				// eslint-disable-next-line obsidianmd/ui/sentence-case -- Entities is the plugin name.
+				dropdown.addOption("insert", "Insertion unavailable in Entities")
 				dropdown.onChange((value) => {
 					settings.actionType = value as "create" | "insert";
 					onShouldSave(settings);
@@ -139,29 +141,17 @@ export class TemplateEntityProvider extends EntityProvider<TemplateProviderUserS
 		);			
 	}
 
-	private actionFunction(file: TFile, context: EditorSuggestContext | null): Promise<string | undefined> {
-		return this.settings.actionType === "create" ? this.createFileFromTemplate(file, context) : this.insertTemplate(file);
-	}
-
-	private async createFileFromTemplate(file: TFile, context: EditorSuggestContext | null): Promise<string | undefined> {
-		const sourcePath = context?.file?.path ?? "";
+	private async createFileFromTemplate(file: TFile, context: ActionContext): Promise<ActionResult> {
 		try {
-			// The host's default destination policy depends on the actual output extension.
-			const destination = resolveDefaultCreationDestination(this.plugin.app, sourcePath, file.extension ? file.name : `${file.name}.md`);
+			if (!context.canStartWork()) return { status: "cancelled" };
+			// Capture the default destination using the actual output extension before the prompt.
+			const destination = resolveDefaultCreationDestination(this.plugin.app, context.source.path, file.extension ? file.name : `${file.name}.md`);
 			const prompt = await promptForCreationName(this, {
 				placeholder: "Enter new note name...",
 				instructions: { insertString: "to create a new note", dismissString: "to dismiss" },
 			});
-			const result = prompt.name === undefined || !prompt.isCurrent() ? { status: "cancelled" as const } : await createNewNoteFromTemplate(this.plugin.app, {
-				engine: "templater", template: file, destination, name: prompt.name,
-			});
-			return creationResultLink(this.plugin.app, result, sourcePath);
-		} catch (error) {
-			return creationResultLink(this.plugin.app, creationFailure(error), sourcePath);
-		}
+			if (prompt.name === undefined || !prompt.isCurrent() || !context.canStartWork()) return { status: "cancelled" };
+			return createNewNoteFromTemplate(this.plugin.app, { engine: "templater", template: file, destination, name: prompt.name });
+		} catch (error) { return creationFailure(error); }
 	}
-
-    private insertTemplate(file: TFile): Promise<string> {
-        return insertTemplateUsingTemplater(this.plugin, file).then(() => "");
-    }
 }

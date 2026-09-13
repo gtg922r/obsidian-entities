@@ -1,4 +1,4 @@
-import { getAction } from "../suggestionTestHelpers";
+import { actionContext, getAction } from "../suggestionTestHelpers";
 import moment = require("moment");
 import { Plugin, TFile } from "obsidian";
 import { DateEntityProvider } from "../../src/Providers/DateEntityProvider";
@@ -133,9 +133,7 @@ describe("DateEntityProvider", () => {
 			.find((item) => item.suggestionText === "this week");
 
 		expect(getAction(suggestion)).toBeDefined();
-		await expect(getAction(suggestion)?.(suggestion, null)).resolves.toBe(
-			"[[Periodic/Weeks/2026-W21|this week]]"
-		);
+		await expect(getAction(suggestion)?.(actionContext())).resolves.toEqual({ status: "existing", file: weeklyFile, alias: "this week" });
 		expect(periodicNotes.getPeriodicNote).toHaveBeenCalledWith(
 			"week",
 			expect.objectContaining({})
@@ -144,12 +142,7 @@ describe("DateEntityProvider", () => {
 		expect(periodicNoteDate.isoWeekYear()).toBe(2026);
 		expect(periodicNoteDate.isoWeek()).toBe(21);
 		expect(periodicNotes.createPeriodicNote).not.toHaveBeenCalled();
-		expect(generateMarkdownLink).toHaveBeenCalledWith(
-			weeklyFile,
-			"",
-			undefined,
-			"this week"
-		);
+		expect(generateMarkdownLink).not.toHaveBeenCalled();
 	});
 
 	test("passes the semantic week date to Periodic Notes on locale week boundaries", async () => {
@@ -194,9 +187,7 @@ describe("DateEntityProvider", () => {
 		);
 		expect(suggestion?.noteText).toBe("2026-W21");
 		expect(getAction(suggestion)).toBeDefined();
-		await expect(getAction(suggestion)?.(suggestion, null)).resolves.toBe(
-			"[[Periodic/Weeks/2026-W21|this week]]"
-		);
+		await expect(getAction(suggestion)?.(actionContext())).resolves.toEqual({ status: "existing", file: weeklyFile, alias: "this week" });
 		expect(periodicNotes.getPeriodicNote).toHaveBeenCalledWith(
 			"week",
 			expect.objectContaining({})
@@ -243,9 +234,7 @@ describe("DateEntityProvider", () => {
 			.getEntityList("next week")
 			.find((item) => item.suggestionText === "next week");
 
-		await expect(getAction(suggestion)?.(suggestion, null)).resolves.toBe(
-			"[[Periodic/Weeks/2026-W22|next week]]"
-		);
+		await expect(getAction(suggestion)?.(actionContext())).resolves.toEqual({ status: "created", file: weeklyFile, alias: "next week" });
 		expect(periodicNotes.createPeriodicNote).toHaveBeenCalledWith(
 			"week",
 			expect.objectContaining({})
@@ -253,12 +242,7 @@ describe("DateEntityProvider", () => {
 		const periodicNoteDate = periodicNotes.createPeriodicNote.mock.calls[0][1];
 		expect(periodicNoteDate.isoWeekYear()).toBe(2026);
 		expect(periodicNoteDate.isoWeek()).toBe(22);
-		expect(generateMarkdownLink).toHaveBeenCalledWith(
-			weeklyFile,
-			"",
-			undefined,
-			"next week"
-		);
+		expect(generateMarkdownLink).not.toHaveBeenCalled();
 	});
 
 	test("adds periodic note actions for explicit parsed week suggestions", async () => {
@@ -299,9 +283,7 @@ describe("DateEntityProvider", () => {
 
 		expect(suggestion?.noteText).toBe("2026-W21 (Wk of 5/18)");
 		expect(getAction(suggestion)).toBeDefined();
-		await expect(getAction(suggestion)?.(suggestion, null)).resolves.toBe(
-			"[[Periodic/Weeks/2026-W21|week 21]]"
-		);
+		await expect(getAction(suggestion)?.(actionContext())).resolves.toEqual({ status: "created", file: weeklyFile, alias: "week 21" });
 		expect(periodicNotes.getPeriodicNote).toHaveBeenCalledWith(
 			"week",
 			expect.objectContaining({})
@@ -367,21 +349,14 @@ describe("DateEntityProvider", () => {
 			.find((item) => item.suggestionText === "today");
 
 		expect(getAction(suggestion)).toBeDefined();
-		await expect(getAction(suggestion)?.(suggestion, null)).resolves.toBe(
-			"[[Periodic/Days/2026-05-18|today]]"
-		);
+		await expect(getAction(suggestion)?.(actionContext())).resolves.toEqual({ status: "created", file: dailyFile, alias: "today" });
 		expect(periodicNotes.createPeriodicNote).toHaveBeenCalledWith(
 			"day",
 			expect.objectContaining({})
 		);
 		const periodicNoteDate = periodicNotes.createPeriodicNote.mock.calls[0][1];
 		expect(periodicNoteDate.format("YYYY-MM-DD")).toBe("2026-05-18");
-		expect(generateMarkdownLink).toHaveBeenCalledWith(
-			dailyFile,
-			"",
-			undefined,
-			"today"
-		);
+		expect(generateMarkdownLink).not.toHaveBeenCalled();
 	});
 
 	test("returns no replacement when periodic note creation does not return a file", async () => {
@@ -407,7 +382,7 @@ describe("DateEntityProvider", () => {
 			.find((item) => item.suggestionText === "this week");
 
 		expect(getAction(suggestion)).toBeDefined();
-		await expect(getAction(suggestion)?.(suggestion, null)).resolves.toBeUndefined();
+		await expect(getAction(suggestion)?.(actionContext())).resolves.toMatchObject({ status: "failed" });
 	});
 
 	test("does not add an action when periodic note creation setting is disabled", () => {
@@ -495,9 +470,9 @@ describe("DateEntityProvider", () => {
 			.find((item) => item.suggestionText === "this week");
 
 		expect(getAction(suggestion)).toBeDefined();
-		await expect(getAction(suggestion)?.(suggestion, null)).resolves.toBeUndefined();
+		await expect(getAction(suggestion)?.(actionContext())).resolves.toMatchObject({ status: "failed" });
 		expect(consoleErrorSpy).not.toHaveBeenCalled();
-		expect(EntitiesNotice).toHaveBeenCalledTimes(1);
+		expect(EntitiesNotice).not.toHaveBeenCalled();
 
 		consoleErrorSpy.mockRestore();
 	});
@@ -526,7 +501,7 @@ describe("DateEntityProvider", () => {
 			.find((item) => item.suggestionText === "this week");
 
 		expect(suggestion?.noteText).toBe("2026-W21");
-		await expect(getAction(suggestion)?.(suggestion, null)).resolves.toBeUndefined();
+		await expect(getAction(suggestion)?.(actionContext())).resolves.toMatchObject({ status: "failed" });
 	});
 
 	test("does not add an action when Periodic Notes lacks active granularity API", () => {

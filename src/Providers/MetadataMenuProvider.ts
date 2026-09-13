@@ -4,7 +4,6 @@ import { EntitySuggestionItem } from "src/suggestion.types";
 import { EntityProvider, EntityProviderUserSettings } from "./EntityProvider";
 import { AppWithPlugins } from "src/entities.types";
 import { createNewNoteFromTemplate, creationFailure, getTemplaterCreationEngine, resolveDefaultCreationDestination } from "../entityCreation";
-import { creationResultLink } from "../creationFeedback";
 import { setValidationStatus } from "src/ui/validationStatus";
 
 const newProviderTypeID = "metadata-menu";
@@ -133,14 +132,13 @@ export class MetadataMenuProvider extends EntityProvider<MetadataMenuProviderUse
 				target: {
 					kind: "action" as const,
 					id: JSON.stringify(["create", fileClassPath, template.path, query]),
-					callback: async (_item, context) => {
-						const sourcePath = context?.file?.path ?? "";
+					callback: context => {
+						if (!context.canStartWork()) return { status: "cancelled" };
 						try {
-							const destination = resolveDefaultCreationDestination(this.plugin.app, sourcePath, `${query}.${template.extension || "md"}`);
-							const result = await createNewNoteFromTemplate(this.plugin.app, { engine: "templater", template, destination, name: query });
-							return creationResultLink(this.plugin.app, result, sourcePath);
+							const destination = resolveDefaultCreationDestination(this.plugin.app, context.source.path, `${query}.${template.extension || "md"}`);
+							return createNewNoteFromTemplate(this.plugin.app, { engine: "templater", template, destination, name: query });
 						} catch (error) {
-							return creationResultLink(this.plugin.app, creationFailure(error), sourcePath);
+							return creationFailure(error);
 						}
 					},
 				},

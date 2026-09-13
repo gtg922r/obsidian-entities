@@ -1,8 +1,8 @@
+import { checkboxEdit, calloutEdit } from "../helperEdits";
 import { cloneSettings } from "../settingsData";
 import { EntitySuggestionItem } from "src/suggestion.types";
 import { EntityProvider, EntityProviderUserSettings, ProviderSettingsInput, RefreshBehavior } from "./EntityProvider";
 import {
-	EditorSuggestContext,
 	Plugin,
 	Setting,
 	moment
@@ -138,10 +138,7 @@ export class HelperEntityProvider extends EntityProvider<HelperProviderUserSetti
 				target: {
 					kind: "action",
 					id: JSON.stringify(["checkbox", checkboxContent]),
-					callback: (item, context) => {
-						if (context) this.checkboxUtilityFunction(checkboxContent, context);
-						else console.log("Utility Function Provider: No context given");
-					},
+					callback: context => ({ status: "edit", edit: checkboxEdit(context, checkboxContent, this.settings.addCreatedTag, moment().format("YYYY-MM-DD")) }),
 				},
 			};
 		});
@@ -151,68 +148,11 @@ export class HelperEntityProvider extends EntityProvider<HelperProviderUserSetti
 			target: {
 				kind: "action",
 				id: JSON.stringify(["callout", type]),
-				callback: (item, context) => {
-					if (context) this.calloutUtilityFunction(type, context);
-					else console.log("Utility Function Provider: No context given");
-				},
+				callback: context => ({ status: "edit", edit: calloutEdit(context, type) }),
 			},
 		}));
 		return [...checkboxSuggestions, ...calloutSuggestions];
 	}
-
-	private checkboxUtilityFunction(
-		checkboxType: string,
-		context: EditorSuggestContext
-	) {
-		const editor = context.editor;
-		const startPos = {
-			...context.start,
-			// TODO: -2 is a hack to account for the space between the checkbox and the text
-			ch: Math.max(context.start.ch - 1, 0), // Ensure ch is not negative
-		};
-		editor.replaceRange("", startPos, context.end);
-
-		const lineStart = { line: context.start.line, ch: 0 };
-		const lineEnd = {
-			line: context.end.line,
-			ch: editor.getLine(context.end.line).length,
-		};
-		const currentLineText = editor.getRange(lineStart, lineEnd);
-		const replaceRegx = /(^\s*)(?:- \[.?\]\s|- )?(.*)(?:\[created)?/;
-		const match = currentLineText.match(replaceRegx);
-		const currentDate = moment().format('YYYY-MM-DD');
-		const createdTag = this.settings.addCreatedTag ? ` [created::${currentDate}]` : '';
-                const replacementText = match
-                        ? `${match[1]}- [${checkboxType}] ${match[2]}${createdTag}`
-                        : currentLineText;
-                editor.replaceRange(replacementText, lineStart, lineEnd);
-        }
-
-        private calloutUtilityFunction(
-                calloutType: string,
-                context: EditorSuggestContext
-        ) {
-                const editor = context.editor;
-                const startPos = {
-                        ...context.start,
-                        ch: Math.max(context.start.ch - 1, 0),
-                };
-                editor.replaceRange("", startPos, context.end);
-
-                const lineStart = { line: context.start.line, ch: 0 };
-                const lineEnd = {
-                        line: context.end.line,
-                        ch: editor.getLine(context.end.line).length,
-                };
-                const currentLineText = editor.getRange(lineStart, lineEnd);
-                const replacementText = `> [!${calloutType}]
-> ${currentLineText}`;
-                editor.replaceRange(replacementText, lineStart, lineEnd);
-                editor.setCursor({
-                        line: lineStart.line + 1,
-                        ch: currentLineText.length + 2, // +2 to account for the "> " prefix
-                });
-        }
 
 	static buildSummarySetting(
 		settingContainer: Setting,

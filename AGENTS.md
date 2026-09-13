@@ -11,11 +11,11 @@ This repository contains an Obsidian plugin that provides context‑aware autoco
   - Provider base + types: `src/Providers/EntityProvider.ts:1`, `src/entities.types.ts:1`
   - Provider registry: `src/Providers/ProviderRegistry.ts:1`
   - Settings UI: `src/EntitiesSettings.ts:1`
-  - Utilities/UI: `src/entitiesUtilities.ts:1`, `src/userComponents.ts:1`
+  - Utilities/UI: `src/actionCoordinator.ts:1`, `src/editorBindings.ts:1`, `src/userComponents.ts:1`
 
 ## Mental Model
 - Triggers: `@` (entities), `:` (symbols), `/` (actions). The suggestor parses the line, detects a trigger, and requests provider suggestions for that trigger.
-- Providers: Return a synchronous array of `EntitySuggestionItem` objects; each item may optionally include an `action` that inserts/acts instead of default link insertion.
+- Providers: Return a synchronous array of `EntitySuggestionItem` objects; each item has an explicit file, unresolved-link, text or action `target`. Actions return typed outcomes to the insertion coordinator.
 - Registry: Manages provider classes and instances, and filters by trigger.
 - Caching/refresh: Providers declare `getRefreshBehavior()` to balance responsiveness and performance.
 
@@ -38,8 +38,8 @@ This repository contains an Obsidian plugin that provides context‑aware autoco
   - Honor `.editorconfig:1` (tabs, LF, final newline).
   - Keep changes minimal and cohesive; avoid drive‑by refactors.
 - UX:
-  - Suggestion items should set `suggestionText`; optionally include `replacementText`, `icon`/`flair`, and concise `noteText`.
-  - If using `action`, return the final replacement string; otherwise the suggestor inserts `[[replacementText || suggestionText]]`.
+  - Suggestion items set `suggestionText` and one typed `target`; optionally include `icon`/`flair` and concise `noteText`.
+  - Action callbacks receive immutable `ActionContext` and return `ActionResult`, never strings/void or preformatted links. Recheck `canStartWork()` immediately before starting an engine after any await. Providers never receive or mutate an Editor; return one calculated edit or an actual creation result.
 
 ## TSDoc Guidance
 - Document exported classes, interfaces, and non‑trivial functions.

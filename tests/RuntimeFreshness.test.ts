@@ -1,6 +1,8 @@
+import { destroyTestEditors, mountTestEditor } from "./editorTestHarness";
+import type { EditorBindings } from "../src/editorBindings";
 import { App, Editor, EditorSuggestContext, Events, Plugin, PluginManifest, TFile } from "obsidian";
 import Entities from "../src/main";
-import { EntitySuggestionItem, SuggestionAction } from "../src/suggestion.types";
+import { ActionResult, EntitySuggestionItem, SuggestionAction } from "../src/suggestion.types";
 import { ConfiguredProviderSettings, EntityProvider, EntityProviderUserSettings, ProviderSettingsInput, RefreshBehavior } from "../src/Providers/EntityProvider";
 import { FolderEntityProvider } from "../src/Providers/FolderEntityProvider";
 import { DataviewEntityProvider } from "../src/Providers/DataviewEntityProvider";
@@ -18,9 +20,10 @@ jest.mock("obsidian", () => {
 			return { emitter: this, name, callback };
 		}
 		offref(ref: { name: string; callback: () => void }) { this.listeners.get(ref.name)?.delete(ref.callback); }
-		trigger(name: string) { this.listeners.get(name)?.forEach(callback => callback()); }
+		trigger(name: string, ...args: unknown[]) { this.listeners.get(name)?.forEach(callback => (callback as (...args: unknown[]) => void)(...args)); }
 	}
 	return {
+		...jest.requireActual("./__mocks__/obsidian"),
 		Events: MockEvents,
 		TFile: class {},
 		EditorSuggest: class {
@@ -34,6 +37,8 @@ jest.mock("obsidian", () => {
 			registerEvent(ref: { emitter: MockEvents; name: string; callback: () => void }) { this.register(() => ref.emitter.offref(ref)); }
 			addSettingTab() {}
 			registerEditorSuggest() {}
+			registeredExtension: unknown;
+			registerEditorExtension(extension: unknown) { this.registeredExtension = extension; }
 			onunload() {}
 			unload() { this.onunload(); this.cleanups.splice(0).forEach(callback => callback()); }
 		},
@@ -45,7 +50,6 @@ jest.mock("obsidian", () => {
 jest.mock("emojilib", () => ({ __esModule: true, default: jest.requireActual("emojilib") }));
 jest.mock("../src/EntitiesSettings", () => ({ EntitiesSettingTab: class {} }));
 jest.mock("../src/userComponents", () => ({}));
-jest.mock("../src/entitiesUtilities", () => ({}));
 
 interface TestSettings extends EntityProviderUserSettings {
 	label: string;
@@ -101,12 +105,22 @@ async function runtime(settings: ConfiguredProviderSettings[]) {
 		getCache: (path: string) => metadata.get(path),
 		getFirstLinkpathDest: (path: string) => file(`${path}.md`),
 	});
-	const app = { vault, metadataCache, plugins: { getPlugin: (id: string) => integrations[id] }, workspace: { onLayoutReady: (callback: () => void) => layoutCallbacks.push(callback) } } as unknown as App;
+	const app = { vault, metadataCache, plugins: { getPlugin: (id: string) => integrations[id] }, workspace: Object.assign(new Events(), { onLayoutReady: (callback: () => void) => layoutCallbacks.push(callback) }) } as unknown as App;
 	const plugin = new Entities(app, { id: "entities", dir: ".obsidian/plugins/entities" } as PluginManifest);
 	const register = plugin.registerEntityProviders.bind(plugin);
 	jest.spyOn(plugin, "registerEntityProviders").mockImplementation(() => { register(); plugin.providerRegistry.registerProviderType(TestProvider); });
 	plugins.push(plugin);
 	await plugin.onload();
+	const mounted = new WeakSet<Editor>();
+	const retrieve = plugin.suggestor.getSuggestions.bind(plugin.suggestor);
+	jest.spyOn(plugin.suggestor, "getSuggestions").mockImplementation(ctx => {
+		if (!mounted.has(ctx.editor)) {
+			files.set(ctx.file.path, ctx.file);
+			mountTestEditor(app, { extension: (plugin as unknown as { registeredExtension: EditorBindings["extension"] }).registeredExtension }, ctx.file, ctx.query, ctx.query, ctx.editor);
+			mounted.add(ctx.editor);
+		}
+		return retrieve(ctx);
+	});
 	return { plugin, suggestor: plugin.suggestor, registry: plugin.providerRegistry, folders, files, metadata, integrations, layoutCallbacks, vault, metadataCache };
 }
 
@@ -115,6 +129,7 @@ beforeEach(() => {
 	jest.spyOn(console, "error").mockImplementation(() => {});
 });
 afterEach(() => {
+	destroyTestEditors();
 	plugins.splice(0).forEach(plugin => plugin.unload());
 	jest.useRealTimers();
 	jest.restoreAllMocks();
@@ -265,10 +280,10 @@ test.each(["delete", "disable", "edit", "reorder", "trigger", "reload"])("config
 	expect(r.suggestor.onTrigger({ line: 0, ch: 1 }, ctx.editor, ctx.file)).not.toBeNull();
 	old.forEach(item => r.suggestor.selectSuggestion(item, {} as MouseEvent));
 	expect(action).not.toHaveBeenCalled();
-	expect(ctx.editor.replaceRange).not.toHaveBeenCalled();
+	expect(ctx.editor.transaction).not.toHaveBeenCalled();
 	const fresh = r.suggestor.getSuggestions(ctx);
 	r.suggestor.selectSuggestion(fresh[0], {} as MouseEvent);
-	expect(ctx.editor.replaceRange).toHaveBeenCalledTimes(1);
+	expect(ctx.editor.transaction).toHaveBeenCalledTimes(1);
 });
 
 test("new result epoch rejects a retained old query item while close-before-selection still works", async () => {
@@ -279,9 +294,9 @@ test("new result epoch rejects a retained old query item while close-before-sele
 	r.suggestor.context = ctx;
 	await r.suggestor.close();
 	r.suggestor.selectSuggestion(old, {} as MouseEvent);
-	expect(ctx.editor.replaceRange).not.toHaveBeenCalled();
+	expect(ctx.editor.transaction).not.toHaveBeenCalled();
 	r.suggestor.selectSuggestion(fresh, {} as MouseEvent);
-	expect(ctx.editor.replaceRange).toHaveBeenCalledWith("[[Test]]", { line: 0, ch: 0 }, ctx.end);
+	expect(ctx.editor.getValue()).toBe("[[Test]]");
 });
 
 test.each([
@@ -296,7 +311,7 @@ test.each([
 	const action = jest.fn(async () => {
 		r.vault.trigger("create");
 		r.metadataCache.trigger("changed");
-		return "Action return";
+		return { status: "target" as const, target: { kind: "text" as const, text: "Action return" } };
 	});
 	const retrieve = jest.spyOn(r.registry.getProviders()[0], "getEntityList").mockReturnValue([
 		{ suggestionText: "Displayed", target: { kind: "unresolved-link" as const, linkpath: "Displayed" }, ...(kind === "action" ? { target: { kind: "action" as const, id: "displayed", callback: action } } : {}) },
@@ -312,7 +327,7 @@ test.each([
 	await Promise.resolve();
 	expect(retrieve).toHaveBeenCalledTimes(1);
 	expect(action).toHaveBeenCalledTimes(kind === "action" ? 1 : 0);
-	expect(ctx.editor.replaceRange).toHaveBeenCalledWith(kind === "action" ? "Action return" : "[[Displayed]]", { line: 0, ch: 0 }, ctx.end);
+	expect(ctx.editor.getValue()).toBe(kind === "action" ? "Action return" : "[[Displayed]]");
 	expect(close).toHaveBeenCalledTimes(1);
 	// Data is still dirty: the next request refreshes even under Never.
 	expect(labels(r.suggestor.getSuggestions(ctx))).toEqual(["Updated"]);
@@ -321,8 +336,8 @@ test.each([
 
 test.each(["replace", "unload", "close", "data"])("awaited action return after %s respects only generation/unload validity", async change => {
 	const r = await runtime([config("source")]);
-	let finish!: (value: string) => void;
-	const action = jest.fn(() => new Promise<string>(resolve => { finish = resolve; }));
+	let finish!: (value: ActionResult) => void;
+	const action = jest.fn(() => new Promise<ActionResult>(resolve => { finish = resolve; }));
 	jest.spyOn(r.registry.getProviders()[0], "getEntityList").mockReturnValue([{ suggestionText: "Act", target: { kind: "action" as const, id: "test-action", callback: action }, }]);
 	const ctx = context();
 	const [item] = r.suggestor.getSuggestions(ctx);
@@ -331,10 +346,10 @@ test.each(["replace", "unload", "close", "data"])("awaited action return after %
 	if (change === "unload") r.plugin.unload();
 	if (change === "close") await r.suggestor.close();
 	if (change === "data") r.metadataCache.trigger("changed");
-	finish("returned text");
+	finish({ status: "target", target: { kind: "text", text: "returned text" } });
 	await Promise.resolve();
 	expect(action).toHaveBeenCalledTimes(1); // Side effects were already started, not cancelled.
-	expect(ctx.editor.replaceRange).toHaveBeenCalledTimes(["close", "data"].includes(change) ? 1 : 0);
+	expect(ctx.editor.transaction).toHaveBeenCalledTimes(["close", "data"].includes(change) ? 1 : 0);
 });
 
 test("Folder metadata changes and Template create/rename/delete refresh without closing on data events", async () => {
@@ -352,9 +367,9 @@ test("Folder metadata changes and Template create/rename/delete refresh without 
 	expect(labels(r.suggestor.getSuggestions(context("/")))).toEqual(["Original"]);
 	r.folders.get("Templates")!.push(file("Templates/Created.md")); r.vault.trigger("create");
 	expect(labels(r.suggestor.getSuggestions(context("/")))).toEqual(["Original", "Created"]);
-	r.folders.set("Templates", [file("Templates/Renamed.md"), file("Templates/Created.md")]); r.vault.trigger("rename");
+	r.folders.set("Templates", [file("Templates/Renamed.md"), file("Templates/Created.md")]); r.vault.trigger("rename", file("Templates/Renamed.md"));
 	expect(labels(r.suggestor.getSuggestions(context("/")))).toEqual(["Renamed", "Created"]);
-	r.folders.set("Templates", []); r.vault.trigger("delete");
+	r.folders.set("Templates", []); r.vault.trigger("delete", file("Templates/Renamed.md"));
 	expect(r.suggestor.getSuggestions(context("/"))).toEqual([]);
 	expect(close).not.toHaveBeenCalled();
 });
@@ -374,7 +389,8 @@ test.each(["dataview:metadata-change", "dataview:index-ready", "dataview:api-rea
 	r.integrations.dataview = { api: pages("Fallback") }; jest.advanceTimersByTime(201);
 	expect(labels(r.suggestor.getSuggestions(context()))).toEqual(["Fallback"]);
 	expect(first.pages).toHaveBeenCalledTimes(1);
-	expect(jest.getTimerCount()).toBe(0); // No constructor retry timer or provider scheduler.
+	destroyTestEditors(); // Dispose CodeMirror measurement scheduling before checking provider timers.
+	expect(jest.getTimerCount()).toBe(0);
 });
 
 test.each(["metadata-menu:indexed", "metadata-menu:fileclass-indexed", "metadata-menu:fields-changed"])("Metadata Menu %s handles absent/index-ready/replaced/removed states", async event => {
@@ -396,7 +412,7 @@ test("all lifecycle events invalidate data; repeated provider reloads add no lis
 	const r = await runtime([config("source", { mode: RefreshBehavior.Never })]);
 	const listenerCount = (emitter: Events) => Array.from((emitter as unknown as { listeners: Map<string, Set<unknown>> }).listeners.values()).reduce((sum, listeners) => sum + listeners.size, 0);
 	for (let i = 0; i < 10; i++) r.plugin.loadEntityProviders();
-	expect(listenerCount(r.vault)).toBe(3); expect(listenerCount(r.metadataCache)).toBe(9);
+	expect(listenerCount(r.vault)).toBe(5); expect(listenerCount(r.metadataCache)).toBe(9);
 	const retrieve = jest.spyOn(r.registry.getProviders()[0], "getEntityList");
 	r.suggestor.getSuggestions(context());
 	for (const event of ["changed", "deleted", "resolved", "dataview:metadata-change", "dataview:index-ready", "dataview:api-ready", "metadata-menu:indexed", "metadata-menu:fileclass-indexed", "metadata-menu:fields-changed"]) {
@@ -425,15 +441,14 @@ test("ordinary results retain ranking and identical unresolved-target deduplicat
 	expect(result.map(item => item.match?.score)).toEqual([10, 10, -10]);
 });
 
-test.each(["returned text", "", undefined, null])("action return %p retains existing insertion behavior", async returned => {
+test.each(["returned text", "", undefined, null])("legacy action return %p is rejected without insertion", async returned => {
 	const r = await runtime([config("source")]);
-	const action = (() => returned) as SuggestionAction;
-	jest.spyOn(r.registry.getProviders()[0], "getEntityList").mockReturnValue([{ suggestionText: "Act", target: { kind: "action" as const, id: "test-action", callback: action }, }]);
+	const action = (() => returned) as unknown as SuggestionAction;
+	jest.spyOn(r.registry.getProviders()[0], "getEntityList").mockReturnValue([{ suggestionText: "Act", target: { kind: "action", id: "test-action", callback: action } }]);
 	const ctx = context();
 	r.suggestor.selectSuggestion(r.suggestor.getSuggestions(ctx)[0], {} as MouseEvent);
 	await Promise.resolve();
-	if (returned == null) expect(ctx.editor.replaceRange).not.toHaveBeenCalled();
-	else expect(ctx.editor.replaceRange).toHaveBeenCalledWith(returned, { line: 0, ch: 0 }, ctx.end);
+	expect(ctx.editor.transaction).not.toHaveBeenCalled();
 });
 
 test("repeated load/unload lifetimes release event and registry listeners and ignore earlier layout callbacks", async () => {
@@ -445,7 +460,7 @@ test("repeated load/unload lifetimes release event and registry listeners and ig
 		const invalidate = jest.spyOn(active, "invalidateData");
 		r.layoutCallbacks.forEach(callback => callback());
 		expect(invalidate).toHaveBeenCalledTimes(1);
-		expect(listenerCount(r.vault) + listenerCount(r.metadataCache)).toBe(12);
+		expect(listenerCount(r.vault) + listenerCount(r.metadataCache)).toBe(14);
 		r.plugin.unload();
 		expect(listenerCount(r.vault) + listenerCount(r.metadataCache)).toBe(0);
 		expect((r.registry as unknown as { changeListeners: Set<unknown> }).changeListeners.size).toBe(0);

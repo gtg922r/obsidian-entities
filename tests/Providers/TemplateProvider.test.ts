@@ -51,10 +51,6 @@ jest.mock("../../src/userComponents", () => ({
 	})),
 }));
 
-jest.mock("../../src/entitiesUtilities", () => ({
-	createNewNoteFromTemplate: jest.fn().mockResolvedValue(undefined),
-	insertTemplateUsingTemplater: jest.fn().mockResolvedValue(undefined),
-}));
 
 jest.mock("../../src/ui/file-suggest", () => ({
 	FolderSuggest: jest.fn(),
@@ -223,7 +219,7 @@ describe("TemplateEntityProvider", () => {
 				actionType: "insert",
 			});
 			const desc = provider.getDescription();
-			expect(desc).toBe("📄 Template entity provider - insert (MyTemplates)");
+			expect(desc).toBe("📄 Template entity provider - Insertion unavailable in Entities (MyTemplates)");
 		});
 
 		test("getDefaultSettings instance method matches static", () => {
@@ -234,4 +230,16 @@ describe("TemplateEntityProvider", () => {
 			);
 		});
 	});
+});
+
+test("insertion settings retain action/path/trigger/identity/unknown fields through migration, edit, save and reload", async () => {
+	const { SettingsStore } = await import("../../src/SettingsStore");
+	const saved = { providerSettings: [{ providerTypeID: "template", providerInstanceId: "kept", enabled: true, icon: "stamp", path: "Templates/ Exact ", actionType: "insert", trigger: ":", extensionData: { retain: [1, 2] } }] };
+	let disk: unknown = saved;
+	const makeStore = () => new SettingsStore(async value => { disk = JSON.parse(JSON.stringify(value)); }, async () => {}, () => TemplateEntityProvider.getDefaultSettings(), () => {});
+	const store = makeStore(); await store.load(async () => disk);
+	store.updateProvider("kept", { icon: "star" }); await store.flush();
+	const restored = makeStore(); await restored.load(async () => disk);
+	expect(restored.settings.providerSettings[0]).toMatchObject({ ...saved.providerSettings[0], icon: "star" });
+	await store.close(); await restored.close();
 });

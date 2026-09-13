@@ -7,14 +7,15 @@ import {
 	EditorSuggestContext,
 	setIcon,
 	prepareFuzzySearch,
-	Notice,
 	EditorSuggestTriggerInfo,
 } from "obsidian";
 import ProviderRegistry from "./Providers/ProviderRegistry";
 import { EntityProvider, EntityProviderUserSettings, RefreshBehavior } from "./Providers/EntityProvider";
+import { ActionCoordinator } from "./actionCoordinator";
+import { EditorBindings } from "./editorBindings";
 import { TriggerCharacter } from "./entities.types";
 import { EntitySuggestionItem } from "./suggestion.types";
-import { effectiveFileAlias, readSuggestionTarget, suggestionTargetKey, unresolvedWikilink } from "./suggestionTargets";
+import { readSuggestionTarget, suggestionTargetKey } from "./suggestionTargets";
 
 // Pre-compiled whitespace matcher to avoid recreating a RegExp per character
 const WHITESPACE_RE = /\s/;
@@ -36,6 +37,7 @@ interface SuggestionProvenance {
 	registryRevision: number;
 	epoch: number;
 	context: EditorSuggestContext;
+	sourcePath: string;
 }
 
 /** Collects synchronous provider results and guards selection against runtime replacement. */
@@ -50,6 +52,7 @@ export class EntitiesSuggestor extends EditorSuggest<EntitySuggestionItem> {
 	private dataRevision = 0;
 	private resultEpoch = 0;
 	private disposed = false;
+	private readonly actions: ActionCoordinator;
 	private readonly removeRegistryListener: () => void;
 
 	// Track the last dismissed query
@@ -58,9 +61,10 @@ export class EntitiesSuggestor extends EditorSuggest<EntitySuggestionItem> {
 	private lastSuggestionCount = 0;
 
 	//empty constructor
-	constructor(plugin: Entities, registry: ProviderRegistry) {
+	constructor(plugin: Entities, registry: ProviderRegistry, bindings = new EditorBindings(plugin.app)) {
 		super(plugin.app);
 		this.plugin = plugin;
+		this.actions = new ActionCoordinator(plugin.app, bindings);
 		this.providerRegistry = registry;
 		this.removeRegistryListener = registry.onChange(() => this.invalidateProviders());
 	}
@@ -174,6 +178,7 @@ export class EntitiesSuggestor extends EditorSuggest<EntitySuggestionItem> {
 	dispose(): void {
 		if (this.disposed) return;
 		this.disposed = true;
+		this.actions.dispose();
 		this.removeRegistryListener();
 		this.invalidateProviders();
 	}
@@ -223,6 +228,8 @@ export class EntitiesSuggestor extends EditorSuggest<EntitySuggestionItem> {
 		const registryRevision = this.providerRegistry.revision;
 		const dataRevision = this.dataRevision;
 		const epoch = ++this.resultEpoch;
+		const capturedContext = { ...context, start: { ...context.start }, end: { ...context.end } };
+		const sourcePath = context.file?.path;
 		const trigger = (context.query.charAt(0) as TriggerCharacter) || TriggerCharacter.At;
 		const searchQuery = context.query.slice(1);
 		const fuzzyMatch = prepareFuzzySearch(searchQuery);
@@ -231,7 +238,7 @@ export class EntitiesSuggestor extends EditorSuggest<EntitySuggestionItem> {
 		const providers = this.providerRegistry.getProvidersForTrigger(trigger);
 		const remember = (item: EntitySuggestionItem, provider: Provider): EntitySuggestionItem => {
 			const copy = { ...item, target: { ...item.target } };
-			this.provenance.set(copy, { provider, registryRevision, epoch, context });
+			this.provenance.set(copy, { provider, registryRevision, epoch, context: capturedContext, sourcePath });
 			return copy;
 		};
 
@@ -327,75 +334,18 @@ export class EntitiesSuggestor extends EditorSuggest<EntitySuggestionItem> {
 	}
 
 	selectSuggestion(value: EntitySuggestionItem, evt: MouseEvent | KeyboardEvent): void {
+		if ("isComposing" in evt && evt.isComposing) return;
 		const source = this.provenance.get(value);
 		if (!source || source.epoch !== this.resultEpoch || !this.isCurrentProvider(source)) return;
-		// Obsidian may close before selection. Provenance retains this result's context.
-		const originalContext = source.context;
-		const target = value.target;
-		if (target.kind === "action") {
-			try {
-				const actionResult = target.callback(value, originalContext);
-				Promise.resolve(actionResult).then((result) => {
-					// This only guards configuration/unload, not action side effects or editor/range safety (R4).
-					if (result != undefined && this.isCurrentProvider(source)) {
-						this.replaceTextAtContext(result, originalContext);
-					}
-				}).catch(error => this.reportFailure(source.provider, "action", error));
-			} catch (error) {
-				this.reportFailure(source.provider, "action", error);
-			}
-		} else {
-			let replacement: string;
-			switch (target.kind) {
-				case "file":
-					try {
-						if (this.plugin.app.vault.getAbstractFileByPath(target.file.path) !== target.file) {
-							new Notice("This note was deleted or replaced. Search again to select a current note.");
-							return;
-						}
-						replacement = this.plugin.app.fileManager.generateMarkdownLink(
-							target.file, originalContext.file.path, undefined, effectiveFileAlias(target.file, target.alias)
-						);
-						if (typeof replacement !== "string" || !replacement.length) throw new Error("No native link returned.");
-					} catch {
-						new Notice("Unable to make a link to this note. Please search again and retry.");
-						return;
-					}
-					break;
-				case "unresolved-link":
-					replacement = unresolvedWikilink(target.linkpath, target.alias);
-					break;
-				case "text":
-					replacement = target.text;
-					break;
-			}
-			this.replaceTextAtContext(replacement, originalContext);
-		}
+		// Native close-before-select is valid. Only entry uses the result epoch;
+		// a fresh retrieval or menu close does not cancel already-started work.
+		this.actions.select(source.context, source.sourcePath, value.target, () => this.isCurrentProvider(source), () => {
+			this.resultEpoch++;
+			this.close();
+		});
 	}
 
-	private replaceTextAtContext(
-		text: string,
-		context: EditorSuggestContext
-	): void {
-		// console.log("Inserting text:", text);
-		// console.log("Inserting using Context:", context);
-
-		const editor = context.editor;
-		const start = {
-			...context.start,
-			ch: Math.max(context.start.ch - 1, 0), // Ensure ch is not negative
-		};
-		const end = context.end;
-
-               const startOffset = editor.posToOffset(start);
-               editor.replaceRange(text, start, end);
-               const newCursor = editor.offsetToPos(startOffset + text.length);
-
-               editor.setCursor(newCursor);
-               this.close();
-	}
-
-	async close(): Promise<void> {
+	close(): void {
 		if (this.context && this.lastSuggestionCount > 0) {
 			this.lastDismissedQuery = this.context.start;
 		}

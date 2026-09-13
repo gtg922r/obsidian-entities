@@ -1,13 +1,11 @@
 import { cloneSettings } from "../settingsData";
 import {
-	EditorSuggestContext,
 	Plugin,
 	Setting,
 	moment,
 } from "obsidian";
-import { EntitySuggestionItem } from "src/suggestion.types";
+import { ActionContext, ActionResult, EntitySuggestionItem } from "src/suggestion.types";
 import { createOrReusePeriodicNote, creationFailure } from "../entityCreation";
-import { creationResultLink } from "../creationFeedback";
 import { EntityProvider, EntityProviderUserSettings } from "./EntityProvider";
 import {
 	AppWithPlugins,
@@ -286,7 +284,7 @@ export class DateEntityProvider extends EntityProvider<DatesProviderUserSettings
 				kind: "action",
 				id: JSON.stringify(["periodic-note", candidate.granularity, candidate.date.format(),
 					candidate.suggestionText, candidate.linkpath, candidate.alias ?? null]),
-				callback: async (item, context) => this.createOrLinkPeriodicNote(candidate, item, context),
+				callback: context => this.createOrLinkPeriodicNote(candidate, context),
 			};
 		}
 
@@ -325,14 +323,13 @@ export class DateEntityProvider extends EntityProvider<DatesProviderUserSettings
 
 	private async createOrLinkPeriodicNote(
 		candidate: DateSuggestionCandidate,
-		item: EntitySuggestionItem,
-		context: EditorSuggestContext | null
-	): Promise<string | undefined> {
-		const sourcePath = context?.file?.path ?? "";
+		context: ActionContext
+	): Promise<ActionResult> {
+		if (!context.canStartWork()) return { status: "cancelled" };
 		const result = candidate.granularity && candidate.date
 			? await createOrReusePeriodicNote(this.plugin.app, candidate.granularity, candidate.date)
 			: creationFailure(new Error("The periodic date is unavailable."));
-		return creationResultLink(this.plugin.app, result, sourcePath, item.suggestionText);
+		return result.status === "created" || result.status === "existing" ? { ...result, alias: candidate.suggestionText } : result;
 	}
 
 	static buildSummarySetting(
