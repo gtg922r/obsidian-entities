@@ -19,7 +19,16 @@ Today I spoke with [type a trigger here] about the next chapter.
    `@Navigator`. Test wikilinks and Markdown links from this nested Writing folder.
 3. Type `@Zoë` and `@東京`, then `@Deep`. Toggle People recursion and aliases;
    compare disabled Places aliases (`@Quiet Room`). Narrow `@People Sentinel`
-   and backspace to `@` to test query broadening.
+   and backspace to `@` to check the query-independent Folder/Dataview lists.
+   Also test Character's query-dependent cache: with emoji enabled, an
+   owner-approved timed harness must seed a fresh `:cat` lookup without
+   intermediate colon queries, then broaden to `:ca` less than 200 ms after
+   the recorded cache refresh. Compare fresh `:ca` after an untouched interval
+   over 200 ms: cactus 🌵 belongs to `ca`, not `cat`, and should appear immediately
+   on broadening. Record actual provider refreshes and monotonic timestamps;
+   follow A1 in the acceptance guide for reliable cache-age control. Manual
+   typing speed alone is insufficient. Mark the timed path BLOCKED if the
+   harness/timing cannot be verified; no runtime PASS is recorded by this kit.
 4. Open `@Sentinel`, edit/remove a source in settings with the menu still open,
    then attempt its old selection. Rename/delete a Sentinel in the vault; retry.
 5. With Templater explicitly enabled, type `@Fresh Person` and select New Person.

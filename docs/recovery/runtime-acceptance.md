@@ -24,7 +24,10 @@ npm run fixture:recovery -- \
 Use real absolute paths without symlink components or `.` / `..`. On macOS use
 `/private/tmp`, not the `/tmp` symlink; `pwd -P` identifies a physical checkout
 path. The destination must not exist, its parent must already exist, and it must
-be outside existing vaults. Re-running against a created vault always fails.
+be outside existing vaults. Automatic ancestor-vault detection recognizes only
+the default `.obsidian` marker. For vaults with custom configuration folders,
+manually check that the destination is outside the vault. Re-running against a
+created vault always fails.
 Use a fresh destination to reset tests. Input artifact/fixture directories must
 not be changed concurrently; this local utility is not a hostile-filesystem
 sandbox. Root creation is exclusive, output files use exclusive creation, and
@@ -133,7 +136,7 @@ retain a BLOCKED result for the combined case until it can be executed.
 
 | ID | Reproduction / CURRENT expectation | Required recovery-release behavior |
 | --- | --- | --- |
-| A1: sources, queries (R2) | Scratch `@Sentinel`: all four sources. Narrow `@People Sentinel`, backspace to `@`; repeat fast/slow. CURRENT class-name cache reuses the first same-type provider's list. | Four distinct sentinels with integrations ready; query broadening and rapid typing refresh without stale/missing results. Lookup remains synchronous/responsive. |
+| A1: sources, queries (R2) | Scratch `@Sentinel`: all four sources. Narrow `@People Sentinel`, backspace to `@`; this checks query-independent Folder/Dataview lists only. Also run the controlled Character `:cat` → `:ca` case below. CURRENT class-name cache reuses same-type lists; query-dependent Character results can remain restricted to `cat` within the 200 ms cache window. | Four distinct sentinels with integrations ready. Broadening to `:ca` immediately includes cactus 🌵, matching fresh `:ca`; narrowing to `:cat` excludes it. Query broadening and rapid typing refresh without stale/missing results. Lookup remains synchronous/responsive. |
 | A2: reload, failures (R2) | Keep `@Sentinel` open while removing/disabling/reconfiguring/reordering its source; attempt old selection. Rename/delete/create a Sentinel; try a missing Folder path. Test invalid Dataview query feedback in UI. CURRENT UI does not save invalid queries: for lookup failure, close Obsidian in a separate disposable run, edit Projects' saved query to `(`, reopen. CURRENT caches/open suggestions can survive replacement; query exceptions can escape. | Old suggestions cannot execute after configuration changes; data refreshes. One source's construction/lookup/creation-suggestion failure cannot blank others. Restore valid configuration without restart. Record any fault path requiring an owner-provided debug build as BLOCKED until executed. |
 | A3: links (R3) | `@Atlas` has four paths. Enable all aliases and try `@Navigator`; inspect every resulting target from `Writing/Scratch.md` and a source-folder note. CURRENT display-text dedupe and basename-only wikilinks lose identity. | Distinct targets/aliases remain selectable with path/source context; selecting each opens its intended TARGET line. Test wikilinks and Markdown links, shortest/relative/vault-absolute path preferences, Unicode aliases and spaces. Repeated references to the same file/alias dedupe appropriately; distinct same-label actions remain available (configure two templates with identical entityName). |
 | A4: semantics (R5) | Toggle aliases independently in Places/Reading and recursion in People/Places. Include `active:^false$`, then `score:^0$`; exclude `absent:.+`; regex `[`. Point one source at each isolated `Cases/` folder. CURRENT toggles are ignored, false/zero treated as absent, malformed aliases may throw. | Toggles persist and work; scalar/list aliases normalize without losing real targets. Missing/false/zero/null/invalid values remain distinct; malformed values/regex/query give useful feedback or fail soft. Configure property aliases from `username` when R5 exposes them; select string/list values and verify original file identity. Current property-alias UI is incomplete. |
@@ -143,6 +146,28 @@ retain a BLOCKED result for the combined case until it can be executed.
 | A8: dates (R4/R5/R6) | Run the daily/weekly table, create off/on, core-only/Periodic-only/both, invalid weeks, leap date, year boundary, `@tomorrow`. CURRENT week bounds/year mapping and failure fallback need validation. | Correct configured folders/formats/precedence and existing-note identity; invalid dates do not create bogus files. A deliberate unresolved link is distinguishable from successful creation; failures cannot masquerade as creation. |
 | A9: input/windows (R6) | `@Zoë 東京`, `:smile`, `/todo`: arrows/Enter/Escape, mouse/touch, IME composition, mobile keyboard selection. Repeat main/popout, settings in another window, and Source/Live Preview. CURRENT private UI/window boundaries are unverified. | No premature IME commit, double insertion, lost caret or orphan menu. Settings search/window edits target the intended source. Ten load/settings/unload/re-enable cycles produce no duplicate menus/listeners or stale results; closing/reopening windows cleans up. |
 | A10: artifact/release (R7) | Run minimum/current matrix, verify hashes before/after and on mobile transfer; package identity/install path. CURRENT kit has no live evidence. | Exact tested assets retained for promotion; version/tag/manifest/assets agree. Record install/upgrade/refusal behavior, BRAT sessions, and owner signoff. This small vault cannot certify large-vault performance: record cold start/suggestion latency and method on separately authorized representative data. |
+
+For **A1's timed Character case**, enable emoji suggestions. The bundled
+dictionary has `cactus` (🌵) for `ca`, but not `cat`. Do not rely on manual typing
+speed: intermediate `:`, `:c`, or `:ca` requests can seed a broader cache and mask
+the defect. Use an owner-approved timed harness against the installed artifact's
+actual suggestor, Character provider and dictionary, with real Scratch editor/
+file contexts and no intervening lookups. The harness must:
+
+1. Leave the Character cache untouched for over 200 ms, then issue `:cat` as a
+   single lookup and verify an actual provider refresh for `cat`.
+2. Immediately issue `:ca`, recording monotonic timestamps at both suggestor
+   entries and the actual `cat` cache-refresh timestamp. Require the `:ca` entry
+   to be less than 200 ms after that refresh; record both suggestion sets.
+3. After a further untouched interval over 200 ms, issue fresh `:ca`, verify its
+   provider refresh, and compare the result sets, specifically cactus 🌵.
+
+Retain harness revision, timestamp/refresh trace and results alongside artifact
+identity; distinguish this instrumented lookup evidence from manual menu/input
+smoke. If instrumentation changes the cache/query behavior, timestamps cannot
+establish the cache age, or the device cannot run the harness reliably, mark the
+timed path **BLOCKED**. The kit provides the procedure, not a timed harness or a
+runtime PASS; slow manual broadening alone cannot clear this case.
 
 ## Old-settings upgrade, recovery and rollback (R1/R7)
 
@@ -154,8 +179,11 @@ For every manual settings replacement below, **fully quit Obsidian** (including
 other vault windows/processes), not merely disable/re-enable Entities or close a
 note/window. An in-memory dirty predecessor can otherwise overwrite restored
 `data.json` on re-enable. Use the platform's full app-termination procedure on
-mobile and record it. Align the exact recovery procedure with R1 documentation
-once accepted; this legacy fixture does not assume its implementation.
+mobile and record it. Follow the accepted [R1 recovery procedure](../settings-recovery.md).
+R1 at `1773e4c` uses schema version 1 and `data.before-settings-v1-<id>.json`
+backups beside `data.json`. Those backups preserve JSON values, not original
+whitespace; retain the separate original-byte copy for exact rollback evidence.
+The fixture input stays unversioned so it exercises migration.
 
 1. Generate the old-artifact vault, explicitly enable it, exercise a few settings
    and record the resulting bytes. Disable Entities and close Obsidian. Preserve
@@ -171,8 +199,9 @@ once accepted; this legacy fixture does not assume its implementation.
    fields and an unknown provider survive using a separate hand-edited legacy
    copy (`fixtureUnknown: {"keep": true}` and a disabled `fixture-unknown` provider).
 4. In separate copies while closed, replace settings with malformed JSON (`{`),
-   a wrong shape (`{"providerSettings":42}`), or a future schema produced from
-   the **accepted candidate's documented schema**, not a guessed R1 contract.
+   a wrong shape (`{"providerSettings":42}`), or a future schema. For accepted
+   R1's version 1, set `schemaVersion: 2` in a separate copy of its saved document;
+   reconfirm the candidate's documented schema before testing later revisions.
    Try UI edits, retry, reload and unload: protected input bytes must remain
    unchanged. Exercise failed reads, existence checks, original-backup writes
    and settings saves through actual Obsidian storage paths: convenience wrappers
@@ -181,7 +210,7 @@ once accepted; this legacy fixture does not assume its implementation.
    though it were a fresh install. Force a save failure only in the disposable vault using an
    owner-approved local method; record the method, notices, retry and final data.
    If not reproducible on a device, mark that path BLOCKED.
-5. Follow the accepted recovery UI/instructions using the preserved original;
+5. Follow the accepted recovery instructions using the preserved original;
    verify recovery is explicit and sources are intact. To test rollback, disable
    Entities, close Obsidian, then restore **both** previous assets and original
    pre-migration data, removing candidate-only assets. Re-hash before reopening;
