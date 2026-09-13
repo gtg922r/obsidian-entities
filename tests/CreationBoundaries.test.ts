@@ -97,6 +97,27 @@ function runTemplate(h: ReturnType<typeof fixture>) {
 }
 beforeEach(() => { mockModals.length = 0; mockStatuses.length = 0; jest.clearAllMocks(); });
 
+test("IME confirmation keeps the prompt open; subsequent ordinary Enter submits once", async () => {
+	const h = fixture(), pending = runTemplate(h);
+	const modal = mockModals.at(-1)!;
+	const close = jest.spyOn(modal, "close");
+	const settled = jest.fn();
+	void modal.getInput().then(settled);
+	const input = modal.modalEl.querySelector("input")!;
+	input.value = "東京";
+	input.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", isComposing: true }));
+	await Promise.resolve(); await Promise.resolve(); await Promise.resolve();
+	expect(settled).not.toHaveBeenCalled();
+	expect(close).not.toHaveBeenCalled();
+	expect(h.create).not.toHaveBeenCalled();
+	input.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter" }));
+	input.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter" }));
+	expect(await pending).toBe("native:Default/東京.md");
+	expect(settled).toHaveBeenCalledTimes(1);
+	expect(settled).toHaveBeenCalledWith("東京");
+	expect(h.create).toHaveBeenCalledTimes(1);
+});
+
 test("an undefined engine result must not produce a guessed success link", async () => {
 	const h = fixture(); h.create.mockResolvedValue(undefined);
 	const provider = new RecipeProvider(h.plugin, { providerInstanceId: "recipe", entityCreationTemplates: [
