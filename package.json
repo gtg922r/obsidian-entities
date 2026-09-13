@@ -12,6 +12,7 @@
 		"build": "tsc -noEmit -skipLibCheck && node esbuild.config.mjs production",
 		"version": "node version-bump.mjs && node scripts/update-changelog.mjs && git add manifest.json versions.json package.json package-lock.json CHANGELOG.md",
 		"test": "jest",
+		"fixture:recovery": "node scripts/create-recovery-vault.mjs",
 		"lint": "eslint src tests scripts \"*.config.{js,mjs}\" version-bump.mjs --max-warnings=0",
 		"lint:fix": "eslint src tests scripts \"*.config.{js,mjs}\" version-bump.mjs --fix",
 		"check": "npm run lint && npm test && npm run build",
