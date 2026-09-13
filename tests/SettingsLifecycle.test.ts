@@ -84,6 +84,7 @@ function createPlugin(data: unknown, dir = "config/plugins/entities") {
 	if (data !== undefined) files.set(`${dir}/data.json`, JSON.stringify(data));
 	const adapter = {
 		exists: jest.fn(async (path: string) => files.has(path)),
+		stat: jest.fn(async (path: string) => files.has(path) ? { type: "file" as const, mtime: 0, ctime: 0, size: files.get(path)!.length } : null),
 		read: jest.fn(async (path: string) => {
 			if (!files.has(path)) throw new Error("Missing file");
 			return files.get(path)!;
@@ -265,7 +266,7 @@ test.each(["../plugins/entities", "/config/plugins/entities", "config/plugins/..
 test("backup collision and write failure never reach migration persistence, even on unload", async () => {
 	for (const failure of ["collision", "disk full"]) {
 		const { plugin, adapter } = createPlugin({ providerSettings: [] });
-		if (failure === "collision") adapter.exists.mockResolvedValue(true);
+		if (failure === "collision") adapter.stat.mockResolvedValue({ type: "file", mtime: 0, ctime: 0, size: 0 });
 		else adapter.write.mockRejectedValue(new Error(failure));
 		await plugin.onload();
 		await plugin.saveSettings();
@@ -400,8 +401,8 @@ test.each(["{private broken JSON", "null", "undefined"])("raw invalid saved cont
 	expect(plugin.saveData).not.toHaveBeenCalled();
 });
 
-test("actual adapter read and exists errors remain protected and retryable", async () => {
-	for (const method of ["exists", "read"] as const) {
+test("actual adapter read and stat errors remain protected and retryable", async () => {
+	for (const method of ["stat", "read"] as const) {
 		const { plugin, adapter } = createPlugin(currentData);
 		adapter[method].mockRejectedValueOnce(new Error("permission denied"));
 		await plugin.onload();
@@ -554,4 +555,57 @@ test("a conflicted provider modal closes and reopening reloads canonical filters
 		open.mockRestore();
 		close.mockRestore();
 	}
+});
+
+test.each(["EACCES", "EIO"])("stat failure protects existing data even when host exists silently returns false: %s", async code => {
+	const { plugin, adapter, files } = createPlugin(currentData);
+	const original = files.get("config/plugins/entities/data.json");
+	const failure = Object.assign(new Error("filesystem unavailable"), { code });
+	// Desktop access/mobile stat errors are swallowed by the host exists wrapper.
+	adapter.exists.mockImplementation(() => Promise.reject(failure).then(() => true, () => false));
+	expect(await adapter.exists("config/plugins/entities/data.json")).toBe(false);
+	adapter.exists.mockClear();
+	adapter.stat.mockRejectedValueOnce(failure);
+	await plugin.onload();
+	expect(plugin.settingsStore.isReadOnly).toBe(true);
+	expect(plugin.settingsStore.loadError).toBe(failure);
+	expect(adapter.exists).not.toHaveBeenCalled();
+	expect(adapter.read).not.toHaveBeenCalled();
+	expect(plugin.settingsStore.addProvider(TestProvider.getDefaultSettings())).toBeUndefined();
+	expect(await plugin.saveSettings()).toBe(false);
+	expect(adapter.write).not.toHaveBeenCalled();
+	expect(files.get("config/plugins/entities/data.json")).toBe(original);
+	// Permission recovery alone cannot enable edits: explicit retry reads existing data.
+	expect(plugin.settingsStore.addProvider(TestProvider.getDefaultSettings())).toBeUndefined();
+	expect(await plugin.loadSettings()).toBe(true);
+	plugin.settingsStore.addProvider(TestProvider.getDefaultSettings());
+	await plugin.saveSettings();
+	expect(dataWrites(plugin).at(-1).providerSettings).toMatchObject([config("a"), config("b"), { providerTypeID: "test" }]);
+});
+
+test.each(["EACCES", "EIO"])("backup stat failure cannot be treated as a free backup path: %s", async code => {
+	const original = { providerSettings: [TestProvider.getDefaultSettings()], privateField: false };
+	const { plugin, adapter, files } = createPlugin(original);
+	const stat = adapter.stat.getMockImplementation()!;
+	const failure = Object.assign(new Error("backup filesystem unavailable"), { code });
+	adapter.exists.mockImplementation(() => Promise.reject(failure).then(() => true, () => false));
+	adapter.stat.mockImplementation(path => path.includes("data.before-settings-v1-") ? Promise.reject(failure) : stat(path));
+	await plugin.onload();
+	expect(plugin.settingsStore.isReadOnly).toBe(true);
+	expect(plugin.settingsStore.loadError).toBe(failure);
+	expect(adapter.exists).not.toHaveBeenCalled();
+	expect(plugin.settingsStore.addProvider(TestProvider.getDefaultSettings())).toBeUndefined();
+	await plugin.saveSettings();
+	plugin.onunload();
+	expect(adapter.write).not.toHaveBeenCalled();
+	expect(JSON.parse(files.get("config/plugins/entities/data.json")!)).toEqual(original);
+});
+
+test("only a literal null stat result permits first-install behavior", async () => {
+	const { plugin, adapter } = createPlugin(currentData);
+	adapter.stat.mockResolvedValue(undefined as unknown as null);
+	await plugin.onload();
+	expect(plugin.settingsStore.isReadOnly).toBe(true);
+	expect(adapter.read).not.toHaveBeenCalled();
+	expect(adapter.write).not.toHaveBeenCalled();
 });

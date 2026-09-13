@@ -32,7 +32,10 @@ succeeds, further load calls cannot replace unsaved edits. Unavailable provider
 types remain visible and preserved until their implementation becomes available.
 
 `SettingsStorage` uses the public vault adapter directly for `data.json`, so read
-and write failures propagate to recovery. A missing file is distinct from literal
+and write failures propagate to recovery. Only a `stat` result of `null` means
+absence; `exists` is not used because host adapters also return false for permission
+and IO errors. Backup collision checks use the same strict `stat` boundary.
+A missing file is distinct from literal
 JSON null, malformed JSON, or a read error; only absence starts fresh. Parser
 errors do not quote private file contents. The plugin's JSON helper wrappers are
 not used as the durability boundary.
@@ -71,9 +74,13 @@ prevent final changes from becoming durable. The handoff cannot survive process
 termination or coordinate an external editor writing `data.json`. Prompt writes
 reduce this window but cannot remove it. Save while the plugin is still enabled and resolve visible save errors before disabling or restarting it.
 
-To restore a migration backup, disable the plugin, retain a copy of the current
-`data.json`, and copy the desired backup over `data.json`. Then enable a compatible
-plugin version. For downgrade, retain the matching older plugin artifact and its
+To restore a migration backup, fully quit Obsidian and confirm that its process has
+exited before replacing files. Disabling the plugin alone is insufficient: a dirty
+predecessor remains in the runtime handoff and will retry its pending save when the
+plugin is enabled again, overwriting a manually restored file. With Obsidian fully
+closed, retain a copy of the current `data.json`, then copy the desired backup over
+`data.json`. Restart Obsidian with a compatible plugin version. For downgrade,
+retain the matching older plugin artifact and its
 original settings: older versions do not understand this store's write protection
 and may write a newer document incorrectly. The automatic backup preserves the
 pre-migration JSON data, not original whitespace or a history of later edits.

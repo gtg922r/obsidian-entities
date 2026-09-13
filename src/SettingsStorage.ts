@@ -21,7 +21,10 @@ export class SettingsStorage {
 	async read(): Promise<unknown> {
 		const path = `${this.directory()}/data.json`;
 		const adapter = this.app.vault.adapter;
-		if (!await adapter.exists(path)) return undefined;
+		// exists() also returns false on permission/IO failures in host adapters.
+		const stat = await adapter.stat(path);
+		if (stat === null) return undefined;
+		if (!stat || stat.type !== "file") throw new Error("The settings path is not a readable file.");
 		const raw = await adapter.read(path);
 		try {
 			return JSON.parse(raw) as unknown;
@@ -39,7 +42,7 @@ export class SettingsStorage {
 	async backup(original: unknown): Promise<void> {
 		const path = `${this.directory()}/data.before-settings-v1-${createProviderInstanceId()}.json`;
 		const adapter = this.app.vault.adapter;
-		if (await adapter.exists(path)) throw new Error("Settings backup already exists. Retry loading settings.");
+		if (await adapter.stat(path) !== null) throw new Error("Settings backup already exists. Retry loading settings.");
 		await adapter.write(path, JSON.stringify(original, null, "\t"));
 	}
 }
