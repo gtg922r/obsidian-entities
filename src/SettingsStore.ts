@@ -46,12 +46,12 @@ function validateProvider(config: Record<string, unknown>, defaults?: EntityProv
 		typeof filter.property === "string" && typeof filter.value === "string"
 	))) throw new Error("A provider has invalid entity filters.");
 	if (config.entityCreationTemplates !== undefined && (!Array.isArray(config.entityCreationTemplates) || !config.entityCreationTemplates.every(template =>
-		isRecord(template) && ["disabled", "core", "templater"].includes(String(template.engine)) &&
+		isRecord(template) && typeof template.engine === "string" && ["disabled", "core", "templater"].includes(template.engine) &&
 		typeof template.templatePath === "string" && typeof template.entityName === "string" &&
 		(template.folderPath === undefined || typeof template.folderPath === "string")
 	))) throw new Error("A provider has invalid creation templates.");
 	if (config.providerTypeID === "template") {
-		if (config.trigger !== undefined && !["@", ":", "/"].includes(String(config.trigger))) throw new Error("A template provider has an invalid trigger.");
+		if (config.trigger !== undefined && (typeof config.trigger !== "string" || !["@", ":", "/"].includes(config.trigger))) throw new Error("A template provider has an invalid trigger.");
 		if (config.actionType !== undefined && config.actionType !== "insert" && config.actionType !== "create") throw new Error("A template provider has an invalid action type.");
 	}
 }
@@ -103,8 +103,10 @@ export function normalizeSettings(
 			seen.add(id);
 			if (config.enabled === undefined || config.icon === undefined) changed = true;
 			if (defaults && Object.entries(defaults).some(([key, value]) => value !== undefined && config[key] === undefined)) changed = true;
+			// Runtime defaults can contain optional undefined fields; persisted data cannot.
+			const savedDefaults = JSON.parse(JSON.stringify(defaults ?? {})) as Partial<EntityProviderUserSettings>;
 			return {
-				...cloneSettings(defaults),
+				...savedDefaults,
 				...cloneSettings(config),
 				providerInstanceId: id,
 				enabled: config.enabled ?? true,
@@ -130,6 +132,7 @@ export class SettingsStore {
 	private loading: Promise<boolean> | undefined;
 	private closed = false;
 	private loaded = false;
+	private reservedIds = new Set<string>();
 	loadError: Error | undefined;
 	saveError: Error | undefined;
 
@@ -170,6 +173,7 @@ export class SettingsStore {
 			if (result.changed) await this.backup(cloneSettings(original));
 			if (this.closed) return false;
 			this.state = result.settings;
+			this.reservedIds = new Set(this.state.providerSettings.map(item => item.providerInstanceId));
 			this.loadError = undefined;
 			this.loaded = true;
 			if (result.changed) this.changed();
@@ -185,7 +189,7 @@ export class SettingsStore {
 		if (this.isReadOnly) return undefined;
 		const provider = {
 			...cloneSettings(defaults),
-			providerInstanceId: uniqueId(new Set(this.state.providerSettings.map(item => item.providerInstanceId)), this.createId),
+			providerInstanceId: uniqueId(this.reservedIds, this.createId),
 		};
 		this.state.providerSettings.push(provider);
 		this.changed();

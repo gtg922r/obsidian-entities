@@ -67,6 +67,7 @@ describe("settings migration", () => {
 		{ providerSettings: [{ ...defaults, path: null }] },
 		{ providerSettings: [{ ...defaults, entityFilters: [{ type: "include", property: 1, value: "yes" }] }] },
 		{ providerSettings: [{ ...defaults, entityCreationTemplates: [{}] }] },
+		{ providerSettings: [{ ...defaults, entityCreationTemplates: [{ engine: ["templater"], templatePath: "test", entityName: "Test" }] }] },
 	])("rejects unsafe data without changing it: %j", input => {
 		const before = JSON.stringify(input);
 		expect(normalizeSettings(input, defaultsForType).ok).toBe(false);
@@ -100,6 +101,16 @@ describe("canonical edits and serialized saves", () => {
 		expect(store.settings.providerSettings).toEqual([configured("b")]);
 		await store.flush();
 		expect(write.mock.calls[0][0].providerSettings).toEqual([configured("b")]);
+	});
+
+	test("a new instance cannot reuse a deleted ID while old callbacks may still exist", async () => {
+		const candidates = ["a", "fresh"];
+		const store = new SettingsStore(async () => {}, async () => {}, defaultsForType, () => {}, () => candidates.shift()!);
+		await store.load(async () => saved("a"));
+		store.deleteProvider("a");
+		expect(store.addProvider(defaults)?.providerInstanceId).toBe("fresh");
+		expect(store.updateProvider("a", patch("late"))).toBe(false);
+		await store.flush();
 	});
 
 	test("edits to two providers within one turn persist together and are visible immediately", async () => {

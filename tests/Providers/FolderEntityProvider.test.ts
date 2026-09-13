@@ -2,6 +2,7 @@ import { Plugin } from "obsidian";
 import { DataviewEntityProvider } from "../../src/Providers/DataviewEntityProvider";
 import { FolderEntityProvider } from "../../src/Providers/FolderEntityProvider";
 import { TriggerCharacter } from "../../src/entities.types";
+import { normalizeSettings } from "../../src/SettingsStore";
 
 // Mock TFile class defined inside jest.mock to avoid hoisting issues
 jest.mock("obsidian", () => {
@@ -411,6 +412,14 @@ describe("FolderEntityProvider", () => {
 
 
 describe("provider defaults and instance identity", () => {
+	test("legacy migration remains idempotent with actual folder defaults", () => {
+		const defaults = () => FolderEntityProvider.getDefaultSettings();
+		const result = normalizeSettings({ providerSettings: [{ providerTypeID: "folder" }] }, defaults, () => "stable");
+		if (!result.ok) throw result.error;
+		expect(result.settings.providerSettings[0]).toMatchObject({ path: "", enabled: true, entityFilters: [] });
+		expect(normalizeSettings(result.settings, defaults)).toEqual({ ok: true, settings: result.settings, changed: false });
+	});
+
 	test.each([FolderEntityProvider, DataviewEntityProvider])("default factories return independent filters and templates", providerType => {
 		const first = providerType.getDefaultSettings();
 		const second = providerType.getDefaultSettings();

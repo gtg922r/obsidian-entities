@@ -2,6 +2,7 @@ import { App, PluginManifest, Notice } from "obsidian";
 import Entities from "../src/main";
 import { EntitiesSettingTab, ProviderSettingsModal } from "../src/EntitiesSettings";
 import { EntityProvider, EntityProviderUserSettings } from "../src/Providers/EntityProvider";
+import { IconPickerModal } from "../src/userComponents";
 
 type Control = { text: string; click: () => void | Promise<void> };
 const mockRows: { name: string; description: string; controls: Control[] }[] = [];
@@ -123,6 +124,37 @@ test("modal close flushes pending edits and invokes its close callback", async (
 	expect(plugin.settingsStore.hasPendingSave).toBe(false);
 });
 
+test("a late draft callback changes only its fields, keeping newer same-provider edits", async () => {
+	const { plugin, app } = createPlugin(currentData);
+	await plugin.onload();
+	const tab = new EntitiesSettingTab(app, plugin);
+	tab.display();
+	const lateEdit = edits.get("a")!;
+	plugin.settingsStore.updateProvider("a", { icon: "new icon" });
+	tab.display();
+	lateEdit("new label");
+	await plugin.saveSettings();
+	expect(plugin.settings.providerSettings[0]).toMatchObject({ label: "new label", icon: "new icon" });
+});
+
+test("successive icon pickers cannot make an older row draft revert the latest icon", async () => {
+	const { plugin, app } = createPlugin(currentData);
+	await plugin.onload();
+	const tab = new EntitiesSettingTab(app, plugin);
+	tab.display();
+	const lateEdit = edits.get("a")!;
+	for (const icon of ["first icon", "last icon"]) {
+		jest.mocked(IconPickerModal).mockImplementationOnce(() => ({
+			open() {}, getInput: async () => icon,
+		}) as unknown as IconPickerModal);
+		mockRows.find(row => row.name === "Provider #1")!.controls[0].click();
+		await Promise.resolve();
+	}
+	lateEdit("new label");
+	await plugin.saveSettings();
+	expect(plugin.settings.providerSettings[0]).toMatchObject({ label: "new label", icon: "last icon" });
+});
+
 test("unload starts a final flush without returning a promise or reconstructing providers", async () => {
 	const { plugin } = createPlugin(currentData);
 	const reconstruction = jest.spyOn(plugin, "loadEntityProviders");
@@ -134,6 +166,21 @@ test("unload starts a final flush without returning a promise or reconstructing 
 	expect(plugin.settingsStore.hasPendingSave).toBe(false);
 	expect(plugin.providerRegistry.getProviders()).toEqual([]);
 	expect(reconstruction).toHaveBeenCalledTimes(1);
+});
+
+test("startup cannot register UI or providers after unloading during the settings read", async () => {
+	const { plugin } = createPlugin(null);
+	let resolve!: (data: unknown) => void;
+	jest.mocked(plugin.loadData).mockReturnValue(new Promise(done => { resolve = done; }));
+	const reconstruction = jest.spyOn(plugin, "loadEntityProviders");
+	const loading = plugin.onload();
+	plugin.onunload();
+	resolve(currentData);
+	await loading;
+	expect(plugin.addSettingTab).not.toHaveBeenCalled();
+	expect(plugin.registerEditorSuggest).not.toHaveBeenCalled();
+	expect(reconstruction).not.toHaveBeenCalled();
+	expect(plugin.saveData).not.toHaveBeenCalled();
 });
 
 test("schema migration backs up original private data in the plugin directory before saving", async () => {

@@ -21,6 +21,7 @@ import { createProviderInstanceId } from "./settingsData";
 export default class Entities extends Plugin {
 	settingsStore!: SettingsStore;
 	private settingsTab?: EntitiesSettingTab;
+	private unloaded = false;
 
 	get settings(): EntitiesSettings {
 		return this.settingsStore.settings;
@@ -29,6 +30,7 @@ export default class Entities extends Plugin {
 	providerRegistry!: ProviderRegistry;
 
 	async onload() {
+		this.unloaded = false;
 		this.providerRegistry = ProviderRegistry.initializeRegistry(this);
 		this.registerEntityProviders();
 		this.settingsStore = new SettingsStore(
@@ -40,7 +42,9 @@ export default class Entities extends Plugin {
 				this.settingsTab?.display();
 			}
 		);
+		const store = this.settingsStore;
 		await this.loadSettings();
+		if (this.unloaded || this.settingsStore !== store) return;
 		this.settingsTab = new EntitiesSettingTab(this.app, this);
 		this.addSettingTab(this.settingsTab);
 		this.suggestor = new EntitiesSuggestor(this, this.providerRegistry);
@@ -48,6 +52,7 @@ export default class Entities extends Plugin {
 	}
 
 	onunload() {
+		this.unloaded = true;
 		// Obsidian does not await this hook. Start draining immediately and report failures.
 		void this.settingsStore?.close();
 		this.providerRegistry?.resetProviders();
@@ -72,8 +77,9 @@ export default class Entities extends Plugin {
 	}
 
 	async loadSettings(): Promise<boolean> {
-		const loaded = await this.settingsStore.load(() => this.loadData());
-		if (loaded) this.loadEntityProviders();
+		const store = this.settingsStore;
+		const loaded = await store.load(() => this.loadData());
+		if (loaded && !this.unloaded && this.settingsStore === store) this.loadEntityProviders();
 		return loaded;
 	}
 

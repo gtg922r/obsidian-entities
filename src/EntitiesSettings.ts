@@ -10,6 +10,7 @@ import Entities from "./main";
 import { EntitiesNotice, IconPickerModal } from "./userComponents";
 import { EntityProviderUserSettings } from "./Providers/EntityProvider";
 import { RegisterableEntityProvider } from "./Providers/ProviderRegistry";
+import { cloneSettings } from "./settingsData";
 
 function updateProviderAndReload(
 	settingsTab: EntitiesSettingTab,
@@ -20,6 +21,25 @@ function updateProviderAndReload(
 	if (!settingsTab.plugin.settingsStore.updateProvider(providerInstanceId, providerConfig)) return;
 	settingsTab.plugin.loadEntityProviders();
 	if (shouldRefreshUI) settingsTab.display();
+}
+
+/** Save only fields changed by this draft so late UI callbacks keep other edits. */
+function providerSaveCallback(
+	settingsTab: EntitiesSettingTab,
+	providerInstanceId: string,
+	initial: EntityProviderUserSettings,
+	shouldRefreshUI = true
+): (settings: EntityProviderUserSettings) => void {
+	let previous = cloneSettings(initial) as unknown as Record<string, unknown>;
+	return settings => {
+		const next = settings as unknown as Record<string, unknown>;
+		const changes: Record<string, unknown> = {};
+		for (const key of new Set([...Object.keys(previous), ...Object.keys(next)])) {
+			if (JSON.stringify(previous[key]) !== JSON.stringify(next[key])) changes[key] = cloneSettings(next[key]);
+		}
+		previous = cloneSettings(next);
+		if (Object.keys(changes).length) updateProviderAndReload(settingsTab, changes, providerInstanceId, shouldRefreshUI);
+	};
 }
 
 export class EntitiesSettingTab extends PluginSettingTab {
@@ -106,7 +126,7 @@ export class EntitiesSettingTab extends PluginSettingTab {
 					if (providerType.buildSimpleSettings || providerType.buildAdvancedSettings) {
 						new ProviderSettingsModal(
 							this.app, providerType, providerSettings, this.plugin,
-							newSettings => updateProviderAndReload(this, newSettings, providerSettings.providerInstanceId),
+							providerSaveCallback(this, providerSettings.providerInstanceId, providerSettings),
 							() => this.display()
 						).open();
 					}
@@ -133,22 +153,10 @@ export class EntitiesSettingTab extends PluginSettingTab {
 						`${providerType.getDescription(providerSettings)}`
 					);
 
-				// .setName(
-				// 	`${providerType.getDescription(providerSettings)}`
-				// );
-
 				providerType.buildSummarySetting(
 					settingContainer,
 					providerSettings,
-					(newSettings) => {
-						providerSettings = { ...newSettings, providerInstanceId };
-						updateProviderAndReload(
-							this,
-							providerSettings,
-							providerInstanceId,
-							false
-						);
-					},
+					providerSaveCallback(this, providerInstanceId, providerSettings, false),
 					this.plugin
 				);
 				settingContainer
@@ -163,7 +171,6 @@ export class EntitiesSettingTab extends PluginSettingTab {
 								iconPickerModal.open();
 								iconPickerModal.getInput().then((iconName) => {
 									if (iconName) {
-										providerSettings.icon = iconName;
 										updateProviderAndReload(
 											this,
 											{ icon: iconName },
@@ -193,20 +200,14 @@ export class EntitiesSettingTab extends PluginSettingTab {
 							button.setDisabled(true);
 						}
 						button.onClick(() => {
+							const current = store.settings.providerSettings.find(item => item.providerInstanceId === providerInstanceId);
+							if (!current) return;
 							const modal = new ProviderSettingsModal(
 								this.app,
 								providerType,
-								providerSettings,
+								current,
 								this.plugin,
-								(newSettings) => {
-									providerSettings = { ...newSettings, providerInstanceId };
-									updateProviderAndReload(
-										this,
-										providerSettings,
-										providerInstanceId,
-										true
-									);
-								},
+								providerSaveCallback(this, providerInstanceId, current),
 								() => {
 									this.display();
 								}
@@ -261,7 +262,7 @@ export class ProviderSettingsModal extends Modal {
 	) {
 		super(app);
 		this.provider = provider;
-		this.providerSettings = providerSettings;
+		this.providerSettings = cloneSettings(providerSettings);
 		this.plugin = plugin;
 		this.saveCallback = saveCallback;
 		this.closeCallback = closeCallback;
