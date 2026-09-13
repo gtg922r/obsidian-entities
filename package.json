@@ -20,6 +20,7 @@
 		"release:assets": "node scripts/prepare-release-assets.mjs",
 		"release:notes": "node scripts/extract-release-notes.mjs",
 		"release:publish": "node scripts/publish-release.mjs",
+		"release:promote": "node scripts/promote-release.mjs",
 		"release:publish:brat": "node scripts/publish-release.mjs --prerelease",
 		"release:patch": "node scripts/release.mjs patch",
 		"release:minor": "node scripts/release.mjs minor",
