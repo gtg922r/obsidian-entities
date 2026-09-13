@@ -18,8 +18,9 @@ or provider attributes. Running normalization on its output changes nothing.
 
 Before writing a migrated or repaired document, the plugin saves the original
 JSON values to a uniquely named `data.before-settings-v1-<id>.json` beside its
-`data.json`, within the configured vault plugin directory. Existing backup files
-are never overwritten. This copy contains settings only and remains private in
+`data.json`, within the configured vault plugin directory. The root-anchored Git
+ignore rule keeps these private backups out of an installed-plugin repository
+without hiding test fixtures. Existing backup files are never overwritten. This copy contains settings only and remains private in
 the vault. Backup failure leaves settings read-only. Fresh installs with no saved
 data require no backup; valid current data creates no repeated backups.
 
@@ -30,23 +31,45 @@ restore a backup, then retry. Concurrent retries share a single read; once a loa
 succeeds, further load calls cannot replace unsaved edits. Unavailable provider
 types remain visible and preserved until their implementation becomes available.
 
+`SettingsStorage` uses the public vault adapter directly for `data.json`, so read
+and write failures propagate to recovery. A missing file is distinct from literal
+JSON null, malformed JSON, or a read error; only absence starts fresh. Parser
+errors do not quote private file contents. The plugin's JSON helper wrappers are
+not used as the durability boundary.
+
 `SettingsStore` owns canonical state. Its snapshots are detached copies. UI edits
 apply synchronously by ID; callbacks from deleted providers or after unload do
 nothing. Pending disk writes belong to the store, with no module-global timer.
-The writer starts in the next microtask and serializes asynchronous `saveData`
-calls, coalescing queued changes into the latest snapshot. A failed write retains
+The writer starts in the next microtask and serializes asynchronous adapter
+writes, coalescing queued changes into the latest snapshot. A failed write retains
 dirty state and reports a notice plus **Retry save** in settings. Subsequent edits
 or explicit flushes retry the current state, never an obsolete captured snapshot.
+A successful automatic retry removes only the warning row, preserving focused
+inputs. Presentation failures cannot poison persistence or prevent retry.
+
+Drafts merge disjoint top-level fields. If a changed field (including a scalar,
+array or object) has also changed in canonical state since that draft opened,
+and the proposed value differs from canonical, the entire edit is rejected.
+A notice explains the conflict, the tab reloads, and the affected provider modal
+closes. Reopen the provider to review current values and deliberately reapply the
+edit. Filter arrays are not recursively merged and do not acquire new identities;
+this prevents stale array edits or deletions from silently restoring old values.
 
 Closing the settings tab or provider modal requests a flush. Plugin unload closes
 the store to edits and starts a final flush, including changes queued behind an
 in-flight write. Obsidian does not await `onunload()`: the hook returns synchronously.
-An abrupt process exit, terminated renderer, disk failure, or immediate plugin
-restart while an old write is still running can prevent the final changes from
-being durable. The store serializes its own lifetime; it cannot coordinate a
-separate future plugin instance or an external editor writing `data.json`.
-Prompt writes reduce this window but cannot remove it. Save while the plugin is
-still enabled and resolve visible save errors before disabling or restarting it.
+A settings-specific runtime handoff survives plugin module reload via a
+namespaced window symbol with weak ownership by app and separate plugin IDs.
+New instances wait for all predecessor writes before reading disk; a failed dirty
+predecessor blocks new reads and writes until **Retry load** finishes its save.
+An intermediate instance unloaded or superseded while waiting forwards the whole
+barrier to its successor and never resumes reading or registering UI. Unrelated
+apps/plugins remain independent.
+
+An abrupt process exit, terminated renderer, or persistent disk failure can still
+prevent final changes from becoming durable. The handoff cannot survive process
+termination or coordinate an external editor writing `data.json`. Prompt writes
+reduce this window but cannot remove it. Save while the plugin is still enabled and resolve visible save errors before disabling or restarting it.
 
 To restore a migration backup, disable the plugin, retain a copy of the current
 `data.json`, and copy the desired backup over `data.json`. Then enable a compatible

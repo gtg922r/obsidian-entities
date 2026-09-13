@@ -17,11 +17,15 @@ import { CharacterProvider } from "./Providers/CharacterProvider";
 
 import { SettingsStore } from "./SettingsStore";
 import { createProviderInstanceId } from "./settingsData";
+import { claimSettingsHandoff } from "./settingsHandoff";
+import { SettingsStorage } from "./SettingsStorage";
 
 export default class Entities extends Plugin {
 	settingsStore!: SettingsStore;
 	private settingsTab?: EntitiesSettingTab;
 	private unloaded = false;
+	private waitForPreviousSettings: () => Promise<void> = async () => {};
+	private settingsStorage!: SettingsStorage;
 
 	get settings(): EntitiesSettings {
 		return this.settingsStore.settings;
@@ -33,18 +37,22 @@ export default class Entities extends Plugin {
 		this.unloaded = false;
 		this.providerRegistry = ProviderRegistry.initializeRegistry(this);
 		this.registerEntityProviders();
+		this.settingsStorage = new SettingsStorage(this.app, this.manifest);
 		this.settingsStore = new SettingsStore(
-			settings => this.saveData(settings),
-			original => this.backupSettings(original),
+			settings => this.settingsStorage.write(settings),
+			original => this.settingsStorage.backup(original),
 			type => this.providerRegistry.getProviderClasses().get(type)?.getDefaultSettings(),
 			error => {
 				new Notice(`Entities settings: ${error.message} Open settings to retry.`, 10000);
 				this.settingsTab?.display();
-			}
+			},
+			createProviderInstanceId,
+			() => this.settingsTab?.clearSaveError()
 		);
+		this.waitForPreviousSettings = claimSettingsHandoff(this.app, this.manifest.id, this.settingsStore);
 		const store = this.settingsStore;
 		await this.loadSettings();
-		if (this.unloaded || this.settingsStore !== store) return;
+		if (this.unloaded || store.isClosed || this.settingsStore !== store) return;
 		this.settingsTab = new EntitiesSettingTab(this.app, this);
 		this.addSettingTab(this.settingsTab);
 		this.suggestor = new EntitiesSuggestor(this, this.providerRegistry);
@@ -78,28 +86,16 @@ export default class Entities extends Plugin {
 
 	async loadSettings(): Promise<boolean> {
 		const store = this.settingsStore;
-		const loaded = await store.load(() => this.loadData());
-		if (loaded && !this.unloaded && this.settingsStore === store) this.loadEntityProviders();
+		const loaded = await store.load(async () => {
+			await this.waitForPreviousSettings();
+			return this.unloaded || store.isClosed ? undefined : this.settingsStorage.read();
+		});
+		if (loaded && !this.unloaded && !store.isClosed && this.settingsStore === store) this.loadEntityProviders();
 		return loaded;
 	}
 
 	/** Flush pending edits; the store reports errors and retains changes for retry. */
 	saveSettings(): Promise<boolean> {
 		return this.settingsStore.flush();
-	}
-
-	/** Keep the original JSON document beside plugin data before its first migration write. */
-	private async backupSettings(original: unknown): Promise<void> {
-		const dir = this.manifest.dir;
-		const pluginRoot = `${this.app.vault.configDir}/plugins/`;
-		if (!dir || !dir.startsWith(pluginRoot) || dir.startsWith("/") || /[:\\]/.test(dir) ||
-			dir.split("/").some(part => !part || part === "." || part === "..") ||
-			dir.slice(pluginRoot.length).includes("/")) {
-			throw new Error("Cannot locate a vault-relative plugin directory to back up settings.");
-		}
-		const adapter = this.app.vault.adapter;
-		const path = `${dir}/data.before-settings-v1-${createProviderInstanceId()}.json`;
-		if (await adapter.exists(path)) throw new Error("Settings backup already exists. Retry loading settings.");
-		await adapter.write(path, JSON.stringify(original, null, "\t"));
 	}
 }

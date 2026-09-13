@@ -17,10 +17,11 @@ function updateProviderAndReload(
 	providerConfig: Partial<EntityProviderUserSettings>,
 	providerInstanceId: string,
 	shouldRefreshUI = true
-) {
-	if (!settingsTab.plugin.settingsStore.updateProvider(providerInstanceId, providerConfig)) return;
+): boolean {
+	if (!settingsTab.plugin.settingsStore.updateProvider(providerInstanceId, providerConfig)) return false;
 	settingsTab.plugin.loadEntityProviders();
 	if (shouldRefreshUI) settingsTab.display();
+	return true;
 }
 
 /** Save only fields changed by this draft so late UI callbacks keep other edits. */
@@ -29,21 +30,34 @@ function providerSaveCallback(
 	providerInstanceId: string,
 	initial: EntityProviderUserSettings,
 	shouldRefreshUI = true
-): (settings: EntityProviderUserSettings) => void {
+): (settings: EntityProviderUserSettings) => boolean {
 	let previous = cloneSettings(initial) as unknown as Record<string, unknown>;
+	let conflicted = false;
 	return settings => {
+		if (conflicted) return false;
+		const current = settingsTab.plugin.settingsStore.settings.providerSettings.find(item => item.providerInstanceId === providerInstanceId);
+		if (!current || settingsTab.plugin.settingsStore.isReadOnly) return false;
+		const canonical = current as unknown as Record<string, unknown>;
 		const next = settings as unknown as Record<string, unknown>;
 		const changes: Record<string, unknown> = {};
 		for (const key of new Set([...Object.keys(previous), ...Object.keys(next)])) {
-			if (JSON.stringify(previous[key]) !== JSON.stringify(next[key])) changes[key] = cloneSettings(next[key]);
+			if (JSON.stringify(previous[key]) === JSON.stringify(next[key])) continue;
+			if (JSON.stringify(canonical[key]) !== JSON.stringify(previous[key]) && JSON.stringify(canonical[key]) !== JSON.stringify(next[key])) {
+				conflicted = true;
+				new EntitiesNotice("This provider changed in another settings view. Your last edit was not applied. Settings have reloaded; reopen the provider and try again.", "alert-triangle", 10000);
+				settingsTab.display();
+				return false;
+			}
+			changes[key] = cloneSettings(next[key]);
 		}
 		previous = cloneSettings(next);
-		if (Object.keys(changes).length) updateProviderAndReload(settingsTab, changes, providerInstanceId, shouldRefreshUI);
+		return Object.keys(changes).length === 0 || updateProviderAndReload(settingsTab, changes, providerInstanceId, shouldRefreshUI);
 	};
 }
 
 export class EntitiesSettingTab extends PluginSettingTab {
 	plugin: Entities;
+	private saveErrorSetting?: Setting;
 
 	constructor(app: App, plugin: Entities) {
 		super(app, plugin);
@@ -54,9 +68,16 @@ export class EntitiesSettingTab extends PluginSettingTab {
 		void this.plugin.saveSettings();
 	}
 
+	/** Remove only the recovered warning, preserving focused provider inputs. */
+	clearSaveError(): void {
+		this.saveErrorSetting?.settingEl.remove();
+		this.saveErrorSetting = undefined;
+	}
+
 	display(): void {
 		const { containerEl } = this;
 		containerEl.empty();
+		this.saveErrorSetting = undefined;
 
 		const store = this.plugin.settingsStore;
 		if (store.loadError) {
@@ -71,7 +92,7 @@ export class EntitiesSettingTab extends PluginSettingTab {
 		}
 		if (store.isReadOnly) return;
 		if (store.saveError) {
-			new Setting(containerEl)
+			this.saveErrorSetting = new Setting(containerEl)
 				.setName("Settings have not been saved")
 				.setDesc(`${store.saveError.message} Changes are still in memory.`)
 				.addButton(button => button.setButtonText("Retry save").onClick(async () => {
@@ -165,17 +186,16 @@ export class EntitiesSettingTab extends PluginSettingTab {
 							.setIcon(providerSettings.icon ?? "box-select")
 							.setDisabled(false)
 							.onClick(() => {
+								const current = store.settings.providerSettings.find(item => item.providerInstanceId === providerInstanceId);
+								if (!current) return;
+								const saveIcon = providerSaveCallback(this, providerInstanceId, current);
 								const iconPickerModal = new IconPickerModal(
 									this.app
 								);
 								iconPickerModal.open();
 								iconPickerModal.getInput().then((iconName) => {
 									if (iconName) {
-										updateProviderAndReload(
-											this,
-											{ icon: iconName },
-											providerInstanceId
-										);
+										saveIcon({ ...current, icon: iconName });
 									}
 								});
 							})
@@ -247,7 +267,7 @@ export class ProviderSettingsModal extends Modal {
 	private provider: RegisterableEntityProvider;
 	private providerSettings: EntityProviderUserSettings;
 	private plugin: Entities;
-	private saveCallback: (newSettings: EntityProviderUserSettings) => void;
+	private saveCallback: (newSettings: EntityProviderUserSettings) => boolean | void;
 	private closeCallback?: () => void;
 	private advancedSettingsOpen = false;
 	buttonContainerEl: HTMLElement;
@@ -257,7 +277,7 @@ export class ProviderSettingsModal extends Modal {
 		provider: RegisterableEntityProvider,
 		providerSettings: EntityProviderUserSettings,
 		plugin: Entities,
-		saveCallback: (newSettings: EntityProviderUserSettings) => void,
+		saveCallback: (newSettings: EntityProviderUserSettings) => boolean | void,
 		closeCallback?: () => void
 	) {
 		super(app);
@@ -301,7 +321,7 @@ export class ProviderSettingsModal extends Modal {
 				this.providerSettings,
 				(newSettings) => {
 					this.providerSettings = newSettings;
-					this.saveCallback(newSettings);
+					if (this.saveCallback(newSettings) === false) this.close();
 				},
 				this.plugin
 			);
@@ -337,7 +357,7 @@ export class ProviderSettingsModal extends Modal {
 					this.providerSettings,
 					(newSettings) => {
 						this.providerSettings = newSettings;
-					this.saveCallback(newSettings);
+						if (this.saveCallback(newSettings) === false) this.close();
 					},
 					this.plugin
 				);

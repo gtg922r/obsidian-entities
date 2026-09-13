@@ -59,7 +59,7 @@ describe("settings migration", () => {
 	});
 
 	test.each([
-		[], "invalid", { schemaVersion: 2, providerSettings: [] }, { schemaVersion: 0 },
+		null, [], "invalid", { schemaVersion: 2, providerSettings: [] }, { schemaVersion: 0 },
 		{ schemaVersion: "1" }, { schemaVersion: 1 }, { providerSettings: null },
 		{ providerSettings: [null] }, { providerSettings: [{}] },
 		{ providerSettings: [{ ...defaults, enabled: "false" }] },
@@ -78,7 +78,7 @@ describe("settings migration", () => {
 describe("canonical edits and serialized saves", () => {
 	test("same-type instances get distinct IDs that survive edits, reorder and restart", async () => {
 		const { store, write } = setup();
-		await store.load(async () => null);
+		await store.load(async () => undefined);
 		const a = store.addProvider(defaults)!;
 		const b = store.addProvider(defaults)!;
 		expect(a.providerInstanceId).not.toBe(b.providerInstanceId);
@@ -162,7 +162,7 @@ describe("canonical edits and serialized saves", () => {
 
 	test("UI drafts and nested defaults cannot mutate canonical data without an edit", async () => {
 		const { store } = setup();
-		await store.load(async () => null);
+		await store.load(async () => undefined);
 		const a = store.addProvider(defaults)!;
 		const b = store.addProvider(defaults)!;
 		const filters = [{ type: "include", property: "kind", value: "person" }];
@@ -304,4 +304,21 @@ describe("recovery and lifecycle", () => {
 		expect(store.isReadOnly).toBe(true);
 		expect(write).not.toHaveBeenCalled();
 	});
+});
+
+test("a throwing error reporter cannot poison retry ownership or misreport a successful recovery", async () => {
+	const write = jest.fn<Promise<void>, [EntitiesSettings]>().mockRejectedValueOnce(new Error("disk full")).mockResolvedValue(undefined);
+	const store = new SettingsStore(write, async () => {}, defaultsForType,
+		() => { throw new Error("notice failed"); }, undefined, () => { throw new Error("UI failed"); });
+	await store.load(async () => saved("a"));
+	store.updateProvider("a", { icon: "star" });
+	expect(await store.flush()).toBe(false);
+	expect(store.saveError?.message).toBe("disk full");
+	expect(await store.flush()).toBe(true);
+	expect(store.hasPendingSave).toBe(false);
+	expect(store.saveError).toBeUndefined();
+	expect(write).toHaveBeenCalledTimes(2);
+	const failedLoad = new SettingsStore(write, async () => {}, defaultsForType, () => { throw new Error("notice failed"); });
+	expect(await failedLoad.load(async () => null)).toBe(false);
+	expect(await failedLoad.load(async () => saved())).toBe(true);
 });

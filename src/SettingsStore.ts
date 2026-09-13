@@ -78,7 +78,7 @@ export function normalizeSettings(
 	createId = createProviderInstanceId
 ): SettingsLoadResult {
 	try {
-		if (data === null || data === undefined) {
+		if (data === undefined) {
 			return { ok: true, settings: { schemaVersion: 1, providerSettings: [] }, changed: false };
 		}
 		if (!isRecord(data) || !isJsonData(data)) throw new Error("Saved settings must be a JSON object.");
@@ -141,7 +141,8 @@ export class SettingsStore {
 		private readonly backup: (original: unknown) => Promise<void>,
 		private readonly defaultsForType: DefaultsForType = () => undefined,
 		private readonly onError: (error: Error) => void = () => {},
-		private readonly createId = createProviderInstanceId
+		private readonly createId = createProviderInstanceId,
+		private readonly onSaveRecovered: () => void = () => {}
 	) {}
 
 	/** Detached data for UI drafts and runtime construction; mutate through ID-based methods. */
@@ -151,6 +152,10 @@ export class SettingsStore {
 
 	get isReadOnly(): boolean {
 		return !this.loaded || this.closed;
+	}
+
+	get isClosed(): boolean {
+		return this.closed;
 	}
 
 	get hasPendingSave(): boolean {
@@ -180,7 +185,7 @@ export class SettingsStore {
 			return true;
 		} catch (error) {
 			this.loadError = asError(error);
-			this.onError(this.loadError);
+			this.reportError(this.loadError);
 			return false;
 		}
 	}
@@ -255,14 +260,22 @@ export class SettingsStore {
 			try {
 				await this.write(cloneSettings(this.state));
 				this.savedRevision = revision;
+				const recovered = this.saveError !== undefined;
 				this.saveError = undefined;
+				if (recovered) {
+					try { this.onSaveRecovered(); } catch { /* Presentation cannot fail a completed write. */ }
+				}
 			} catch (error) {
 				this.saveError = asError(error);
-				this.onError(this.saveError);
+				this.reportError(this.saveError);
 				return false;
 			}
 		}
 		return true;
+	}
+
+	private reportError(error: Error): void {
+		try { this.onError(error); } catch { /* Keep the error and writer retryable even if UI fails. */ }
 	}
 
 	/** Stop accepting UI callbacks and start a final flush; Obsidian cannot await it. */
