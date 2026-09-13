@@ -8,7 +8,6 @@
 
 > [!IMPORTANT]
 > This plugin is in very early development and is not intended for public usage.
-> Note that at this time, all rights are reserved.
 
 **Entities** is an advanced autocomplete plugin for [Obsidian](https://obsidian.md) that provides context-aware suggestions for notes, templates and helper actions.
 
@@ -131,4 +130,4 @@ Contributions are welcome via pull requests.
 
 ## License
 
-Released under the MIT License.
+Released under the [MIT License](LICENSE).
