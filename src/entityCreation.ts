@@ -54,7 +54,8 @@ function hasControlCharacters(value: string): boolean {
 function resolveDestination(app: App, destination: CreationDestination): TFolder | string {
 	if (destination.kind === "resolved") return requireLiveFolder(app, destination.folder);
 	if (hasControlCharacters(destination.path)) throw new Error("Use a valid folder path inside the vault.");
-	const raw = destination.path.trim().replace(/\\/g, "/");
+	// Ordinary spaces are part of the configured vault path, including an all-space folder name.
+	const raw = destination.path.replace(/\\/g, "/");
 	if (!raw || raw === "/") return requireLiveFolder(app, app.vault.getRoot());
 	if (raw.startsWith("/") || /[:*?"<>|]/.test(raw) || raw.split("/").some(part => part === "." || part === "..")) {
 		throw new Error("Use a valid folder path inside the vault.");

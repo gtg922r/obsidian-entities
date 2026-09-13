@@ -134,11 +134,30 @@ test("creation capability does not depend on append capability", async () => {
 	expect(result).toMatchObject({ status: "created" });
 	expect(h.create).toHaveBeenCalledWith(h.template, h.root, "Alice", false);
 });
-test.each(["", "/", "  "])("configured root %j passes the live root folder", async path => {
+test.each(["", "/"])("configured root %j passes the live root folder", async path => {
 	const h = fixture();
 	await createNewNoteFromTemplate(h.app, { ...h.request, destination: { kind: "explicit", path } });
 	expect(h.create.mock.calls[0][1]).toBe(h.root);
 	expect(h.getNewFileParent).not.toHaveBeenCalled();
+});
+test.each([" Initial", "Trailing ", "  "])("explicit folder %j preserves ordinary spaces and existing contents", async path => {
+	const h = fixture();
+	const folder = Object.assign(new TFolder(), { path });
+	const sentinel = Object.assign(file(`${path}/Existing.md`), { content: "keep spaced folder contents" });
+	const otherPath = path.trim();
+	const otherFolder = otherPath ? Object.assign(new TFolder(), { path: otherPath }) : h.root;
+	const otherNote = Object.assign(file(`${otherPath ? otherPath + "/" : ""}Alice.md`), { content: "keep other destination contents" });
+	h.files.set(path, folder); h.files.set(sentinel.path, sentinel);
+	h.files.set(otherFolder.path, otherFolder); h.files.set(otherNote.path, otherNote);
+	const result = await createNewNoteFromTemplate(h.app, { ...h.request, destination: { kind: "explicit", path } });
+	expect(result).toMatchObject({ status: "created", file: { path: `${path}/Alice.md` } });
+	expect(h.create.mock.calls[0][1]).toBe(path);
+	expect(h.files.get(path)).toBe(folder);
+	expect(h.files.get(sentinel.path)).toBe(sentinel);
+	expect(sentinel.content).toBe("keep spaced folder contents");
+	expect(h.files.get(otherFolder.path)).toBe(otherFolder);
+	expect(h.files.get(otherNote.path)).toBe(otherNote);
+	expect(otherNote.content).toBe("keep other destination contents");
 });
 test("normalized missing parents reach native creation and remain after later failure", async () => {
 	const h = fixture();
