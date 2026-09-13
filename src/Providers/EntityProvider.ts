@@ -2,7 +2,19 @@ import { EntitySuggestionItem } from "src/EntitiesSuggestor";
 import { entityFromTemplateSettings } from "../entities.types";
 import { createNewNoteFromTemplate } from "../entitiesUtilities";
 import { Plugin, SearchResult } from "obsidian";
+import { cloneSettings } from "../settingsData";
 import { TriggerCharacter } from "../entities.types";
+
+/** Persisted identity of one configured provider, independent of its provider type. */
+export interface ProviderInstanceIdentity {
+	readonly providerInstanceId: string;
+}
+
+/** Runtime construction requires an identity assigned by the settings store. */
+export type ProviderSettingsInput<T extends EntityProviderUserSettings> = Partial<T> & ProviderInstanceIdentity;
+
+/** A saved provider configuration after migration. Defaults do not have an identity. */
+export type ConfiguredProviderSettings = EntityProviderUserSettings & ProviderInstanceIdentity;
 
 // Base interfaces and classes for Providers
 export interface EntityProviderID {
@@ -27,6 +39,7 @@ export enum RefreshBehavior {
  */
 export abstract class EntityProvider<T extends EntityProviderUserSettings> {
 	protected settings: T;
+	readonly providerInstanceId: string;
 	plugin: Plugin;
 
 	abstract getDefaultSettings(): T;
@@ -41,9 +54,10 @@ export abstract class EntityProvider<T extends EntityProviderUserSettings> {
 		return this.settings.enabled;
 	}
 
-	constructor(plugin: Plugin, settings: Partial<T>) {
+	constructor(plugin: Plugin, settings: ProviderSettingsInput<T>) {
 		this.plugin = plugin;
-		this.settings = { ...this.getDefaultSettings(), ...settings };
+		this.providerInstanceId = settings.providerInstanceId;
+		this.settings = cloneSettings({ ...this.getDefaultSettings(), ...settings });
 	}
 
 	// New getter function for triggers

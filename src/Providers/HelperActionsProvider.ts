@@ -1,5 +1,6 @@
+import { cloneSettings } from "../settingsData";
 import { EntitySuggestionItem } from "src/EntitiesSuggestor";
-import { EntityProvider, EntityProviderUserSettings, RefreshBehavior } from "./EntityProvider";
+import { EntityProvider, EntityProviderUserSettings, ProviderSettingsInput, RefreshBehavior } from "./EntityProvider";
 import {
 	EditorSuggestContext,
 	Plugin,
@@ -104,14 +105,14 @@ export class HelperEntityProvider extends EntityProvider<HelperProviderUserSetti
 		return HelperEntityProvider.getDescription(this.settings);
 	}
 	static getDefaultSettings(): HelperProviderUserSettings {
-		return { ...defaultHelperProviderUserSettings };
+		return cloneSettings(defaultHelperProviderUserSettings);
 	}
 
 	getDefaultSettings(): HelperProviderUserSettings {
 		return HelperEntityProvider.getDefaultSettings();
 	}
 
-	constructor(plugin: Plugin, settings: Partial<HelperProviderUserSettings>) {
+	constructor(plugin: Plugin, settings: ProviderSettingsInput<HelperProviderUserSettings>) {
 		super(plugin, settings);
 	}
 

@@ -1,5 +1,6 @@
+import { cloneSettings } from "../settingsData";
 import { EntitySuggestionItem } from "src/EntitiesSuggestor";
-import { EntityProvider, EntityProviderUserSettings } from "./EntityProvider";
+import { EntityProvider, EntityProviderUserSettings, ProviderSettingsInput } from "./EntityProvider";
 import { Plugin, Setting, TFile, TFolder } from "obsidian";
 import { EntitiesModalInput } from "src/userComponents";
 import {
@@ -44,14 +45,14 @@ export class TemplateEntityProvider extends EntityProvider<TemplateProviderUserS
 		return TemplateEntityProvider.getDescription(this.settings);
 	}
 	static getDefaultSettings(): TemplateProviderUserSettings {
-		return { ...defaultTemplateProviderUserSettings };
+		return cloneSettings(defaultTemplateProviderUserSettings);
 	}
 
 	getDefaultSettings(): TemplateProviderUserSettings {
 		return TemplateEntityProvider.getDefaultSettings();
 	}
 
-    constructor(plugin: Plugin, settings: Partial<TemplateProviderUserSettings>) {
+    constructor(plugin: Plugin, settings: ProviderSettingsInput<TemplateProviderUserSettings>) {
 		super(plugin, settings);
         this.files = this.getTemplateFiles(this.settings.path);
     }

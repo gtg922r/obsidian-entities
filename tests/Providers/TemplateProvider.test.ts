@@ -119,6 +119,7 @@ describe("TemplateEntityProvider", () => {
 		test("triggers uses configured trigger from settings", () => {
 			const mockPlugin = createMockPlugin({});
 			const provider = new TemplateEntityProvider(mockPlugin, {
+				providerInstanceId: "test-instance",
 				trigger: TriggerCharacter.At,
 			});
 			expect(provider.triggers).toEqual([TriggerCharacter.At]);
@@ -126,13 +127,14 @@ describe("TemplateEntityProvider", () => {
 
 		test("default trigger is slash", () => {
 			const mockPlugin = createMockPlugin({});
-			const provider = new TemplateEntityProvider(mockPlugin, {});
+			const provider = new TemplateEntityProvider(mockPlugin, { providerInstanceId: "test-instance" });
 			expect(provider.triggers).toEqual([TriggerCharacter.Slash]);
 		});
 
 		test("can use colon trigger", () => {
 			const mockPlugin = createMockPlugin({});
 			const provider = new TemplateEntityProvider(mockPlugin, {
+				providerInstanceId: "test-instance",
 				trigger: TriggerCharacter.Colon,
 			});
 			expect(provider.triggers).toEqual([TriggerCharacter.Colon]);
@@ -143,6 +145,7 @@ describe("TemplateEntityProvider", () => {
 		test("returns empty for non-existent folder", () => {
 			const mockPlugin = createMockPlugin({});
 			const provider = new TemplateEntityProvider(mockPlugin, {
+				providerInstanceId: "test-instance",
 				path: "NonExistent",
 			});
 			const results = provider.getEntityList();
@@ -159,6 +162,7 @@ describe("TemplateEntityProvider", () => {
 				"Templates": templateFiles,
 			});
 			const provider = new TemplateEntityProvider(mockPlugin, {
+				providerInstanceId: "test-instance",
 				path: "Templates",
 			});
 			const results = provider.getEntityList();
@@ -174,6 +178,7 @@ describe("TemplateEntityProvider", () => {
 			const templateFiles = [createMockFile("Templates/Test.md")];
 			const mockPlugin = createMockPlugin({ "Templates": templateFiles });
 			const provider = new TemplateEntityProvider(mockPlugin, {
+				providerInstanceId: "test-instance",
 				path: "Templates",
 				actionType: "create",
 			});
@@ -185,6 +190,7 @@ describe("TemplateEntityProvider", () => {
 			const templateFiles = [createMockFile("Templates/Test.md")];
 			const mockPlugin = createMockPlugin({ "Templates": templateFiles });
 			const provider = new TemplateEntityProvider(mockPlugin, {
+				providerInstanceId: "test-instance",
 				path: "Templates",
 				actionType: "insert",
 			});
@@ -198,6 +204,7 @@ describe("TemplateEntityProvider", () => {
 			];
 			const mockPlugin = createMockPlugin({ "Templates": templateFiles });
 			const provider = new TemplateEntityProvider(mockPlugin, {
+				providerInstanceId: "test-instance",
 				path: "Templates",
 			});
 			const results = provider.getEntityList();
@@ -210,6 +217,7 @@ describe("TemplateEntityProvider", () => {
 		test("getDescription instance method", () => {
 			const mockPlugin = createMockPlugin({});
 			const provider = new TemplateEntityProvider(mockPlugin, {
+				providerInstanceId: "test-instance",
 				path: "MyTemplates",
 				actionType: "insert",
 			});
@@ -219,7 +227,7 @@ describe("TemplateEntityProvider", () => {
 
 		test("getDefaultSettings instance method matches static", () => {
 			const mockPlugin = createMockPlugin({});
-			const provider = new TemplateEntityProvider(mockPlugin, {});
+			const provider = new TemplateEntityProvider(mockPlugin, { providerInstanceId: "test-instance" });
 			expect(provider.getDefaultSettings()).toEqual(
 				TemplateEntityProvider.getDefaultSettings()
 			);

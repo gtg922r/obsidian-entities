@@ -64,6 +64,14 @@ This document explains the overall layout and flow of the **Entities** Obsidian 
    `buildSummarySetting` / `buildSimpleSettings` / `buildAdvancedSettings`
    methods.
 
+   `SettingsStore` owns the canonical configuration. UI builders receive detached
+   drafts; edits and deletions address `providerInstanceId` and update memory
+   immediately. Disk writes start in the next microtask, run one at a time, and
+   coalesce edits arriving during a write into the latest successor snapshot.
+   Provider reconstruction uses the current in-memory settings, independent of
+   disk completion. See [settings recovery](docs/settings-recovery.md) for the
+   migration, backup, retry, and shutdown contract.
+
 4. **Providers** – Each provider:
    - Extends `EntityProvider<T>` with strongly-typed settings.
    - Implements `getEntityList(query, trigger)` synchronously.
@@ -106,6 +114,10 @@ Shared UI builders eliminating duplication across provider settings:
   - Holds provider settings and plugin reference.
   - Defines `getEntityList(query, trigger)` (sync) and optional template creation.
   - Exposes `triggers` getter, `isEnabled` getter, and `getRefreshBehavior()`.
+  - Requires `ProviderSettingsInput<T>` at construction and exposes the typed
+    read-only `providerInstanceId`. `providerTypeID` identifies the implementation;
+    `providerInstanceId` identifies one saved configuration across reconstruction.
+    Default factories return fresh nested data without generating IDs.
 
 - **`ProviderRegistry`** (singleton)
   - Manages registered provider classes and instantiated providers.

@@ -1,3 +1,4 @@
+import { cloneSettings } from "../settingsData";
 import {
 	App,
 	ExtraButtonComponent,
@@ -9,7 +10,7 @@ import {
 	TFolder,
 } from "obsidian";
 import { EntitySuggestionItem } from "src/EntitiesSuggestor";
-import { EntityProvider, EntityProviderUserSettings } from "./EntityProvider";
+import { EntityProvider, EntityProviderUserSettings, ProviderSettingsInput } from "./EntityProvider";
 import { TextInputSuggest, TextInputSuggestOptions } from "src/ui/suggest";
 import { AppWithPlugins, EntityFilter } from "src/entities.types";
 import { buildIconPickerSetting, buildTemplateCreationSetting } from "src/ui/providerSettingsComponents";
@@ -69,7 +70,7 @@ export class DataviewEntityProvider extends EntityProvider<DataviewProviderUserS
 		return DataviewEntityProvider.getDescription(this.settings);
 	}
 	static getDefaultSettings(): DataviewProviderUserSettings {
-		return { ...defaultDataviewProviderUserSettings };
+		return cloneSettings(defaultDataviewProviderUserSettings);
 	}
 
 	getDefaultSettings(): DataviewProviderUserSettings {
@@ -78,7 +79,7 @@ export class DataviewEntityProvider extends EntityProvider<DataviewProviderUserS
 
 	constructor(
 		plugin: Plugin,
-		settings: Partial<DataviewProviderUserSettings>
+		settings: ProviderSettingsInput<DataviewProviderUserSettings>
 	) {
 		super(plugin, settings);
 		this.initialize();

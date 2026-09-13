@@ -2,6 +2,7 @@ import { Plugin } from "obsidian";
 import {
 	EntityProvider,
 	EntityProviderUserSettings,
+	ProviderSettingsInput,
 	RefreshBehavior,
 } from "../../src/Providers/EntityProvider";
 import { TriggerCharacter } from "../../src/entities.types";
@@ -67,7 +68,7 @@ class CustomTriggerProvider extends EntityProvider<TestProviderSettings> {
 class RefreshBehaviorProvider extends EntityProvider<TestProviderSettings> {
 	private behavior: RefreshBehavior;
 
-	constructor(plugin: Plugin, settings: Partial<TestProviderSettings>, behavior: RefreshBehavior) {
+	constructor(plugin: Plugin, settings: ProviderSettingsInput<TestProviderSettings>, behavior: RefreshBehavior) {
 		super(plugin, settings);
 		this.behavior = behavior;
 	}
@@ -97,6 +98,7 @@ describe("EntityProvider base class", () => {
 	describe("constructor and settings", () => {
 		test("merges provided settings with defaults", () => {
 			const provider = new TestEntityProvider(mockPlugin, {
+				providerInstanceId: "test-instance",
 				testOption: "custom",
 			});
 			// Access settings via a protected property workaround
@@ -107,26 +109,26 @@ describe("EntityProvider base class", () => {
 		});
 
 		test("uses defaults when no settings provided", () => {
-			const provider = new TestEntityProvider(mockPlugin, {});
+			const provider = new TestEntityProvider(mockPlugin, { providerInstanceId: "test-instance" });
 			const settings = (provider as any).settings;
 			expect(settings.testOption).toBe("default");
 			expect(settings.providerTypeID).toBe("testProvider");
 		});
 
 		test("stores plugin reference", () => {
-			const provider = new TestEntityProvider(mockPlugin, {});
+			const provider = new TestEntityProvider(mockPlugin, { providerInstanceId: "test-instance" });
 			expect(provider.plugin).toBe(mockPlugin);
 		});
 	});
 
 	describe("triggers", () => {
 		test("default triggers returns At", () => {
-			const provider = new TestEntityProvider(mockPlugin, {});
+			const provider = new TestEntityProvider(mockPlugin, { providerInstanceId: "test-instance" });
 			expect(provider.triggers).toEqual([TriggerCharacter.At]);
 		});
 
 		test("custom triggers can be specified", () => {
-			const provider = new CustomTriggerProvider(mockPlugin, {});
+			const provider = new CustomTriggerProvider(mockPlugin, { providerInstanceId: "test-instance" });
 			expect(provider.triggers).toEqual([
 				TriggerCharacter.Slash,
 				TriggerCharacter.Colon,
@@ -136,14 +138,14 @@ describe("EntityProvider base class", () => {
 
 	describe("getRefreshBehavior", () => {
 		test("default is RefreshBehavior.Default", () => {
-			const provider = new TestEntityProvider(mockPlugin, {});
+			const provider = new TestEntityProvider(mockPlugin, { providerInstanceId: "test-instance" });
 			expect(provider.getRefreshBehavior()).toBe(RefreshBehavior.Default);
 		});
 
 		test("can return ShouldRefresh", () => {
 			const provider = new RefreshBehaviorProvider(
 				mockPlugin,
-				{},
+				{ providerInstanceId: "test-instance" },
 				RefreshBehavior.ShouldRefresh
 			);
 			expect(provider.getRefreshBehavior()).toBe(RefreshBehavior.ShouldRefresh);
@@ -152,7 +154,7 @@ describe("EntityProvider base class", () => {
 		test("can return Never", () => {
 			const provider = new RefreshBehaviorProvider(
 				mockPlugin,
-				{},
+				{ providerInstanceId: "test-instance" },
 				RefreshBehavior.Never
 			);
 			expect(provider.getRefreshBehavior()).toBe(RefreshBehavior.Never);
@@ -161,7 +163,7 @@ describe("EntityProvider base class", () => {
 
 	describe("getEntityList", () => {
 		test("returns suggestions with query", () => {
-			const provider = new TestEntityProvider(mockPlugin, {});
+			const provider = new TestEntityProvider(mockPlugin, { providerInstanceId: "test-instance" });
 			const results = provider.getEntityList("myquery", TriggerCharacter.At);
 			expect(results).toHaveLength(2);
 			expect(results[0].suggestionText).toBe("Test: myquery");
@@ -171,13 +173,14 @@ describe("EntityProvider base class", () => {
 
 	describe("getTemplateCreationSuggestions", () => {
 		test("returns empty array when no templates configured", () => {
-			const provider = new TestEntityProvider(mockPlugin, {});
+			const provider = new TestEntityProvider(mockPlugin, { providerInstanceId: "test-instance" });
 			const results = provider.getTemplateCreationSuggestions("test");
 			expect(results).toEqual([]);
 		});
 
 		test("returns empty array for non-templater engines", () => {
 			const provider = new TestEntityProvider(mockPlugin, {
+				providerInstanceId: "test-instance",
 				entityCreationTemplates: [
 					{
 						engine: "core",
@@ -197,6 +200,7 @@ describe("EntityProvider base class", () => {
 
 		test("returns suggestions for templater engine", () => {
 			const provider = new TestEntityProvider(mockPlugin, {
+				providerInstanceId: "test-instance",
 				entityCreationTemplates: [
 					{
 						engine: "templater",
@@ -216,6 +220,7 @@ describe("EntityProvider base class", () => {
 
 		test("filters to only templater templates", () => {
 			const provider = new TestEntityProvider(mockPlugin, {
+				providerInstanceId: "test-instance",
 				entityCreationTemplates: [
 					{
 						engine: "templater",
@@ -242,6 +247,7 @@ describe("EntityProvider base class", () => {
 
 		test("template action returns link to new note", async () => {
 			const provider = new TestEntityProvider(mockPlugin, {
+				providerInstanceId: "test-instance",
 				entityCreationTemplates: [
 					{
 						engine: "templater",

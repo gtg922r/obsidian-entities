@@ -1,3 +1,4 @@
+import { cloneSettings } from "../settingsData";
 import {
 	ExtraButtonComponent,
 	Plugin,
@@ -42,7 +43,7 @@ export class FolderEntityProvider extends EntityProvider<FolderProviderUserSetti
 	static readonly providerTypeID: string = folderProviderTypeID;
 
 	static getDefaultSettings(): FolderProviderUserSettings {
-		return { ...defaultFolderProviderUserSettings };
+		return cloneSettings(defaultFolderProviderUserSettings);
 	}
 
 	getDefaultSettings(): FolderProviderUserSettings {

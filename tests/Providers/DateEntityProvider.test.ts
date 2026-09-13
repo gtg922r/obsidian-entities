@@ -74,7 +74,7 @@ describe("DateEntityProvider", () => {
 			},
 		});
 
-		const provider = new DateEntityProvider(plugin, {});
+		const provider = new DateEntityProvider(plugin, { providerInstanceId: "test-instance" });
 
 		expect(() => provider.getEntityList("today")).not.toThrow();
 		expect(provider.getEntityList("today")).toEqual([]);
@@ -109,6 +109,7 @@ describe("DateEntityProvider", () => {
 		);
 
 		const provider = new DateEntityProvider(plugin, {
+			providerInstanceId: "test-instance",
 			shouldCreateIfNotExists: true,
 		});
 		const suggestion = provider
@@ -164,6 +165,7 @@ describe("DateEntityProvider", () => {
 		);
 
 		const provider = new DateEntityProvider(plugin, {
+			providerInstanceId: "test-instance",
 			shouldCreateIfNotExists: true,
 		});
 		const suggestion = provider
@@ -219,6 +221,7 @@ describe("DateEntityProvider", () => {
 		);
 
 		const provider = new DateEntityProvider(plugin, {
+			providerInstanceId: "test-instance",
 			shouldCreateIfNotExists: true,
 		});
 		const suggestion = provider
@@ -272,6 +275,7 @@ describe("DateEntityProvider", () => {
 		);
 
 		const provider = new DateEntityProvider(plugin, {
+			providerInstanceId: "test-instance",
 			shouldCreateIfNotExists: true,
 		});
 		const suggestion = provider
@@ -340,6 +344,7 @@ describe("DateEntityProvider", () => {
 		);
 
 		const provider = new DateEntityProvider(plugin, {
+			providerInstanceId: "test-instance",
 			shouldCreateIfNotExists: true,
 		});
 		const suggestion = provider
@@ -379,6 +384,7 @@ describe("DateEntityProvider", () => {
 		});
 
 		const provider = new DateEntityProvider(plugin, {
+			providerInstanceId: "test-instance",
 			shouldCreateIfNotExists: true,
 		});
 		const suggestion = provider
@@ -406,6 +412,7 @@ describe("DateEntityProvider", () => {
 		});
 
 		const provider = new DateEntityProvider(plugin, {
+			providerInstanceId: "test-instance",
 			shouldCreateIfNotExists: false,
 		});
 		const suggestion = provider
@@ -433,6 +440,7 @@ describe("DateEntityProvider", () => {
 		});
 
 		const provider = new DateEntityProvider(plugin, {
+			providerInstanceId: "test-instance",
 			shouldCreateIfNotExists: true,
 		});
 		const suggestion = provider
@@ -466,6 +474,7 @@ describe("DateEntityProvider", () => {
 		});
 
 		const provider = new DateEntityProvider(plugin, {
+			providerInstanceId: "test-instance",
 			shouldCreateIfNotExists: true,
 		});
 		const suggestion = provider
@@ -498,6 +507,7 @@ describe("DateEntityProvider", () => {
 		});
 
 		const provider = new DateEntityProvider(plugin, {
+			providerInstanceId: "test-instance",
 			shouldCreateIfNotExists: true,
 		});
 		const suggestion = provider
@@ -523,6 +533,7 @@ describe("DateEntityProvider", () => {
 		});
 
 		const provider = new DateEntityProvider(plugin, {
+			providerInstanceId: "test-instance",
 			shouldCreateIfNotExists: true,
 		});
 
@@ -546,6 +557,7 @@ describe("DateEntityProvider", () => {
 		});
 
 		const provider = new DateEntityProvider(plugin, {
+			providerInstanceId: "test-instance",
 			shouldCreateIfNotExists: true,
 		});
 		const suggestion = provider

@@ -10,54 +10,96 @@ import Entities from "./main";
 import { EntitiesNotice, IconPickerModal } from "./userComponents";
 import { EntityProviderUserSettings } from "./Providers/EntityProvider";
 import { RegisterableEntityProvider } from "./Providers/ProviderRegistry";
+import { cloneSettings } from "./settingsData";
 
-let saveTimeout: number | undefined;
-
-export function clearPendingSave(): void {
-	if (saveTimeout !== undefined) {
-		window.clearTimeout(saveTimeout);
-		saveTimeout = undefined;
-	}
+function updateProviderAndReload(
+	settingsTab: EntitiesSettingTab,
+	providerConfig: Partial<EntityProviderUserSettings>,
+	providerInstanceId: string,
+	shouldRefreshUI = true
+): boolean {
+	if (!settingsTab.plugin.settingsStore.updateProvider(providerInstanceId, providerConfig)) return false;
+	settingsTab.plugin.loadEntityProviders();
+	if (shouldRefreshUI) settingsTab.display();
+	return true;
 }
 
-function updateProviderAtIndexAndSaveAndReload(
+/** Save only fields changed by this draft so late UI callbacks keep other edits. */
+function providerSaveCallback(
 	settingsTab: EntitiesSettingTab,
-	providerConfig: EntityProviderUserSettings,
-	index: number,
-	shouldWaitToSave = true,
+	providerInstanceId: string,
+	initial: EntityProviderUserSettings,
 	shouldRefreshUI = true
-) {
-	if (saveTimeout !== undefined) {
-		window.clearTimeout(saveTimeout);
-	}
-
-	saveTimeout = window.setTimeout(
-		() => {
-			settingsTab.plugin.settings.providerSettings[index] =
-				providerConfig;
-			settingsTab.plugin.saveSettings().then(() => {
-				settingsTab.plugin.loadEntityProviders(); // Reload providers after setting change
-			});
-			saveTimeout = undefined;
-			if (shouldRefreshUI) {
+): (settings: EntityProviderUserSettings) => boolean {
+	let previous = cloneSettings(initial) as unknown as Record<string, unknown>;
+	let conflicted = false;
+	return settings => {
+		if (conflicted) return false;
+		const current = settingsTab.plugin.settingsStore.settings.providerSettings.find(item => item.providerInstanceId === providerInstanceId);
+		if (!current || settingsTab.plugin.settingsStore.isReadOnly) return false;
+		const canonical = current as unknown as Record<string, unknown>;
+		const next = settings as unknown as Record<string, unknown>;
+		const changes: Record<string, unknown> = {};
+		for (const key of new Set([...Object.keys(previous), ...Object.keys(next)])) {
+			if (JSON.stringify(previous[key]) === JSON.stringify(next[key])) continue;
+			if (JSON.stringify(canonical[key]) !== JSON.stringify(previous[key]) && JSON.stringify(canonical[key]) !== JSON.stringify(next[key])) {
+				conflicted = true;
+				new EntitiesNotice("This provider changed in another settings view. Your last edit was not applied. Settings have reloaded; reopen the provider and try again.", "alert-triangle", 10000);
 				settingsTab.display();
+				return false;
 			}
-		},
-		shouldWaitToSave ? 1000 : 0
-	);
+			changes[key] = cloneSettings(next[key]);
+		}
+		previous = cloneSettings(next);
+		return Object.keys(changes).length === 0 || updateProviderAndReload(settingsTab, changes, providerInstanceId, shouldRefreshUI);
+	};
 }
 
 export class EntitiesSettingTab extends PluginSettingTab {
 	plugin: Entities;
+	private saveErrorSetting?: Setting;
 
 	constructor(app: App, plugin: Entities) {
 		super(app, plugin);
 		this.plugin = plugin;
 	}
 
+	hide(): void {
+		void this.plugin.saveSettings();
+	}
+
+	/** Remove only the recovered warning, preserving focused provider inputs. */
+	clearSaveError(): void {
+		this.saveErrorSetting?.settingEl.remove();
+		this.saveErrorSetting = undefined;
+	}
+
 	display(): void {
 		const { containerEl } = this;
 		containerEl.empty();
+		this.saveErrorSetting = undefined;
+
+		const store = this.plugin.settingsStore;
+		if (store.loadError) {
+			new Setting(containerEl)
+				.setName("Settings could not be loaded")
+				.setDesc(`${store.loadError.message} Saved data has not been changed. Fix the saved file or restore a backup, then retry.`)
+				.addButton(button => button.setButtonText("Retry load").onClick(async () => {
+					await this.plugin.loadSettings();
+					this.display();
+				}));
+			return;
+		}
+		if (store.isReadOnly) return;
+		if (store.saveError) {
+			this.saveErrorSetting = new Setting(containerEl)
+				.setName("Settings have not been saved")
+				.setDesc(`${store.saveError.message} Changes are still in memory.`)
+				.addButton(button => button.setButtonText("Retry save").onClick(async () => {
+					await this.plugin.saveSettings();
+					this.display();
+				}));
+		}
 
 		new Setting(containerEl)
 			.setName("Entity providers")
@@ -98,55 +140,30 @@ export class EntitiesSettingTab extends PluginSettingTab {
 						);
 						return;
 					}
-					const providerSettings = providerType.getDefaultSettings();
-					const index =
-						this.plugin.settings.providerSettings.push(
-							providerSettings
-						) - 1;
-					this.plugin.saveSettings().then(() => {
-						this.plugin.loadEntityProviders();
-						this.display();
-
-						if (
-							typeof providerType.buildSimpleSettings ===
-								"function" ||
-							typeof providerType.buildAdvancedSettings ===
-								"function"
-						) {
-							// Open the ProviderSettingsModal for the new provider
-							const modal = new ProviderSettingsModal(
-								this.app,
-								providerType,
-								providerSettings,
-								this.plugin,
-								(newSettings) => {
-									updateProviderAtIndexAndSaveAndReload(
-										this,
-										newSettings,
-										index,
-										true,
-										true
-									);
-								},
-								() => {
-									this.display();
-								}
-							);
-							modal.open();
-						}
-					});
+					const providerSettings = store.addProvider(providerType.getDefaultSettings());
+					if (!providerSettings) return;
+					this.plugin.loadEntityProviders();
+					this.display();
+					if (providerType.buildSimpleSettings || providerType.buildAdvancedSettings) {
+						new ProviderSettingsModal(
+							this.app, providerType, providerSettings, this.plugin,
+							providerSaveCallback(this, providerSettings.providerInstanceId, providerSettings),
+							() => this.display()
+						).open();
+					}
 				})
 			);
 
 		this.plugin.settings.providerSettings.forEach(
 			(providerSettings, index) => {
+				const { providerInstanceId } = providerSettings;
 				const providerType = this.plugin.providerRegistry
 					.getProviderClasses()
 					.get(providerSettings.providerTypeID);
 				if (!providerType) {
-					console.error(
-						`Provider type "${providerSettings.providerTypeID}" not found.`
-					);
+					new Setting(containerEl)
+						.setName(`Provider #${index + 1}`)
+						.setDesc(`Unavailable provider type: ${providerSettings.providerTypeID}. Its settings are preserved.`);
 					return;
 				}
 				const settingContainer = new Setting(containerEl);
@@ -157,23 +174,10 @@ export class EntitiesSettingTab extends PluginSettingTab {
 						`${providerType.getDescription(providerSettings)}`
 					);
 
-				// .setName(
-				// 	`${providerType.getDescription(providerSettings)}`
-				// );
-
 				providerType.buildSummarySetting(
 					settingContainer,
 					providerSettings,
-					(newSettings) => {
-						providerSettings = newSettings;
-						updateProviderAtIndexAndSaveAndReload(
-							this,
-							providerSettings,
-							index,
-							true,
-							false
-						);
-					},
+					providerSaveCallback(this, providerInstanceId, providerSettings, false),
 					this.plugin
 				);
 				settingContainer
@@ -182,19 +186,16 @@ export class EntitiesSettingTab extends PluginSettingTab {
 							.setIcon(providerSettings.icon ?? "box-select")
 							.setDisabled(false)
 							.onClick(() => {
+								const current = store.settings.providerSettings.find(item => item.providerInstanceId === providerInstanceId);
+								if (!current) return;
+								const saveIcon = providerSaveCallback(this, providerInstanceId, current);
 								const iconPickerModal = new IconPickerModal(
 									this.app
 								);
 								iconPickerModal.open();
 								iconPickerModal.getInput().then((iconName) => {
 									if (iconName) {
-										providerSettings.icon = iconName;
-										updateProviderAtIndexAndSaveAndReload(
-											this,
-											providerSettings,
-											index,
-											false
-										);
+										saveIcon({ ...current, icon: iconName });
 									}
 								});
 							})
@@ -219,21 +220,14 @@ export class EntitiesSettingTab extends PluginSettingTab {
 							button.setDisabled(true);
 						}
 						button.onClick(() => {
+							const current = store.settings.providerSettings.find(item => item.providerInstanceId === providerInstanceId);
+							if (!current) return;
 							const modal = new ProviderSettingsModal(
 								this.app,
 								providerType,
-								providerSettings,
+								current,
 								this.plugin,
-								(newSettings) => {
-									providerSettings = newSettings;
-									updateProviderAtIndexAndSaveAndReload(
-										this,
-										providerSettings,
-										index,
-										true,
-										true
-									);
-								},
+								providerSaveCallback(this, providerInstanceId, current),
 								() => {
 									this.display();
 								}
@@ -243,18 +237,10 @@ export class EntitiesSettingTab extends PluginSettingTab {
 					})
 					.addButton((button) =>
 						button.setIcon("trash").onClick(() => {
-							this.plugin.settings.providerSettings.splice(
-								index,
-								1
-							);
-							this.plugin.saveSettings().then(() => {
-								this.plugin.loadEntityProviders();
-								this.display();
-								new EntitiesNotice(
-									"Provider deleted successfully",
-									"trash-2"
-								);
-							});
+							if (!store.deleteProvider(providerInstanceId)) return;
+							this.plugin.loadEntityProviders();
+							this.display();
+							new EntitiesNotice("Provider removed", "trash-2");
 						})
 					);
 			}
@@ -281,7 +267,7 @@ export class ProviderSettingsModal extends Modal {
 	private provider: RegisterableEntityProvider;
 	private providerSettings: EntityProviderUserSettings;
 	private plugin: Entities;
-	private saveCallback: (newSettings: EntityProviderUserSettings) => void;
+	private saveCallback: (newSettings: EntityProviderUserSettings) => boolean | void;
 	private closeCallback?: () => void;
 	private advancedSettingsOpen = false;
 	buttonContainerEl: HTMLElement;
@@ -291,14 +277,15 @@ export class ProviderSettingsModal extends Modal {
 		provider: RegisterableEntityProvider,
 		providerSettings: EntityProviderUserSettings,
 		plugin: Entities,
-		saveCallback: (newSettings: EntityProviderUserSettings) => void,
+		saveCallback: (newSettings: EntityProviderUserSettings) => boolean | void,
 		closeCallback?: () => void
 	) {
 		super(app);
 		this.provider = provider;
-		this.providerSettings = providerSettings;
+		this.providerSettings = cloneSettings(providerSettings);
 		this.plugin = plugin;
 		this.saveCallback = saveCallback;
+		this.closeCallback = closeCallback;
 
 		this.modalEl.addClass("entities-wide-modal");
 
@@ -318,6 +305,7 @@ export class ProviderSettingsModal extends Modal {
 	}
 
 	onClose() {
+		void this.plugin.saveSettings();
 		this.closeCallback?.();
 	}
 
@@ -332,7 +320,8 @@ export class ProviderSettingsModal extends Modal {
 				contentEl,
 				this.providerSettings,
 				(newSettings) => {
-					this.saveCallback(newSettings);
+					this.providerSettings = newSettings;
+					if (this.saveCallback(newSettings) === false) this.close();
 				},
 				this.plugin
 			);
@@ -367,7 +356,8 @@ export class ProviderSettingsModal extends Modal {
 					contentEl,
 					this.providerSettings,
 					(newSettings) => {
-						this.saveCallback(newSettings);
+						this.providerSettings = newSettings;
+						if (this.saveCallback(newSettings) === false) this.close();
 					},
 					this.plugin
 				);

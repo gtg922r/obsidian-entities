@@ -4,7 +4,8 @@ import {
 	TFile,
 } from "obsidian";
 import { EntitySuggestionItem } from "src/EntitiesSuggestor";
-import { EntityProvider, EntityProviderUserSettings } from "./EntityProvider";
+import { EntityProvider, EntityProviderUserSettings, ProviderSettingsInput } from "./EntityProvider";
+import { cloneSettings } from "src/settingsData";
 import { entityFromTemplateSettings } from "src/entities.types";
 
 const newProviderTypeID = "newProvider";
@@ -38,7 +39,7 @@ export class NewEntityProvider extends EntityProvider<NewProviderUserSettings> {
 	}
 
 	static getDefaultSettings(): NewProviderUserSettings {
-		return { ...defaultNewProviderUserSettings };
+		return cloneSettings(defaultNewProviderUserSettings);
 	}
 
 	getDefaultSettings(): NewProviderUserSettings {
@@ -47,7 +48,7 @@ export class NewEntityProvider extends EntityProvider<NewProviderUserSettings> {
 
 	constructor(
 		plugin: Plugin,
-		settings: Partial<NewProviderUserSettings>
+		settings: ProviderSettingsInput<NewProviderUserSettings>
 	) {
 		super(plugin, settings);
 		// Initialize any additional properties or methods here

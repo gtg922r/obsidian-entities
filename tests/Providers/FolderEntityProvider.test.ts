@@ -1,6 +1,8 @@
 import { Plugin } from "obsidian";
+import { DataviewEntityProvider } from "../../src/Providers/DataviewEntityProvider";
 import { FolderEntityProvider } from "../../src/Providers/FolderEntityProvider";
 import { TriggerCharacter } from "../../src/entities.types";
+import { normalizeSettings } from "../../src/SettingsStore";
 
 // Mock TFile class defined inside jest.mock to avoid hoisting issues
 jest.mock("obsidian", () => {
@@ -123,13 +125,14 @@ describe("FolderEntityProvider", () => {
 	describe("instance behavior", () => {
 		test("default triggers is At", () => {
 			const mockPlugin = createMockPlugin({});
-			const provider = new FolderEntityProvider(mockPlugin, {});
+			const provider = new FolderEntityProvider(mockPlugin, { providerInstanceId: "test-instance" });
 			expect(provider.triggers).toEqual([TriggerCharacter.At]);
 		});
 
 		test("getDescription instance method", () => {
 			const mockPlugin = createMockPlugin({});
 			const provider = new FolderEntityProvider(mockPlugin, {
+				providerInstanceId: "test-instance",
 				path: "Projects",
 			});
 			expect(provider.getDescription()).toBe("📂 Folder entity provider (Projects)");
@@ -140,6 +143,7 @@ describe("FolderEntityProvider", () => {
 		test("returns empty for non-existent folder", () => {
 			const mockPlugin = createMockPlugin({});
 			const provider = new FolderEntityProvider(mockPlugin, {
+				providerInstanceId: "test-instance",
 				path: "NonExistent",
 			});
 			const results = provider.getEntityList("test");
@@ -154,6 +158,7 @@ describe("FolderEntityProvider", () => {
 			];
 			const mockPlugin = createMockPlugin({ "People": files });
 			const provider = new FolderEntityProvider(mockPlugin, {
+				providerInstanceId: "test-instance",
 				path: "People",
 			});
 			const results = provider.getEntityList("test");
@@ -166,6 +171,7 @@ describe("FolderEntityProvider", () => {
 			const files = [createMockFile("People/Alice.md", "Alice")];
 			const mockPlugin = createMockPlugin({ "People": files });
 			const provider = new FolderEntityProvider(mockPlugin, {
+				providerInstanceId: "test-instance",
 				path: "People",
 				icon: "user",
 			});
@@ -177,6 +183,7 @@ describe("FolderEntityProvider", () => {
 			const files = [createMockFile("People/Alice.md", "Alice")];
 			const mockPlugin = createMockPlugin({ "People": files });
 			const provider = new FolderEntityProvider(mockPlugin, {
+				providerInstanceId: "test-instance",
 				path: "People",
 			});
 			const results = provider.getEntityList("test");
@@ -193,6 +200,7 @@ describe("FolderEntityProvider", () => {
 				};
 				const mockPlugin = createMockPlugin({ "People": files }, metadata);
 				const provider = new FolderEntityProvider(mockPlugin, {
+					providerInstanceId: "test-instance",
 					path: "People",
 				});
 				const results = provider.getEntityList("test");
@@ -211,6 +219,7 @@ describe("FolderEntityProvider", () => {
 				};
 				const mockPlugin = createMockPlugin({ "People": files }, metadata);
 				const provider = new FolderEntityProvider(mockPlugin, {
+					providerInstanceId: "test-instance",
 					path: "People",
 				});
 				const results = provider.getEntityList("test");
@@ -230,6 +239,7 @@ describe("FolderEntityProvider", () => {
 				};
 				const mockPlugin = createMockPlugin({ "People": files }, metadata);
 				const provider = new FolderEntityProvider(mockPlugin, {
+					providerInstanceId: "test-instance",
 					path: "People",
 				});
 				const results = provider.getEntityList("test");
@@ -246,6 +256,7 @@ describe("FolderEntityProvider", () => {
 				};
 				const mockPlugin = createMockPlugin({ "People": files }, metadata);
 				const provider = new FolderEntityProvider(mockPlugin, {
+					providerInstanceId: "test-instance",
 					path: "People",
 				});
 				const results = provider.getEntityList("test");
@@ -266,6 +277,7 @@ describe("FolderEntityProvider", () => {
 				};
 				const mockPlugin = createMockPlugin({ "People": files }, metadata);
 				const provider = new FolderEntityProvider(mockPlugin, {
+					providerInstanceId: "test-instance",
 					path: "People",
 					entityFilters: [
 						{ type: "include", property: "type", value: "person" },
@@ -287,6 +299,7 @@ describe("FolderEntityProvider", () => {
 				};
 				const mockPlugin = createMockPlugin({ "People": files }, metadata);
 				const provider = new FolderEntityProvider(mockPlugin, {
+					providerInstanceId: "test-instance",
 					path: "People",
 					entityFilters: [
 						{ type: "exclude", property: "type", value: "robot" },
@@ -310,6 +323,7 @@ describe("FolderEntityProvider", () => {
 				};
 				const mockPlugin = createMockPlugin({ "People": files }, metadata);
 				const provider = new FolderEntityProvider(mockPlugin, {
+					providerInstanceId: "test-instance",
 					path: "People",
 					entityFilters: [
 						{ type: "include", property: "status", value: "^active" },
@@ -331,6 +345,7 @@ describe("FolderEntityProvider", () => {
 				// Suppress console.error for this test
 				const consoleSpy = jest.spyOn(console, "error").mockImplementation();
 				const provider = new FolderEntityProvider(mockPlugin, {
+					providerInstanceId: "test-instance",
 					path: "People",
 					entityFilters: [
 						{ type: "include", property: "type", value: "[invalid" },
@@ -355,6 +370,7 @@ describe("FolderEntityProvider", () => {
 				};
 				const mockPlugin = createMockPlugin({ "People": files }, metadata);
 				const provider = new FolderEntityProvider(mockPlugin, {
+					providerInstanceId: "test-instance",
 					path: "People",
 					entityFilters: [
 						{ type: "include", property: "type", value: "person" },
@@ -380,6 +396,7 @@ describe("FolderEntityProvider", () => {
 				};
 				const mockPlugin = createMockPlugin({ "People": files }, metadata);
 				const provider = new FolderEntityProvider(mockPlugin, {
+					providerInstanceId: "test-instance",
 					path: "People",
 					entityFilters: [
 						{ type: "exclude", property: "archived", value: "true" },
@@ -390,5 +407,40 @@ describe("FolderEntityProvider", () => {
 				expect(results[0].suggestionText).toBe("Bob");
 			});
 		});
+	});
+});
+
+
+describe("provider defaults and instance identity", () => {
+	test("legacy migration remains idempotent with actual folder defaults", () => {
+		const defaults = () => FolderEntityProvider.getDefaultSettings();
+		const result = normalizeSettings({ providerSettings: [{ providerTypeID: "folder" }] }, defaults, () => "stable");
+		if (!result.ok) throw result.error;
+		expect(result.settings.providerSettings[0]).toMatchObject({ path: "", enabled: true, entityFilters: [] });
+		expect(normalizeSettings(result.settings, defaults)).toEqual({ ok: true, settings: result.settings, changed: false });
+	});
+
+	test.each([FolderEntityProvider, DataviewEntityProvider])("default factories return independent filters and templates", providerType => {
+		const first = providerType.getDefaultSettings();
+		const second = providerType.getDefaultSettings();
+		first.entityFilters!.push({ type: "include", property: "kind", value: "person" });
+		first.entityCreationTemplates!.push({ engine: "core", templatePath: "test", entityName: "Person" });
+		expect(second.entityFilters).toEqual([]);
+		expect(second.entityCreationTemplates).toEqual([]);
+		expect(providerType.getDefaultSettings().entityFilters).toEqual([]);
+		expect(first).not.toHaveProperty("providerInstanceId");
+	});
+
+	test("reconstructing configured providers keeps each identity and separates nested input", () => {
+		const mockPlugin = createMockPlugin({});
+		const settings = { ...FolderEntityProvider.getDefaultSettings(), providerInstanceId: "stable" };
+		const first = new FolderEntityProvider(mockPlugin, settings);
+		const reloaded = new FolderEntityProvider(mockPlugin, settings);
+		const other = new FolderEntityProvider(mockPlugin, { ...settings, providerInstanceId: "other" });
+		expect(first.providerInstanceId).toBe("stable");
+		expect(reloaded.providerInstanceId).toBe("stable");
+		expect(other.providerInstanceId).toBe("other");
+		settings.entityFilters!.push({ type: "include", property: "kind", value: "person" });
+		expect((first as any).settings.entityFilters).toEqual([]);
 	});
 });

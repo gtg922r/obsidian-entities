@@ -1,6 +1,7 @@
+import { cloneSettings } from "../settingsData";
 import { ExtraButtonComponent, Plugin, SearchResult, Setting, TFile } from "obsidian";
 import { EntitySuggestionItem } from "src/EntitiesSuggestor";
-import { EntityProvider, EntityProviderUserSettings } from "./EntityProvider";
+import { EntityProvider, EntityProviderUserSettings, ProviderSettingsInput } from "./EntityProvider";
 import { AppWithPlugins } from "src/entities.types";
 import { createNewNoteFromTemplate } from "src/entitiesUtilities";
 import { setValidationStatus } from "src/ui/validationStatus";
@@ -55,7 +56,7 @@ export class MetadataMenuProvider extends EntityProvider<MetadataMenuProviderUse
 	}
 
 	static getDefaultSettings(): MetadataMenuProviderUserSettings {
-		return { ...defaultNewProviderUserSettings };
+		return cloneSettings(defaultNewProviderUserSettings);
 	}
 
 	getDefaultSettings(): MetadataMenuProviderUserSettings {
@@ -64,7 +65,7 @@ export class MetadataMenuProvider extends EntityProvider<MetadataMenuProviderUse
 
 	constructor(
 		plugin: Plugin,
-		settings: Partial<MetadataMenuProviderUserSettings>
+		settings: ProviderSettingsInput<MetadataMenuProviderUserSettings>
 	) {
 		super(plugin, settings);
 		this.initialize();

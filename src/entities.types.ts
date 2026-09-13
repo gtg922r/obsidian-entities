@@ -1,5 +1,5 @@
 import { App, Plugin, TFile, moment } from "obsidian";
-import { EntityProviderUserSettings } from "./Providers/EntityProvider";
+import { ConfiguredProviderSettings } from "./Providers/EntityProvider";
 
 export enum TriggerCharacter {
 	At = "@", 		// `@` for Entities
@@ -42,7 +42,8 @@ export interface ProviderTemplateCreationSettings {
 } 
 
 export interface EntitiesSettings {
-	providerSettings: EntityProviderUserSettings[];
+	schemaVersion: 1;
+	providerSettings: ConfiguredProviderSettings[];
 }
 export interface TemplaterPlugin {
 	templater?: {
@@ -92,6 +93,7 @@ export interface PeriodicNotesPlugin extends Plugin {
 }
 
 export const DEFAULT_SETTINGS: EntitiesSettings = {
+	schemaVersion: 1,
 	providerSettings: [],
 };
 
