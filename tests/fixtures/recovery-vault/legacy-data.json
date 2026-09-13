@@ -1,0 +1,52 @@
+{
+	"providerSettings": [
+		{
+			"providerTypeID": "folder",
+			"enabled": true,
+			"icon": "users",
+			"path": "Sources/People",
+			"shouldLoadSubFolders": true,
+			"shouldCreateEntitiesForAliases": true,
+			"entityFilters": [],
+			"entityCreationTemplates": [
+				{ "engine": "core", "templatePath": "Templates/Core/Core Person.md", "entityName": "Core person", "folderPath": "Created" },
+				{ "engine": "templater", "templatePath": "Templates/Templater/Person.md", "entityName": "Person", "folderPath": "Created" },
+				{ "engine": "templater", "templatePath": "Templates/Templater/Delayed Person.md", "entityName": "Delayed person", "folderPath": "Created" },
+				{ "engine": "templater", "templatePath": "Templates/Templater/Renamed Person.md", "entityName": "Renamed person", "folderPath": "Created" },
+				{ "engine": "templater", "templatePath": "Templates/Templater/Failure.md", "entityName": "Failure probe", "folderPath": "Created" }
+			]
+		},
+		{
+			"providerTypeID": "folder", "enabled": true, "icon": "map-pin",
+			"path": "Sources/Places", "shouldLoadSubFolders": false,
+			"shouldCreateEntitiesForAliases": false, "entityFilters": [], "entityCreationTemplates": []
+		},
+		{
+			"providerTypeID": "dataview", "enabled": true, "icon": "briefcase",
+			"query": "\"Sources/Projects\"", "shouldCreateEntitiesForAliases": true,
+			"entityFilters": [], "entityCreationTemplates": []
+		},
+		{
+			"providerTypeID": "dataview", "enabled": true, "icon": "book-open",
+			"query": "\"Sources/Reading\"", "shouldCreateEntitiesForAliases": false,
+			"entityFilters": [], "entityCreationTemplates": []
+		},
+		{
+			"providerTypeID": "template", "enabled": true, "icon": "file-plus",
+			"path": "Templates/Templater", "actionType": "create", "trigger": "/", "entityCreationTemplates": []
+		},
+		{
+			"providerTypeID": "nlDates", "enabled": true, "icon": "calendar",
+			"shouldCreateIfNotExists": true, "includeWeekSuggestions": true, "entityCreationTemplates": []
+		},
+		{ "providerTypeID": "metadata-menu", "enabled": true, "icon": "database", "entityCreationTemplates": [] },
+		{
+			"providerTypeID": "helper", "enabled": true, "icon": "", "addCreatedTag": false,
+			"checkboxIcon": "square-asterisk", "calloutIcon": "square-chevron-right", "entityCreationTemplates": []
+		},
+		{
+			"providerTypeID": "characterProvider", "enabled": true, "icon": "keyboard",
+			"suggestEmoji": true, "suggestFontAwesome": true, "entityCreationTemplates": []
+		}
+	]
+}
