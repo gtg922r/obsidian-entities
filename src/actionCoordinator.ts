@@ -7,6 +7,7 @@ interface Operation {
 	readonly editor: Editor;
 	readonly binding: EditorBindingSnapshot;
 	readonly context: ActionContext;
+	readonly primary: CapturedSelection;
 	readonly isProviderCurrent: () => boolean;
 	settled: boolean;
 }
@@ -30,6 +31,10 @@ function selectionsAt(editor: Editor, snapshot: string): readonly CapturedSelect
 	return Object.freeze(editor.listSelections().map(selection => Object.freeze({
 		anchor: snapshotOffset(snapshot, selection.anchor), head: snapshotOffset(snapshot, selection.head),
 	})));
+}
+
+function primarySelectionAt(editor: Editor, snapshot: string): CapturedSelection {
+	return { anchor: snapshotOffset(snapshot, editor.getCursor("anchor")), head: snapshotOffset(snapshot, editor.getCursor("head")) };
 }
 
 function readResult(value: unknown): ActionResult {
@@ -85,7 +90,8 @@ export class ActionCoordinator {
 			!this.bindings.isCurrent(operation.binding) || context.source.file.path !== context.source.path ||
 			this.app.vault.getAbstractFileByPath(context.source.path) !== context.source.file || editor.getValue() !== context.snapshot) return false;
 		const selections = selectionsAt(editor, context.snapshot);
-		return selections.length === context.selections.length && selections.every((selection, i) =>
+		const primary = primarySelectionAt(editor, context.snapshot);
+		return primary.anchor === operation.primary.anchor && primary.head === operation.primary.head && selections.length === context.selections.length && selections.every((selection, i) =>
 			selection.anchor === context.selections[i].anchor && selection.head === context.selections[i].head) &&
 			context.snapshot.slice(context.trigger.from, context.trigger.to) === context.trigger.text;
 	}
@@ -108,11 +114,12 @@ export class ActionCoordinator {
 			const binding = this.bindings.capture(editor, context.file);
 			if (!binding) throw new Error("The source editor is unavailable. Search again in a live note.");
 			const selections = selectionsAt(editor, snapshot);
-			if (!selections.length || snapshotOffset(snapshot, editor.getCursor("head")) !== to) throw new Error("The source selection changed. Search again.");
+			const primary = primarySelectionAt(editor, snapshot);
+			if (!selections.length || primary.head !== to) throw new Error("The source selection changed. Search again.");
 			const captured = Object.freeze({ source: Object.freeze({ file: context.file, path: sourcePath }), snapshot,
 				trigger: Object.freeze({ from, to, text: snapshot.slice(from, to), query: context.query }), selections,
 				canStartWork: () => this.canStart(operation) });
-			operation = { editor, binding, context: captured, isProviderCurrent, settled: false };
+			operation = { editor, binding, context: captured, primary, isProviderCurrent, settled: false };
 			this.pending.set(editor, operation);
 		} catch (error) {
 			consume();

@@ -285,3 +285,51 @@ test("moving an owned view to a different document invalidates the captured owne
 	gate.resolve(outcome()); await flush(); expect(h.editor.transaction).not.toHaveBeenCalled();
 	frame.remove();
 });
+
+test("changing only the primary selection invalidates a pending insertion", async () => {
+	const h = fixture(), gate = deferred<ActionResult>();
+	h.view.setState(EditorState.create({ doc: "@Thing", selection: EditorSelection.create([EditorSelection.cursor(2), EditorSelection.cursor(6)], 1),
+		extensions: [EditorState.allowMultipleSelections.of(true), editorInfoField.init(() => h.info), h.bindings.extension] }));
+	let captured!: ActionContext;
+	h.suggestor.selectSuggestion(h.use(context => { captured = context; return gate.promise; }), event);
+	expect(captured.canStartWork()).toBe(true);
+	const before = h.editor.listSelections();
+	h.view.dispatch({ selection: EditorSelection.create([EditorSelection.cursor(2), EditorSelection.cursor(6)], 0) });
+	expect(h.editor.listSelections()).toEqual(before);
+	expect(h.editor.getCursor("head")).toEqual({ line: 0, ch: 2 });
+	expect(captured.canStartWork()).toBe(false);
+	gate.resolve(outcome()); await flush();
+	expect(h.editor.transaction).not.toHaveBeenCalled();
+});
+
+test("a stale reused-Editor view update cannot steal the newer binding", () => {
+	const h = fixture(), next = h.addEditor("Next.md", "@Thing", "@Thing", h.editor);
+	const before = h.bindings.capture(next.editor, next.context.file);
+	expect(before).toBeDefined();
+	h.view.dispatch({ selection: { anchor: 1 } });
+	expect(h.bindings.isCurrent(before!)).toBe(true);
+	expect(h.bindings.capture(next.editor, next.context.file)).toBeDefined();
+});
+
+
+test("superseded view stays retired after newer destroy, but a genuine public binding change can rebind", () => {
+	const h = fixture(), next = h.addEditor("Next.md", "@Thing", "@Thing", h.editor);
+	const active = h.bindings.capture(next.editor, next.context.file)!;
+	h.view.contentDOM.dispatchEvent(new FocusEvent("focus"));
+	expect(h.bindings.isCurrent(active)).toBe(true);
+	next.view.destroy(); h.workspace.activeEditor = h.info;
+	h.view.dispatch({ selection: { anchor: 6 } });
+	expect(h.bindings.capture(h.editor, h.context.file)).toBeUndefined();
+	const rebound = { ...h.info }; h.workspace.activeEditor = rebound; h.setInfo(rebound);
+	expect(h.bindings.capture(h.editor, h.context.file)).toBeDefined();
+});
+
+test("a non-superseded binding can recover after a source rename or observed detach", () => {
+	const h = fixture(); const before = h.bindings.capture(h.editor, h.context.file)!;
+	h.vault.trigger("rename", h.context.file, "Old.md"); h.view.dispatch({});
+	expect(h.bindings.isCurrent(before)).toBe(false);
+	expect(h.bindings.capture(h.editor, h.context.file)).toBeDefined();
+	const parent = h.view.dom.parentElement!; h.view.dom.remove(); h.workspace.trigger("layout-change");
+	parent.appendChild(h.view.dom); h.view.dispatch({});
+	expect(h.bindings.capture(h.editor, h.context.file)).toBeDefined();
+});

@@ -9,6 +9,7 @@ interface Binding {
 	readonly ownerDocument: Document;
 	readonly window: Window | null;
 	readonly generation: number;
+	superseded: boolean;
 }
 
 /** Opaque captured public binding and observed change generations. */
@@ -40,16 +41,24 @@ export class EditorBindings {
 			refresh() {
 				const info = this.view.state.field(editorInfoField, false);
 				const editor = info?.editor, file = info?.file;
-				if (this.binding && (owner.current.get(this.binding.editor) !== this.binding || this.binding.info !== info || this.binding.editor !== editor || this.binding.file !== file ||
+				if (this.binding && (this.binding.info !== info || this.binding.editor !== editor || this.binding.file !== file ||
 					this.binding.ownerDocument !== this.view.dom.ownerDocument)) {
+					owner.remove(this.binding);
+					this.binding = undefined;
+				}
+				// An unchanged old view must never reclaim an Editor from its newer owner,
+				// even after that newer view is destroyed. A changed info/editor/file or
+				// owner document (or a newly constructed extension) establishes a new binding.
+				if (this.binding && owner.current.get(this.binding.editor) !== this.binding) {
+					if (this.binding.superseded) return;
 					owner.remove(this.binding);
 					this.binding = undefined;
 				}
 				if (!this.binding && !owner.disposed && info && editor && file instanceof TFile) {
 					const old = owner.current.get(editor);
-					if (old) owner.remove(old);
+					if (old) { old.superseded = true; owner.remove(old); }
 					this.binding = { editor, file, info, view: this.view, ownerDocument: this.view.dom.ownerDocument,
-						window: this.view.dom.ownerDocument.defaultView, generation: ++owner.generation };
+						window: this.view.dom.ownerDocument.defaultView, generation: ++owner.generation, superseded: false };
 					owner.current.set(editor, this.binding);
 					owner.live.add(this.binding);
 				}
@@ -60,7 +69,7 @@ export class EditorBindings {
 			eventHandlers: {
 				focus() {
 					this.refresh();
-					if (this.binding) owner.observeFocus(this.binding);
+					if (this.binding && owner.current.get(this.binding.editor) === this.binding) owner.observeFocus(this.binding);
 				},
 			},
 		});
