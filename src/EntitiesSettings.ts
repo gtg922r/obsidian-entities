@@ -11,40 +11,15 @@ import { EntitiesNotice, IconPickerModal } from "./userComponents";
 import { EntityProviderUserSettings } from "./Providers/EntityProvider";
 import { RegisterableEntityProvider } from "./Providers/ProviderRegistry";
 
-let saveTimeout: number | undefined;
-
-export function clearPendingSave(): void {
-	if (saveTimeout !== undefined) {
-		window.clearTimeout(saveTimeout);
-		saveTimeout = undefined;
-	}
-}
-
-function updateProviderAtIndexAndSaveAndReload(
+function updateProviderAndReload(
 	settingsTab: EntitiesSettingTab,
-	providerConfig: EntityProviderUserSettings,
-	index: number,
-	shouldWaitToSave = true,
+	providerConfig: Partial<EntityProviderUserSettings>,
+	providerInstanceId: string,
 	shouldRefreshUI = true
 ) {
-	if (saveTimeout !== undefined) {
-		window.clearTimeout(saveTimeout);
-	}
-
-	saveTimeout = window.setTimeout(
-		() => {
-			settingsTab.plugin.settings.providerSettings[index] =
-				providerConfig;
-			settingsTab.plugin.saveSettings().then(() => {
-				settingsTab.plugin.loadEntityProviders(); // Reload providers after setting change
-			});
-			saveTimeout = undefined;
-			if (shouldRefreshUI) {
-				settingsTab.display();
-			}
-		},
-		shouldWaitToSave ? 1000 : 0
-	);
+	if (!settingsTab.plugin.settingsStore.updateProvider(providerInstanceId, providerConfig)) return;
+	settingsTab.plugin.loadEntityProviders();
+	if (shouldRefreshUI) settingsTab.display();
 }
 
 export class EntitiesSettingTab extends PluginSettingTab {
@@ -55,9 +30,35 @@ export class EntitiesSettingTab extends PluginSettingTab {
 		this.plugin = plugin;
 	}
 
+	hide(): void {
+		void this.plugin.saveSettings();
+	}
+
 	display(): void {
 		const { containerEl } = this;
 		containerEl.empty();
+
+		const store = this.plugin.settingsStore;
+		if (store.loadError) {
+			new Setting(containerEl)
+				.setName("Settings could not be loaded")
+				.setDesc(`${store.loadError.message} Saved data has not been changed. Fix the saved file or restore a backup, then retry.`)
+				.addButton(button => button.setButtonText("Retry load").onClick(async () => {
+					await this.plugin.loadSettings();
+					this.display();
+				}));
+			return;
+		}
+		if (store.isReadOnly) return;
+		if (store.saveError) {
+			new Setting(containerEl)
+				.setName("Settings have not been saved")
+				.setDesc(`${store.saveError.message} Changes are still in memory.`)
+				.addButton(button => button.setButtonText("Retry save").onClick(async () => {
+					await this.plugin.saveSettings();
+					this.display();
+				}));
+		}
 
 		new Setting(containerEl)
 			.setName("Entity providers")
@@ -98,55 +99,30 @@ export class EntitiesSettingTab extends PluginSettingTab {
 						);
 						return;
 					}
-					const providerSettings = providerType.getDefaultSettings();
-					const index =
-						this.plugin.settings.providerSettings.push(
-							providerSettings
-						) - 1;
-					this.plugin.saveSettings().then(() => {
-						this.plugin.loadEntityProviders();
-						this.display();
-
-						if (
-							typeof providerType.buildSimpleSettings ===
-								"function" ||
-							typeof providerType.buildAdvancedSettings ===
-								"function"
-						) {
-							// Open the ProviderSettingsModal for the new provider
-							const modal = new ProviderSettingsModal(
-								this.app,
-								providerType,
-								providerSettings,
-								this.plugin,
-								(newSettings) => {
-									updateProviderAtIndexAndSaveAndReload(
-										this,
-										newSettings,
-										index,
-										true,
-										true
-									);
-								},
-								() => {
-									this.display();
-								}
-							);
-							modal.open();
-						}
-					});
+					const providerSettings = store.addProvider(providerType.getDefaultSettings());
+					if (!providerSettings) return;
+					this.plugin.loadEntityProviders();
+					this.display();
+					if (providerType.buildSimpleSettings || providerType.buildAdvancedSettings) {
+						new ProviderSettingsModal(
+							this.app, providerType, providerSettings, this.plugin,
+							newSettings => updateProviderAndReload(this, newSettings, providerSettings.providerInstanceId),
+							() => this.display()
+						).open();
+					}
 				})
 			);
 
 		this.plugin.settings.providerSettings.forEach(
 			(providerSettings, index) => {
+				const { providerInstanceId } = providerSettings;
 				const providerType = this.plugin.providerRegistry
 					.getProviderClasses()
 					.get(providerSettings.providerTypeID);
 				if (!providerType) {
-					console.error(
-						`Provider type "${providerSettings.providerTypeID}" not found.`
-					);
+					new Setting(containerEl)
+						.setName(`Provider #${index + 1}`)
+						.setDesc(`Unavailable provider type: ${providerSettings.providerTypeID}. Its settings are preserved.`);
 					return;
 				}
 				const settingContainer = new Setting(containerEl);
@@ -165,12 +141,11 @@ export class EntitiesSettingTab extends PluginSettingTab {
 					settingContainer,
 					providerSettings,
 					(newSettings) => {
-						providerSettings = newSettings;
-						updateProviderAtIndexAndSaveAndReload(
+						providerSettings = { ...newSettings, providerInstanceId };
+						updateProviderAndReload(
 							this,
 							providerSettings,
-							index,
-							true,
+							providerInstanceId,
 							false
 						);
 					},
@@ -189,11 +164,10 @@ export class EntitiesSettingTab extends PluginSettingTab {
 								iconPickerModal.getInput().then((iconName) => {
 									if (iconName) {
 										providerSettings.icon = iconName;
-										updateProviderAtIndexAndSaveAndReload(
+										updateProviderAndReload(
 											this,
-											providerSettings,
-											index,
-											false
+											{ icon: iconName },
+											providerInstanceId
 										);
 									}
 								});
@@ -225,12 +199,11 @@ export class EntitiesSettingTab extends PluginSettingTab {
 								providerSettings,
 								this.plugin,
 								(newSettings) => {
-									providerSettings = newSettings;
-									updateProviderAtIndexAndSaveAndReload(
+									providerSettings = { ...newSettings, providerInstanceId };
+									updateProviderAndReload(
 										this,
 										providerSettings,
-										index,
-										true,
+										providerInstanceId,
 										true
 									);
 								},
@@ -243,18 +216,10 @@ export class EntitiesSettingTab extends PluginSettingTab {
 					})
 					.addButton((button) =>
 						button.setIcon("trash").onClick(() => {
-							this.plugin.settings.providerSettings.splice(
-								index,
-								1
-							);
-							this.plugin.saveSettings().then(() => {
-								this.plugin.loadEntityProviders();
-								this.display();
-								new EntitiesNotice(
-									"Provider deleted successfully",
-									"trash-2"
-								);
-							});
+							if (!store.deleteProvider(providerInstanceId)) return;
+							this.plugin.loadEntityProviders();
+							this.display();
+							new EntitiesNotice("Provider removed", "trash-2");
 						})
 					);
 			}
@@ -299,6 +264,7 @@ export class ProviderSettingsModal extends Modal {
 		this.providerSettings = providerSettings;
 		this.plugin = plugin;
 		this.saveCallback = saveCallback;
+		this.closeCallback = closeCallback;
 
 		this.modalEl.addClass("entities-wide-modal");
 
@@ -318,6 +284,7 @@ export class ProviderSettingsModal extends Modal {
 	}
 
 	onClose() {
+		void this.plugin.saveSettings();
 		this.closeCallback?.();
 	}
 
@@ -332,6 +299,7 @@ export class ProviderSettingsModal extends Modal {
 				contentEl,
 				this.providerSettings,
 				(newSettings) => {
+					this.providerSettings = newSettings;
 					this.saveCallback(newSettings);
 				},
 				this.plugin
@@ -367,7 +335,8 @@ export class ProviderSettingsModal extends Modal {
 					contentEl,
 					this.providerSettings,
 					(newSettings) => {
-						this.saveCallback(newSettings);
+						this.providerSettings = newSettings;
+					this.saveCallback(newSettings);
 					},
 					this.plugin
 				);

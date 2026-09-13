@@ -141,14 +141,14 @@ describe("Integration: Full suggestion flow", () => {
 			registry.registerProviderType(ColonTriggerProvider as any);
 
 			// Create instances with specific items
-			const atProvider = new AtTriggerProvider(mockPlugin, {}, [
+			const atProvider = new AtTriggerProvider(mockPlugin, { providerInstanceId: "at-instance" }, [
 				{ suggestionText: "AtItem1" },
 				{ suggestionText: "AtItem2" },
 			]);
-			const slashProvider = new SlashTriggerProvider(mockPlugin, {}, [
+			const slashProvider = new SlashTriggerProvider(mockPlugin, { providerInstanceId: "slash-instance" }, [
 				{ suggestionText: "SlashItem1" },
 			]);
-			const colonProvider = new ColonTriggerProvider(mockPlugin, {}, [
+			const colonProvider = new ColonTriggerProvider(mockPlugin, { providerInstanceId: "colon-instance" }, [
 				{ suggestionText: "ColonItem1" },
 			]);
 
@@ -340,7 +340,7 @@ describe("Integration: Provider refresh behavior", () => {
 	});
 
 	test("ShouldRefresh providers are called on every getSuggestions", () => {
-		const provider = new RefreshingProvider(mockPlugin, {});
+		const provider = new RefreshingProvider(mockPlugin, { providerInstanceId: "test-instance" });
 		(registry as any).providers = [provider];
 
 		const context = {
@@ -359,7 +359,7 @@ describe("Integration: Provider refresh behavior", () => {
 	});
 
 	test("Never refresh providers cache results", () => {
-		const provider = new NeverRefreshProvider(mockPlugin, {});
+		const provider = new NeverRefreshProvider(mockPlugin, { providerInstanceId: "test-instance" });
 		(registry as any).providers = [provider];
 
 		const context = {

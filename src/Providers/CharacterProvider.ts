@@ -1,6 +1,7 @@
+import { cloneSettings } from "../settingsData";
 import { Plugin, Setting } from "obsidian";
 import { EntitySuggestionItem } from "src/EntitiesSuggestor";
-import { EntityProvider, EntityProviderUserSettings } from "./EntityProvider";
+import { EntityProvider, EntityProviderUserSettings, ProviderSettingsInput } from "./EntityProvider";
 import emojilib from "emojilib";
 import { TriggerCharacter } from "../entities.types";
 
@@ -69,7 +70,7 @@ export class CharacterProvider extends EntityProvider<CharacterProviderUserSetti
 	}
 
 	static getDefaultSettings(): CharacterProviderUserSettings {
-		return { ...defaultCharacterProviderUserSettings };
+		return cloneSettings(defaultCharacterProviderUserSettings);
 	}
 
 	getDefaultSettings(): CharacterProviderUserSettings {
@@ -78,7 +79,7 @@ export class CharacterProvider extends EntityProvider<CharacterProviderUserSetti
 
 	constructor(
 		plugin: Plugin,
-		settings: Partial<CharacterProviderUserSettings>
+		settings: ProviderSettingsInput<CharacterProviderUserSettings>
 	) {
 		super(plugin, settings);
 		// Initialize any additional properties or methods specific to CharacterProvider here

@@ -1,3 +1,4 @@
+import { cloneSettings } from "../settingsData";
 import {
 	EditorSuggestContext,
 	Plugin,
@@ -6,7 +7,7 @@ import {
 	moment,
 } from "obsidian";
 import { EntitySuggestionItem } from "src/EntitiesSuggestor";
-import { EntityProvider, EntityProviderUserSettings } from "./EntityProvider";
+import { EntityProvider, EntityProviderUserSettings, ProviderSettingsInput } from "./EntityProvider";
 import {
 	AppWithPlugins,
 	PeriodicNotesGranularity,
@@ -74,14 +75,14 @@ export class DateEntityProvider extends EntityProvider<DatesProviderUserSettings
 		return DateEntityProvider.getDescription(this.settings);
 	}
 	static getDefaultSettings(): DatesProviderUserSettings {
-		return { ...defaultDatesProviderUserSettings };
+		return cloneSettings(defaultDatesProviderUserSettings);
 	}
 
 	getDefaultSettings(): DatesProviderUserSettings {
 		return DateEntityProvider.getDefaultSettings();
 	}
 
-	constructor(plugin: Plugin, settings: Partial<DatesProviderUserSettings>) {
+	constructor(plugin: Plugin, settings: ProviderSettingsInput<DatesProviderUserSettings>) {
 		super(plugin, settings);
 		this.initialize();
 	}

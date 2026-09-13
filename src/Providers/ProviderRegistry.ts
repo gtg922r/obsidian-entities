@@ -1,5 +1,5 @@
 import { Plugin, Setting } from "obsidian";
-import { EntityProvider, EntityProviderID, EntityProviderUserSettings } from "./EntityProvider";
+import { EntityProvider, EntityProviderID, EntityProviderUserSettings, ConfiguredProviderSettings, ProviderInstanceIdentity } from "./EntityProvider";
 import { DerivedClassWithConstructorArgs } from "src/entities.types";
 import { TriggerCharacter } from "src/entities.types";
 
@@ -28,7 +28,7 @@ interface ProviderRegistryClassMethods<T extends EntityProviderUserSettings> {
 
 export type RegisterableEntityProvider = DerivedClassWithConstructorArgs<
 	EntityProviderID & typeof EntityProvider,
-	[Plugin, EntityProviderUserSettings]
+	[Plugin, ConfiguredProviderSettings]
 > & ProviderRegistryClassMethods<EntityProviderUserSettings>;
 
 
@@ -68,7 +68,7 @@ class ProviderRegistry {
 	}
 
 	instantiateProvider<T extends EntityProviderUserSettings>(
-		settings: T
+		settings: T & ProviderInstanceIdentity
 	): ProviderRegistry {
 		const providerClass = this.providerClasses.get(settings.providerTypeID);
 		if (providerClass) {
@@ -89,7 +89,7 @@ class ProviderRegistry {
 	}
 
 	instantiateProvidersFromSettings(
-		settingsList: EntityProviderUserSettings[]
+		settingsList: ConfiguredProviderSettings[]
 	): void {
 		if (!this.plugin) {
 			throw new Error(

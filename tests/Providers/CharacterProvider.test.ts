@@ -60,38 +60,39 @@ describe("CharacterProvider", () => {
 
 	describe("instance properties", () => {
 		test("triggers returns colon", () => {
-			const provider = new CharacterProvider(mockPlugin, {});
+			const provider = new CharacterProvider(mockPlugin, { providerInstanceId: "test-instance" });
 			expect(provider.triggers).toEqual([TriggerCharacter.Colon]);
 		});
 
 		test("getDefaultSettings instance method matches static", () => {
-			const provider = new CharacterProvider(mockPlugin, {});
+			const provider = new CharacterProvider(mockPlugin, { providerInstanceId: "test-instance" });
 			expect(provider.getDefaultSettings()).toEqual(
 				CharacterProvider.getDefaultSettings()
 			);
 		});
 
 		test("getDescription instance method works", () => {
-			const provider = new CharacterProvider(mockPlugin, {});
+			const provider = new CharacterProvider(mockPlugin, { providerInstanceId: "test-instance" });
 			expect(provider.getDescription()).toBe("⌨️ Character provider");
 		});
 	});
 
 	describe("getEntityList", () => {
 		test("returns empty for non-colon trigger", () => {
-			const provider = new CharacterProvider(mockPlugin, {});
+			const provider = new CharacterProvider(mockPlugin, { providerInstanceId: "test-instance" });
 			const results = provider.getEntityList("smile", TriggerCharacter.At);
 			expect(results).toEqual([]);
 		});
 
 		test("returns empty for slash trigger", () => {
-			const provider = new CharacterProvider(mockPlugin, {});
+			const provider = new CharacterProvider(mockPlugin, { providerInstanceId: "test-instance" });
 			const results = provider.getEntityList("smile", TriggerCharacter.Slash);
 			expect(results).toEqual([]);
 		});
 
 		test("returns emoji suggestions for colon trigger", () => {
 			const provider = new CharacterProvider(mockPlugin, {
+				providerInstanceId: "test-instance",
 				suggestEmoji: true,
 				suggestFontAwesome: false, // Disable font awesome to only get emojis
 			});
@@ -106,7 +107,7 @@ describe("CharacterProvider", () => {
 		});
 
 		test("returns font awesome suggestions for colon trigger", () => {
-			const provider = new CharacterProvider(mockPlugin, {});
+			const provider = new CharacterProvider(mockPlugin, { providerInstanceId: "test-instance" });
 			const results = provider.getEntityList("arrow", TriggerCharacter.Colon);
 			expect(results.length).toBeGreaterThan(0);
 			// Check that at least one result is font awesome
@@ -116,6 +117,7 @@ describe("CharacterProvider", () => {
 
 		test("respects suggestEmoji setting when false", () => {
 			const provider = new CharacterProvider(mockPlugin, {
+				providerInstanceId: "test-instance",
 				suggestEmoji: false,
 				suggestFontAwesome: true,
 			});
@@ -127,6 +129,7 @@ describe("CharacterProvider", () => {
 
 		test("respects suggestFontAwesome setting when false", () => {
 			const provider = new CharacterProvider(mockPlugin, {
+				providerInstanceId: "test-instance",
 				suggestEmoji: true,
 				suggestFontAwesome: false,
 			});
@@ -138,6 +141,7 @@ describe("CharacterProvider", () => {
 
 		test("returns empty when both settings disabled", () => {
 			const provider = new CharacterProvider(mockPlugin, {
+				providerInstanceId: "test-instance",
 				suggestEmoji: false,
 				suggestFontAwesome: false,
 			});
@@ -146,7 +150,7 @@ describe("CharacterProvider", () => {
 		});
 
 		test("suggestions have action that returns character", async () => {
-			const provider = new CharacterProvider(mockPlugin, {});
+			const provider = new CharacterProvider(mockPlugin, { providerInstanceId: "test-instance" });
 			const results = provider.getEntityList("smile", TriggerCharacter.Colon);
 			const smileSuggestion = results.find(r => 
 				r.suggestionText.toLowerCase().includes("smile") ||
@@ -161,7 +165,7 @@ describe("CharacterProvider", () => {
 		});
 
 		test("suggestions include flair with character", () => {
-			const provider = new CharacterProvider(mockPlugin, {});
+			const provider = new CharacterProvider(mockPlugin, { providerInstanceId: "test-instance" });
 			const results = provider.getEntityList("heart", TriggerCharacter.Colon);
 			const heartSuggestion = results.find(r => 
 				r.suggestionText.toLowerCase().includes("heart")
@@ -172,14 +176,14 @@ describe("CharacterProvider", () => {
 		});
 
 		test("case-insensitive search", () => {
-			const provider = new CharacterProvider(mockPlugin, {});
+			const provider = new CharacterProvider(mockPlugin, { providerInstanceId: "test-instance" });
 			const lowerResults = provider.getEntityList("smile", TriggerCharacter.Colon);
 			const upperResults = provider.getEntityList("SMILE", TriggerCharacter.Colon);
 			expect(lowerResults.length).toBe(upperResults.length);
 		});
 
 		test("shows synonym info for keyword matches", () => {
-			const provider = new CharacterProvider(mockPlugin, {});
+			const provider = new CharacterProvider(mockPlugin, { providerInstanceId: "test-instance" });
 			// Search for a common emoji keyword that might be a synonym
 			const results = provider.getEntityList("happy", TriggerCharacter.Colon);
 			// This might not always be true depending on the emoji dictionary
