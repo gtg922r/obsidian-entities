@@ -1,6 +1,7 @@
 import { App, Editor, EditorSuggestContext, TFile } from "obsidian";
 import Entities from "../src/main";
-import { EntitiesSuggestor, EntitySuggestionItem } from "../src/EntitiesSuggestor";
+import { EntitiesSuggestor } from "../src/EntitiesSuggestor";
+import { EntitySuggestionItem } from "../src/suggestion.types";
 import { EntityProvider, EntityProviderUserSettings, RefreshBehavior } from "../src/Providers/EntityProvider";
 import ProviderRegistry from "../src/Providers/ProviderRegistry";
 import { TriggerCharacter } from "../src/entities.types";
@@ -506,13 +507,13 @@ describe("getSuggestions tests", () => {
 
         const expectedSuggestions: EntitySuggestionItem[] = [
             {
-                suggestionText: "Test suggestion",
+                suggestionText: "Test suggestion", target: { kind: "unresolved-link" as const, linkpath: "Test suggestion" },
             },
         ];
 
 		const expectedSuggestionsWithMatches: EntitySuggestionItem[] = [
 			{
-				suggestionText: "Test suggestion",
+				suggestionText: "Test suggestion", target: { kind: "unresolved-link" as const, linkpath: "Test suggestion" },
 				match: { score: 10, matches: [[0, 4]] },
 			},
 		];
@@ -536,16 +537,15 @@ describe("getSuggestions tests", () => {
 
         const entitySuggestions: EntitySuggestionItem[] = [
             {
-                suggestionText: "Note suggestion",
+                suggestionText: "Note suggestion", target: { kind: "unresolved-link" as const, linkpath: "Note suggestion" },
                 match: { score: 5, matches: [] },
             },
         ];
 
         const templateSuggestions: EntitySuggestionItem[] = [
             {
-                suggestionText: "New Note: note",
+                suggestionText: "New Note: note", target: { kind: "action" as const, id: "test-action", callback: jest.fn() },
                 icon: "plus-circle",
-                action: jest.fn(),
                 match: { score: -10, matches: [[0, 4]] },
             },
         ];
@@ -556,13 +556,12 @@ describe("getSuggestions tests", () => {
         const result = suggestor.getSuggestions(context);
 
         expect(result).toContainEqual({
-            suggestionText: "Note suggestion",
+            suggestionText: "Note suggestion", target: { kind: "unresolved-link" as const, linkpath: "Note suggestion" },
             match: { score: 10, matches: [[0, 4]] },
         });
         expect(result).toContainEqual({
-            suggestionText: "New Note: note",
+            suggestionText: "New Note: note", target: { kind: "action" as const, id: "test-action", callback: expect.any(Function) },
             icon: "plus-circle",
-            action: expect.any(Function),
             match: { score: -10, matches: [[0, 4]] },
         });
         expect(mockEntityProvider.getEntityList).toHaveBeenCalledWith("note", TriggerCharacter.At);

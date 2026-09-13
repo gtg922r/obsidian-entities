@@ -6,7 +6,7 @@ import {
 	Setting,
 	TFile,
 } from "obsidian";
-import { EntitySuggestionItem } from "src/EntitiesSuggestor";
+import { EntitySuggestionItem } from "src/suggestion.types";
 import { EntityProvider, EntityProviderUserSettings } from "./EntityProvider";
 import { EntityFilter } from "src/entities.types";
 import { applyFiltersToFiles } from "./EntityFilters";
@@ -80,9 +80,10 @@ export class FolderEntityProvider extends EntityProvider<FolderProviderUserSetti
 
 		const filteredEntities = applyFiltersToFiles(entities, this.settings.entityFilters, this.plugin.app);
 
-		const entitySuggestions =
+		const entitySuggestions: EntitySuggestionItem[] =
 			filteredEntities?.map((file) => ({
 				suggestionText: file.basename,
+				target: { kind: "file", file },
 				icon: this.settings.icon ?? "folder-open-dot",
 			})) ?? [];
 
@@ -92,7 +93,7 @@ export class FolderEntityProvider extends EntityProvider<FolderProviderUserSetti
 		) => EntitySuggestionItem = (alias: string, file: TFile) => ({
 			suggestionText: alias,
 			icon: this.settings.icon ?? "folder-open-dot",
-			replacementText: `${file.basename}|${alias}`,
+			target: { kind: "file", file, alias },
 		});
 
 		const aliasEntitiesSuggestions = filteredEntities?.flatMap((file) => {

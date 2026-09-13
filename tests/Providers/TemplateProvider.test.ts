@@ -1,3 +1,4 @@
+import { getAction } from "../suggestionTestHelpers";
 import { Plugin } from "obsidian";
 import { TemplateEntityProvider } from "../../src/Providers/TemplateProvider";
 import { TriggerCharacter } from "../../src/entities.types";
@@ -208,8 +209,8 @@ describe("TemplateEntityProvider", () => {
 				path: "Templates",
 			});
 			const results = provider.getEntityList();
-			expect(results[0].action).toBeDefined();
-			expect(typeof results[0].action).toBe("function");
+			expect(getAction(results[0])).toBeDefined();
+			expect(typeof getAction(results[0])).toBe("function");
 		});
 	});
 

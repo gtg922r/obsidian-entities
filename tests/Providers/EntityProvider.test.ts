@@ -1,3 +1,4 @@
+import { getAction } from "../suggestionTestHelpers";
 import { Plugin } from "obsidian";
 import {
 	EntityProvider,
@@ -6,7 +7,7 @@ import {
 	RefreshBehavior,
 } from "../../src/Providers/EntityProvider";
 import { TriggerCharacter } from "../../src/entities.types";
-import { EntitySuggestionItem } from "../../src/EntitiesSuggestor";
+import { EntitySuggestionItem } from "../../src/suggestion.types";
 
 // Mock Obsidian
 jest.mock("obsidian", () => ({
@@ -45,8 +46,8 @@ class TestEntityProvider extends EntityProvider<TestProviderSettings> {
 
 	getEntityList(query: string, trigger: TriggerCharacter): EntitySuggestionItem[] {
 		return [
-			{ suggestionText: `Test: ${query}` },
-			{ suggestionText: "Static suggestion" },
+			{ suggestionText: `Test: ${query}`, target: { kind: "unresolved-link" as const, linkpath: `Test: ${query}` } },
+			{ suggestionText: "Static suggestion", target: { kind: "unresolved-link" as const, linkpath: "Static suggestion" } },
 		];
 	}
 }
@@ -214,7 +215,7 @@ describe("EntityProvider base class", () => {
 			expect(results).toHaveLength(1);
 			expect(results[0].suggestionText).toBe("New Person: John Doe");
 			expect(results[0].icon).toBe("plus-circle");
-			expect(results[0].action).toBeDefined();
+			expect(getAction(results[0])).toBeDefined();
 			expect(results[0].match?.score).toBe(-10);
 		});
 
@@ -257,7 +258,7 @@ describe("EntityProvider base class", () => {
 				],
 			});
 			const results = provider.getTemplateCreationSuggestions("Alice");
-			const action = results[0].action!;
+			const action = getAction(results[0])!;
 			// Note: action is async and calls createNewNoteFromTemplate
 			const result = await action(results[0], null);
 			expect(result).toBe("[[Alice]]");

@@ -25,9 +25,13 @@ items but are retried rather than cached.
 
 Ordinary items are copied into the raw cache and fuzzy-filtered into fresh result
 objects per request. Query-specific fuzzy scores never mutate cached/provider
-objects. Existing score ordering, ordinary-before-creation precedence and
-same-label deduplication remain unchanged. Semantic target deduplication and
-native link generation belong to R3.
+objects. Target wrappers are detached at both boundaries; the actual `TFile` and
+callback references are retained. Never serialize targets with JSON/cloneSettings
+or reconstruct a host file. Existing score ordering and ordinary-before-creation
+precedence remain. Semantic deduplication follows matching: keep the best score,
+then the first provider in traversal order on ties. Keep that original winning
+result. If adding a presentation clone, copy its **existing** private provenance;
+never stamp an old row with the current result epoch.
 
 `ProviderRegistry.instantiateProvidersFromSettings()` constructs every row with
 its own error boundary, then publishes one complete list and increments its
@@ -66,7 +70,7 @@ fallback remains necessary for unobserved integration lifecycle/settings changes
 Eligibility, cache-policy access, ordinary retrieval and creation retrieval have
 independent error boundaries. An ordinary/policy failure cannot suppress that
 provider's valid creation results, and a creation failure cannot suppress its
-ordinary results. Invalid suggestion text, display fields, action shape or match
+ordinary results. Invalid suggestion text, display fields, target variant or match
 shape cause the individual item to be skipped. Console diagnostics retain at
 most one marker per live provider/stage, via weak ownership; there are no
 per-keystroke notices or growing historical error sets. Constructors report once
@@ -84,9 +88,80 @@ unload, so normal close or an index event from the action itself does not discar
 its returned string. It does **not** cancel action side effects, detect document
 switches/edits, validate replacement ranges, or solve cancellation, double
 selection and undo. Those editor/action guarantees remain R4. Public
-`EntitySuggestionItem` and action signatures are unchanged.
+`EntitySuggestionItem` now requires one target; callback arguments and string-or-void
+outcomes remain unchanged.
 
 `tests/RuntimeFreshness.test.ts` exercises cache timing/bounds, concrete provider
 instances, fault isolation, runtime events and retained selection with controlled
 mocks. It does not prove real Obsidian popover ordering or integration startup;
 those require a focused smoke in the dedicated disposable fixture vault.
+
+
+## Targets and selection
+
+Import `EntitySuggestionItem` and `SuggestionTarget` from `src/suggestion.types.ts`,
+which has only type imports and no UI implementation dependency. A suggestion has
+one required `target`; top-level `replacementText`/`action` fields are rejected.
+Keep `suggestionText` for recognition/search and `icon`, `flair`, `noteText`, `match`
+for presentation. Never encode insertion meaning in a label.
+
+| Target | Meaning and identity |
+| --- | --- |
+| `{ kind: "file", file, alias? }` | Actual live `TFile` identity plus effective alias; shared across providers. |
+| `{ kind: "unresolved-link", linkpath, alias? }` | Deliberately unresolved destination plus effective alias, separate from real files. |
+| `{ kind: "text", text }` | Exact literal text, including Unicode sequences; shared across providers. |
+| `{ kind: "action", id, callback }` | Deterministic operation ID scoped to the configured provider instance. |
+
+Keys are structured JSON tuples. Omitted and empty aliases use the native default;
+all other aliases are preserved exactly, including whitespace, case and Unicode.
+For Markdown files the default alias is undefined. For other files the default
+alias is `file.name`, making native Markdown attachment links visible; deduplication
+uses this same effective alias. Explicit nonempty aliases stay exact, even if they
+look like the basename. Different file objects (including delete/recreate at the
+same path), aliases, target kinds and provider-scoped operations stay distinct.
+
+Folder keeps each actual `TFile` and separate aliases. Dataview resolves the exact
+`project.file.path` to a live `TFile`, skipping missing paths and folders; it never
+falls back to the displayed name. Its pages and aliases accept the iterable
+DataArray returned by the [Dataview API](https://github.com/blacksmithgu/obsidian-dataview/blob/master/src/api/plugin-api.ts);
+ordinary results are materialized into a synchronous array. Character returns literal targets. Template
+IDs encode operation + template path. Base creation IDs encode engine, template
+path, destination folder and query. Metadata Menu encodes file-class path,
+template path and query; Helper encodes the operation and its argument. Template
+rows show the operation and template path in their secondary note, never raw IDs.
+No new persisted template-row IDs are introduced.
+
+At real-file selection, `vault.getAbstractFileByPath(file.path) === file` must hold.
+A renamed live file uses its current path. A deleted/replaced file gives a notice
+and no editor write. Native formatting is evaluated at selection as
+`app.fileManager.generateMarkdownLink(file, sourceContext.file.path, undefined, effectiveAlias)`.
+Source context comes from R2 provenance, never whichever editor happens to be
+active. Preferences changed after caching take effect; fresh retrieval for another
+source can reuse cached raw targets. Formatting failure gives a notice without
+an editor write or guessed fallback. The native string is passed through unchanged.
+
+The deliberate unresolved-date boundary remains explicit wikilinks in R3, even
+under Markdown preferences. Date splits linkpath/alias at its producer, with no
+generic parsing of pipe-containing strings and no fabricated files or private
+preference reads. Date creation callbacks preserve their existing fallback and
+native alias behavior until R4. Their IDs include granularity/date, operative
+output alias (`today` versus `this sunday`), and fallback linkpath/alias.
+
+## Evidence boundary
+
+Focused target tests cover duplicate basenames/aliases, cross-provider identity,
+ranking/provenance, source contexts, wrapper isolation, malformed targets and
+selection after background invalidation. Mocked generator outputs test exact
+forwarding, not Obsidian rendering. Separate local method-level checks execute
+actual Obsidian 1.12.7/1.14.1 native formatting with inert vault indexes/preferences
+(240 cases per version), including exact forwarding through this suggestor and
+selection-time source/preferences/file-event checks. The actual installed Dataview
+0.5.66 DataArray class/proxy also passes the provider/suggestor alias flow.
+These do not prove live UI behavior or the proposed minimum-version gate.
+
+Native aliases and unusual filenames have host quirks: e.g. `A]]B` can produce
+`[[Unique Note|A]]B]]`; `#`, `%` and parentheses in destinations are not generally
+escaped. R3 adds no escaping/parser layer. Unusual punctuation/filename rendered
+resolution, live UI, and actual created-file outcomes remain unverified host/R4
+acceptance cases for the coordinator's dedicated fixture run. Do not infer
+arbitrary punctuation safety from a successful native-string parity check.

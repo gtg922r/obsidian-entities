@@ -9,7 +9,7 @@ import {
 	TFile,
 	TFolder,
 } from "obsidian";
-import { EntitySuggestionItem } from "src/EntitiesSuggestor";
+import { EntitySuggestionItem } from "src/suggestion.types";
 import { EntityProvider, EntityProviderUserSettings } from "./EntityProvider";
 import { TextInputSuggest, TextInputSuggestOptions } from "src/ui/suggest";
 import { AppWithPlugins, EntityFilter } from "src/entities.types";
@@ -24,12 +24,12 @@ interface DataviewPage {
 	file: {
 		path: string;
 		name: string;
-		aliases: string[];
+		aliases: Iterable<string>;
 	};
 }
 
 interface DataviewApi {
-	pages(query: string): DataviewPage[];
+	pages(query: string): Iterable<DataviewPage> & { readonly length: number };
 }
 
 interface DataviewPlugin {
@@ -87,21 +87,25 @@ export class DataviewEntityProvider extends EntityProvider<DataviewProviderUserS
 			return [];
 		}
 
-		const filteredQueryResults = applyFiltersToQueryResults(dvQueryReults, this.settings.entityFilters, this.plugin.app);
+		const filteredQueryResults = applyFiltersToQueryResults(Array.from(dvQueryReults), this.settings.entityFilters, this.plugin.app);
 
-		const entitiesWithAliases = (filteredQueryResults as { file: { path: string; name: string; aliases: string[] } }[])?.flatMap(
+		const entitiesWithAliases = filteredQueryResults.flatMap(
 			(project) => {
+				if (typeof project?.file?.path !== "string") return [];
+				const file = this.plugin.app.vault.getAbstractFileByPath(project.file.path);
+				if (!(file instanceof TFile)) return [];
 				const baseEntity: EntitySuggestionItem = {
 					suggestionText: project.file.name,
+					target: { kind: "file", file },
 					icon: this.settings.icon ?? "box",
 				};
 
 				const projectEntities: EntitySuggestionItem[] = [
 					baseEntity,
-					...project.file.aliases.map((alias: string) => ({
+					...Array.from(project.file.aliases, (alias: string): EntitySuggestionItem => ({
 						suggestionText: alias,
 						icon: this.settings.icon ?? "box",
-						replacementText: `${project.file.name}|${alias}`,
+						target: { kind: "file", file, alias },
 					})),
 				];
 

@@ -230,7 +230,7 @@ describe("FolderEntityProvider", () => {
 				]);
 			});
 
-			test("alias suggestions have correct replacementText", () => {
+			test("alias suggestions retain the file and separate alias", () => {
 				const files = [createMockFile("People/Alice.md", "Alice")];
 				const metadata = {
 					"People/Alice.md": {
@@ -244,10 +244,10 @@ describe("FolderEntityProvider", () => {
 				});
 				const results = provider.getEntityList("test");
 				const aliasSuggestion = results.find(r => r.suggestionText === "Ali");
-				expect(aliasSuggestion?.replacementText).toBe("Alice|Ali");
+				expect(aliasSuggestion?.target).toEqual({ kind: "file", file: files[0], alias: "Ali" });
 			});
 
-			test("base suggestions have no replacementText", () => {
+			test("base suggestions retain the file with native default alias", () => {
 				const files = [createMockFile("People/Alice.md", "Alice")];
 				const metadata = {
 					"People/Alice.md": {
@@ -261,7 +261,7 @@ describe("FolderEntityProvider", () => {
 				});
 				const results = provider.getEntityList("test");
 				const baseSuggestion = results.find(r => r.suggestionText === "Alice");
-				expect(baseSuggestion?.replacementText).toBeUndefined();
+				expect(baseSuggestion?.target).toEqual({ kind: "file", file: files[0] });
 			});
 		});
 

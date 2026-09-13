@@ -3,7 +3,7 @@ import {
 	Setting,
 	TFile,
 } from "obsidian";
-import { EntitySuggestionItem } from "src/EntitiesSuggestor";
+import { EntitySuggestionItem } from "src/suggestion.types";
 import { EntityProvider, EntityProviderUserSettings, ProviderSettingsInput } from "./EntityProvider";
 import { cloneSettings } from "src/settingsData";
 import { entityFromTemplateSettings } from "src/entities.types";
@@ -59,7 +59,9 @@ export class NewEntityProvider extends EntityProvider<NewProviderUserSettings> {
 	// Creation suggestions always stay uncached. Resolve optional APIs here,
 	// never by constructor timers. See provider-runtime.md.
 	getEntityList(query: string): EntitySuggestionItem[] {
-		// Implement logic to return a list of entity suggestions based on the query
+		// Return labels paired with required targets, for example:
+		// { suggestionText: file.basename, target: { kind: "file", file } }
+		// Keep the live TFile; never resolve or format links from the label.
 		return [];
 	}
 

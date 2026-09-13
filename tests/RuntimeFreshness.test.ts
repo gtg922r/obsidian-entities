@@ -1,6 +1,6 @@
 import { App, Editor, EditorSuggestContext, Events, Plugin, PluginManifest, TFile } from "obsidian";
 import Entities from "../src/main";
-import { EntitySuggestionItem } from "../src/EntitiesSuggestor";
+import { EntitySuggestionItem, SuggestionAction } from "../src/suggestion.types";
 import { ConfiguredProviderSettings, EntityProvider, EntityProviderUserSettings, ProviderSettingsInput, RefreshBehavior } from "../src/Providers/EntityProvider";
 import { FolderEntityProvider } from "../src/Providers/FolderEntityProvider";
 import { DataviewEntityProvider } from "../src/Providers/DataviewEntityProvider";
@@ -69,8 +69,8 @@ class TestProvider extends EntityProvider<TestSettings> {
 	get triggers() { return this.settings.triggers; }
 	get isQueryDependent() { return this.settings.queryDependent; }
 	getRefreshBehavior() { return this.settings.mode; }
-	getEntityList() { return [{ suggestionText: this.settings.label }]; }
-	getTemplateCreationSuggestions(query: string) { return this.settings.creation ? [{ suggestionText: `${this.settings.creation}: ${query}`, match: { score: -10, matches: [] } }] : []; }
+	getEntityList(): EntitySuggestionItem[] { return [{ suggestionText: this.settings.label, target: { kind: "unresolved-link" as const, linkpath: this.settings.label } }]; }
+	getTemplateCreationSuggestions(query: string): EntitySuggestionItem[] { return this.settings.creation ? [{ suggestionText: `${this.settings.creation}: ${query}`, target: { kind: "unresolved-link" as const, linkpath: `${this.settings.creation}: ${query}` }, match: { score: -10, matches: [] } }] : []; }
 }
 const config = (id: string, overrides: Partial<TestSettings> = {}) => ({ ...TestProvider.getDefaultSettings(), ...overrides, providerInstanceId: id });
 const file = (path: string) => Object.assign(new TFile(), { path, basename: path.split("/").pop()!.replace(/\.md$/, "") });
@@ -82,11 +82,13 @@ const plugins: Entities[] = [];
 
 async function runtime(settings: ConfiguredProviderSettings[]) {
 	const folders = new Map<string, TFile[]>();
+	const files = new Map<string, TFile>();
 	const metadata = new Map<string, { frontmatter: Record<string, unknown> }>();
 	const integrations: Record<string, unknown> = {};
 	const layoutCallbacks: (() => void)[] = [];
 	const vault = Object.assign(new Events(), {
 		configDir: ".obsidian",
+		getAbstractFileByPath: (path: string) => files.get(path) ?? Array.from(folders.values()).flat().find(file => file.path === path) ?? null,
 		getFolderByPath: (path: string) => folders.has(path) ? { children: folders.get(path) } : null,
 		adapter: {
 			stat: async () => ({ type: "file" }),
@@ -105,7 +107,7 @@ async function runtime(settings: ConfiguredProviderSettings[]) {
 	jest.spyOn(plugin, "registerEntityProviders").mockImplementation(() => { register(); plugin.providerRegistry.registerProviderType(TestProvider); });
 	plugins.push(plugin);
 	await plugin.onload();
-	return { plugin, suggestor: plugin.suggestor, registry: plugin.providerRegistry, folders, metadata, integrations, layoutCallbacks, vault, metadataCache };
+	return { plugin, suggestor: plugin.suggestor, registry: plugin.providerRegistry, folders, files, metadata, integrations, layoutCallbacks, vault, metadataCache };
 }
 
 beforeEach(() => {
@@ -126,13 +128,14 @@ test("two Folder and two Dataview configured instances all contribute distinct l
 		{ ...DataviewEntityProvider.getDefaultSettings(), providerInstanceId: "dv-b", query: "B" },
 	]);
 	r.folders.set("A", [file("A/Folder A.md")]); r.folders.set("B", [file("B/Folder B.md")]);
+	r.files.set("A.md", file("A.md")); r.files.set("B.md", file("B.md"));
 	r.integrations.dataview = { api: { pages: (query: string) => [{ file: { name: `Dataview ${query}`, path: `${query}.md`, aliases: [] } }] } };
 	expect(labels(r.suggestor.getSuggestions(context()))).toEqual(["Folder A", "Folder B", "Dataview A", "Dataview B"]);
 });
 
 test("one provider retains a separate current entry for each trigger", async () => {
 	const r = await runtime([config("multi", { triggers: [TriggerCharacter.At, TriggerCharacter.Colon], queryDependent: false, mode: RefreshBehavior.Never })]);
-	const retrieve = jest.spyOn(r.registry.getProviders()[0], "getEntityList").mockImplementation((query, trigger) => [{ suggestionText: `Item ${trigger}` }]);
+	const retrieve = jest.spyOn(r.registry.getProviders()[0], "getEntityList").mockImplementation((query, trigger) => [{ suggestionText: `Item ${trigger}`, target: { kind: "unresolved-link" as const, linkpath: `Item ${trigger}` } }]);
 	expect(labels(r.suggestor.getSuggestions(context("@")))).toEqual(["Item @"]);
 	expect(labels(r.suggestor.getSuggestions(context(":")))).toEqual(["Item :"]);
 	r.suggestor.getSuggestions(context("@"));
@@ -146,8 +149,8 @@ test("Character narrow-to-broad query within 200ms recovers omitted symbols", as
 	const broad = r.suggestor.getSuggestions(context(":ca"));
 	expect(narrow.length).toBeGreaterThan(0);
 	expect(broad.length).toBeGreaterThan(narrow.length);
-	expect(narrow.some(item => item.replacementText === "🌵")).toBe(false);
-	expect(broad.some(item => item.replacementText === "🌵")).toBe(true);
+	expect(narrow.some(item => item.target.kind === "text" && item.target.text === "🌵")).toBe(false);
+	expect(broad.some(item => item.target.kind === "text" && item.target.text === "🌵")).toBe(true);
 });
 
 test.each([RefreshBehavior.Default, RefreshBehavior.ShouldRefresh, RefreshBehavior.Never])("refresh policy %s observes query, time and explicit invalidation with bounded entries", async mode => {
@@ -173,14 +176,14 @@ test.each([RefreshBehavior.Default, RefreshBehavior.ShouldRefresh, RefreshBehavi
 
 test("query-independent raw cache is fuzzy-filtered afresh and result mutations do not poison later scores", async () => {
 	const r = await runtime([config("source", { queryDependent: false, mode: RefreshBehavior.Never })]);
-	const raw = [{ suggestionText: "Alpha" }, { suggestionText: "Beta" }];
+	const raw = [{ suggestionText: "Alpha", target: { kind: "unresolved-link" as const, linkpath: "Alpha" } }, { suggestionText: "Beta", target: { kind: "unresolved-link" as const, linkpath: "Beta" } }];
 	const retrieve = jest.spyOn(r.registry.getProviders()[0], "getEntityList").mockReturnValue(raw);
 	const first = r.suggestor.getSuggestions(context("@Al"));
 	first[0].suggestionText = "mutated";
 	first[0].match!.score = 999;
 	expect(labels(r.suggestor.getSuggestions(context("@Be")))).toEqual(["Beta"]);
-	expect(r.suggestor.getSuggestions(context("@Al"))[0]).toMatchObject({ suggestionText: "Alpha", match: { score: 10 } });
-	expect(raw).toEqual([{ suggestionText: "Alpha" }, { suggestionText: "Beta" }]);
+	expect(r.suggestor.getSuggestions(context("@Al"))[0]).toMatchObject({ suggestionText: "Alpha", target: { kind: "unresolved-link" as const, linkpath: "Alpha" }, match: { score: 10 } });
+	expect(raw).toEqual([{ suggestionText: "Alpha", target: { kind: "unresolved-link" as const, linkpath: "Alpha" } }, { suggestionText: "Beta", target: { kind: "unresolved-link" as const, linkpath: "Beta" } }]);
 	expect(retrieve).toHaveBeenCalledTimes(1);
 });
 
@@ -234,7 +237,7 @@ test("Never failed refresh discards previous success and retries; creation remai
 test("malformed items are individually skipped and never lock a Never provider into cached emptiness", async () => {
 	const r = await runtime([config("source", { mode: RefreshBehavior.Never })]);
 	const retrieve = jest.spyOn(r.registry.getProviders()[0], "getEntityList");
-	retrieve.mockReturnValueOnce([null, {}, { suggestionText: 42 }, { suggestionText: "Bad icon", icon: {} }, { get suggestionText() { return fail(); } }, { suggestionText: "Good" }] as unknown as EntitySuggestionItem[]);
+	retrieve.mockReturnValueOnce([null, {}, { suggestionText: 42, target: { kind: "unresolved-link" as const, linkpath: 42 } }, { suggestionText: "Bad icon", target: { kind: "unresolved-link" as const, linkpath: "Bad icon" }, icon: {} }, { get suggestionText() { return fail(); } }, { suggestionText: "Good", target: { kind: "unresolved-link" as const, linkpath: "Good" } }] as unknown as EntitySuggestionItem[]);
 	expect(labels(r.suggestor.getSuggestions(context()))).toEqual(["Good"]);
 	retrieve.mockReturnValueOnce([null] as unknown as EntitySuggestionItem[]);
 	expect(r.suggestor.getSuggestions(context())).toEqual([]);
@@ -246,7 +249,7 @@ test.each(["delete", "disable", "edit", "reorder", "trigger", "reload"])("config
 	const r = await runtime([config("a"), config("b", { label: "Second" })]);
 	const ctx = context();
 	const action = jest.fn(() => "action result");
-	jest.spyOn(r.registry.getProviders()[0], "getEntityList").mockReturnValue([{ suggestionText: "Action", action }, { suggestionText: "Link" }]);
+	jest.spyOn(r.registry.getProviders()[0], "getEntityList").mockReturnValue([{ suggestionText: "Action", target: { kind: "action" as const, id: "test-action", callback: action }, }, { suggestionText: "Link", target: { kind: "unresolved-link" as const, linkpath: "Link" } }]);
 	const old = r.suggestor.getSuggestions(ctx);
 	r.suggestor.context = ctx;
 	await r.suggestor.close();
@@ -296,13 +299,13 @@ test.each([
 		return "Action return";
 	});
 	const retrieve = jest.spyOn(r.registry.getProviders()[0], "getEntityList").mockReturnValue([
-		{ suggestionText: "Displayed", ...(kind === "action" ? { action } : {}) },
+		{ suggestionText: "Displayed", target: { kind: "unresolved-link" as const, linkpath: "Displayed" }, ...(kind === "action" ? { target: { kind: "action" as const, id: "displayed", callback: action } } : {}) },
 	]);
 	const ctx = context();
 	const [displayed] = r.suggestor.getSuggestions(ctx);
 	r.suggestor.context = ctx;
 	const close = jest.spyOn(r.suggestor, "close");
-	retrieve.mockReturnValue([{ suggestionText: "Updated" }]);
+	retrieve.mockReturnValue([{ suggestionText: "Updated", target: { kind: "unresolved-link" as const, linkpath: "Updated" } }]);
 	r[source].trigger(event);
 	expect(close).not.toHaveBeenCalled();
 	r.suggestor.selectSuggestion(displayed, {} as MouseEvent);
@@ -320,7 +323,7 @@ test.each(["replace", "unload", "close", "data"])("awaited action return after %
 	const r = await runtime([config("source")]);
 	let finish!: (value: string) => void;
 	const action = jest.fn(() => new Promise<string>(resolve => { finish = resolve; }));
-	jest.spyOn(r.registry.getProviders()[0], "getEntityList").mockReturnValue([{ suggestionText: "Act", action }]);
+	jest.spyOn(r.registry.getProviders()[0], "getEntityList").mockReturnValue([{ suggestionText: "Act", target: { kind: "action" as const, id: "test-action", callback: action }, }]);
 	const ctx = context();
 	const [item] = r.suggestor.getSuggestions(ctx);
 	r.suggestor.selectSuggestion(item, {} as MouseEvent);
@@ -360,6 +363,7 @@ test.each(["dataview:metadata-change", "dataview:index-ready", "dataview:api-rea
 	const r = await runtime([{ ...DataviewEntityProvider.getDefaultSettings(), providerInstanceId: "dv" }]);
 	expect(r.suggestor.getSuggestions(context())).toEqual([]);
 	const pages = (name: string) => ({ pages: jest.fn(() => [{ file: { name, path: `${name}.md`, aliases: [] } }]) });
+	for (const name of ["Ready", "Replacement", "Fallback"]) r.files.set(`${name}.md`, file(`${name}.md`));
 	const first = pages("Ready");
 	r.integrations.dataview = { api: first }; r.metadataCache.trigger(event);
 	expect(labels(r.suggestor.getSuggestions(context()))).toEqual(["Ready"]);
@@ -414,7 +418,7 @@ test("all lifecycle events invalidate data; repeated provider reloads add no lis
 	expect((r.registry as unknown as { changeListeners: Set<unknown> }).changeListeners.size).toBe(0);
 });
 
-test("ordinary results retain ranking and same-label deduplication ahead of creation results", async () => {
+test("ordinary results retain ranking and identical unresolved-target deduplication ahead of creation results", async () => {
 	const r = await runtime([config("one", { label: "Shared", creation: "Create" }), config("two", { label: "Shared" }), config("three", { label: "Other" })]);
 	const result = r.suggestor.getSuggestions(context());
 	expect(labels(result)).toEqual(["Shared", "Other", "Create: "]);
@@ -423,8 +427,8 @@ test("ordinary results retain ranking and same-label deduplication ahead of crea
 
 test.each(["returned text", "", undefined, null])("action return %p retains existing insertion behavior", async returned => {
 	const r = await runtime([config("source")]);
-	const action = (() => returned) as EntitySuggestionItem["action"];
-	jest.spyOn(r.registry.getProviders()[0], "getEntityList").mockReturnValue([{ suggestionText: "Act", action }]);
+	const action = (() => returned) as SuggestionAction;
+	jest.spyOn(r.registry.getProviders()[0], "getEntityList").mockReturnValue([{ suggestionText: "Act", target: { kind: "action" as const, id: "test-action", callback: action }, }]);
 	const ctx = context();
 	r.suggestor.selectSuggestion(r.suggestor.getSuggestions(ctx)[0], {} as MouseEvent);
 	await Promise.resolve();
