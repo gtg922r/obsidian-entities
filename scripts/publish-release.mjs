@@ -10,7 +10,7 @@ cli(() => {
 	const flags = args.filter((arg) => arg.startsWith("-"));
 	// Keep the asset path deterministic so a similarly named directory cannot select another candidate.
 	if (tags.length !== 1 || new Set(flags).size !== flags.length || flags.some((arg) => !["--prerelease", "--dry-run"].includes(arg))) throw new Error("Usage: publish-release.mjs <version> --prerelease [--dry-run]");
-	if (!flags.includes("--prerelease")) throw new Error("Stable publication/promotion is disabled. Explicit --prerelease is required; promotion must preserve tested assets and awaits separate review.");
+	if (!flags.includes("--prerelease")) throw new Error("Stable publication/promotion is disabled here. Explicit --prerelease is required; use release:promote for an owner-accepted existing candidate.");
 	const tag = version(tags[0]);
 	validateRepository();
 	validateToolchain();

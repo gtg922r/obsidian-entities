@@ -121,7 +121,8 @@ dated advisory snapshot, not a runtime security guarantee.
 Release commands prepare reviewable metadata locally. Candidates use exact numeric
 semver tags such as `0.4.5`, are packaged from a committed revision with a hash
 receipt, and are explicitly published to BRAT as GitHub prereleases. Stable
-promotion remains blocked until the tested tag and bytes can be preserved.
+promotion is an explicit command that preserves the tested tag, release and assets,
+after owner acceptance and a reviewed default-branch metadata transition.
 
 See [the release guide](docs/releasing.md) for preparation, observational dry runs,
 packaging, deliberate publication and recovery after failures.
