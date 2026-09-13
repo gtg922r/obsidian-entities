@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { execFileSync, spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { chmodSync, copyFileSync, existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { chmodSync, copyFileSync, existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, realpathSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -17,7 +17,7 @@ const hash = (bytes) => createHash("sha256").update(bytes).digest("hex");
 const parse = (file) => JSON.parse(readFileSync(file, "utf8"));
 const writeJSON = (file, value) => writeFileSync(file, `${JSON.stringify(value, null, "\t")}\n`);
 
-// All mutating release commands are fake executables, including npm version and every tag/remote action.
+// Fault-injection tests fake external commands. The real npm lifecycle fixtures below have no remote.
 const fakeExecutable = `#!${process.execPath}
 const fs = require('node:fs');
 const path = require('node:path');
@@ -55,7 +55,7 @@ if (command === 'npm') {
    fs.writeFileSync(file, JSON.stringify(value));
   }
   if (process.env.VERSION_FAILURE) { console.error('Injected lifecycle failure after package update'); process.exit(19); }
-  const result = cp.spawnSync(process.execPath,['version-bump.mjs'], { stdio:'inherit',env:{...process.env,npm_package_version:args[1],npm_config_git_tag_version:'false'}});
+  const result = cp.spawnSync(process.execPath,['version-bump.mjs'], { stdio:'inherit',env:{...process.env,npm_package_version:args[1],npm_config_git_tag_version:''}});
   process.exit(result.status ?? 1);
  }
  throw Error('Unexpected npm command: ' + key);
@@ -103,7 +103,7 @@ function fixture(t, notes = releasedNotes) {
 	}
 	writeJSON(join(repo, "package.json"), { name: "release-fixture", version: "0.4.4", engines: { node: "24.21.0", npm: "11.19.0" } });
 	writeJSON(join(repo, "package-lock.json"), { name: "release-fixture", version: "0.4.4", lockfileVersion: 3, packages: { "": { version: "0.4.4" } } });
-	writeFileSync(join(repo, "manifest.json"), '{ "id": "entities", "version": "0.4.4", "minAppVersion": "1.7.2" }');
+	writeFileSync(join(repo, "manifest.json"), '{ "id": "entities", "name": "Entities", "isDesktopOnly": false, "version": "0.4.4", "minAppVersion": "1.7.2" }');
 	writeJSON(join(repo, "versions.json"), { "0.4.3": "1.5.7", "0.4.4": "1.7.2" });
 	writeFileSync(join(repo, "CHANGELOG.md"), notes);
 	writeFileSync(join(repo, "styles.css"), "/* committed styles */\n");
@@ -514,4 +514,142 @@ test("npm preversion preflights requested notes before package or lock mutation"
 	const empty = snapshot(f.repo);
 	failed(f.run("version-bump.mjs", ["--preflight"], env), /empty/);
 	assert.deepEqual(snapshot(f.repo), empty);
+});
+
+/** Exercise npm's actual env encoding and preversion/version ordering without dependencies or a remote. */
+function realNpmFixture(t, notes = initialNotes, interrupt = false) {
+	const f = fixture(t, notes);
+	f.git("remote", "remove", "origin");
+	const pkg = parse(join(f.repo, "package.json"));
+	pkg.scripts = {
+		preversion: "node record-env.cjs && node version-bump.mjs --preflight",
+		version: interrupt ? "node interrupt-version.cjs" : "node version-bump.mjs",
+	};
+	writeJSON(join(f.repo, "package.json"), pkg);
+	writeFileSync(join(f.repo, "record-env.cjs"), "require('node:fs').writeFileSync(process.env.NPM_ENV_CAPTURE, JSON.stringify({ disabled: process.env.npm_config_git_tag_version }));\n");
+	if (interrupt) writeFileSync(join(f.repo, "interrupt-version.cjs"), "process.stderr.write('Fixture interruption after npm updated package and lock.\\n'); process.exit(23);\n");
+	f.git("add", "."); f.git("commit", "-m", "test: real npm lifecycle");
+	const npmCli = realpathSync(execFileSync("which", ["npm"], { encoding: "utf8" }).trim());
+	const env = Object.fromEntries(Object.entries(process.env).filter(([key]) => !/^npm_/i.test(key)));
+	Object.assign(env, {
+		NPM_ENV_CAPTURE: join(f.temp, "npm-env.json"),
+		npm_config_cache: join(f.temp, "npm-cache"),
+		npm_config_userconfig: join(f.temp, "user.npmrc"),
+		npm_config_globalconfig: join(f.temp, "global.npmrc"),
+		npm_config_offline: "true",
+		GIT_OPTIONAL_LOCKS: "0",
+	});
+	writeFileSync(env.npm_config_userconfig, "");
+	writeFileSync(env.npm_config_globalconfig, "");
+	const npm = (args) => spawnSync(process.execPath, [npmCli, ...args], { cwd: f.repo, env, encoding: "utf8" });
+	assert.equal(process.versions.node, "24.21.0");
+	assert.equal(npm(["--version"]).stdout.trim(), "11.19.0");
+	assert.equal(f.git("remote"), "");
+	return { ...f, npm, realEnv: env };
+}
+
+function assertAligned(f, version) {
+	assert.equal(parse(join(f.repo, "package.json")).version, version);
+	const lock = parse(join(f.repo, "package-lock.json"));
+	assert.equal(lock.version, version);
+	assert.equal(lock.packages[""].version, version);
+	assert.equal(parse(join(f.repo, "manifest.json")).version, version);
+	assert.equal(parse(join(f.repo, "versions.json"))[version], "1.7.2");
+	assert.match(readFileSync(join(f.repo, "CHANGELOG.md"), "utf8"), new RegExp(`^## \\[${version.replaceAll(".", "\\.")}\\]`, "m"));
+}
+
+test("real pinned npm version aligns all metadata with empty-string disabled flag and no Git mutation", (t) => {
+	const f = realNpmFixture(t);
+	const gitBefore = snapshot(join(f.repo, ".git"));
+	const result = f.npm(["version", "0.4.5", "--no-git-tag-version", "--ignore-scripts=false"]);
+	assert.equal(result.status, 0, result.stderr);
+	assert.equal(parse(f.realEnv.NPM_ENV_CAPTURE).disabled, "");
+	assertAligned(f, "0.4.5");
+	assert.deepEqual(snapshot(join(f.repo, ".git")), gitBefore);
+	assert.equal(f.git("diff", "--cached", "--name-only"), "");
+	assert.equal(f.git("tag", "--list"), "");
+	assert.deepEqual(f.commands(), []);
+});
+
+test("real pinned npm preflight rejects empty notes before touching metadata or Git", (t) => {
+	const f = realNpmFixture(t, "# Changelog\n\n## [Unreleased]\n\n### Fixed\n");
+	const before = snapshot(f.repo);
+	failed(f.npm(["version", "0.4.5", "--no-git-tag-version", "--ignore-scripts=false"]), /Unreleased notes are empty/);
+	assert.deepEqual(snapshot(f.repo), before);
+});
+
+test("real pinned npm interrupted version retains partial edits and supports deliberate hook recovery", (t) => {
+	const f = realNpmFixture(t, initialNotes, true);
+	writeFileSync(join(f.repo, "unrelated.txt"), "Preserve unrelated work.\n");
+	const gitBefore = snapshot(join(f.repo, ".git"));
+	failed(f.npm(["version", "0.4.5", "--no-git-tag-version", "--ignore-scripts=false"]), /Fixture interruption/);
+	assert.equal(parse(join(f.repo, "package.json")).version, "0.4.5");
+	assert.equal(parse(join(f.repo, "package-lock.json")).packages[""].version, "0.4.5");
+	assert.equal(parse(join(f.repo, "manifest.json")).version, "0.4.4");
+	const recover = () => spawnSync(process.execPath, [join(f.repo, "version-bump.mjs")], {
+		cwd: f.repo, encoding: "utf8",
+		env: { ...f.realEnv, npm_package_version: "0.4.5", npm_config_git_tag_version: "" },
+	});
+	const result = recover();
+	assert.equal(result.status, 0, result.stderr);
+	assertAligned(f, "0.4.5");
+	assert.equal(readFileSync(join(f.repo, "unrelated.txt"), "utf8"), "Preserve unrelated work.\n");
+	const after = snapshot(f.repo);
+	assert.equal(recover().status, 0);
+	assert.deepEqual(snapshot(f.repo), after);
+	assert.deepEqual(snapshot(join(f.repo, ".git")), gitBefore);
+	assert.equal(f.git("tag", "--list"), "");
+});
+
+for (const enabled of ["true", "1", "FALSE"]) {
+	test(`lifecycle rejects enabled/unsupported git-tag-version encoding ${enabled}`, (t) => {
+		const f = fixture(t, initialNotes);
+		const before = snapshot(f.repo);
+		failed(f.run("version-bump.mjs", ["--preflight"], { npm_config_git_tag_version: enabled, npm_new_version: "0.4.5" }), /implicit release commits\/tags are disabled/);
+		assert.deepEqual(snapshot(f.repo), before);
+	});
+}
+
+for (const [field, value] of [["id", "another-plugin"], ["id", undefined], ["name", "  "], ["name", 42], ["name", undefined], ["isDesktopOnly", "false"], ["isDesktopOnly", undefined]]) {
+	test(`invalid manifest ${field}=${value} fails before preparation, lifecycle, packaging and publication writes`, (t) => {
+		const f = fixture(t);
+		const directory = f.candidate();
+		const manifestPath = join(f.repo, "manifest.json");
+		const manifest = parse(manifestPath); manifest[field] = value; writeJSON(manifestPath, manifest); f.commit();
+		// Forge an internally hash-consistent package for the now-invalid committed manifest.
+		copyFileSync(manifestPath, join(directory, "manifest.json"));
+		const receiptPath = join(directory, "receipt.json");
+		const receipt = parse(receiptPath);
+		receipt.sourceCommit = f.git("rev-parse", "HEAD");
+		receipt.metadata["manifest.json"] = hash(readFileSync(manifestPath));
+		receipt.artifacts["manifest.json"] = { sha256: hash(readFileSync(manifestPath)), size: readFileSync(manifestPath).length };
+		writeJSON(receiptPath, receipt);
+		writeFileSync(f.ledger, "");
+		const before = snapshot(f.repo);
+		const error = /manifest\.(id|name|isDesktopOnly)/;
+		failed(f.run("scripts/release.mjs", ["patch"]), error);
+		failed(f.run("version-bump.mjs", [], { npm_config_git_tag_version: "", npm_package_version: "0.4.4" }), error);
+		failed(f.run("scripts/prepare-release-assets.mjs", ["0.4.4"]), error);
+		failed(f.run("scripts/publish-release.mjs", ["0.4.4", "--prerelease"], publicationEnv(f)), error);
+		assert.deepEqual(snapshot(f.repo), before);
+		assert.ok(!f.commands().some(({ command, args }) => command === "gh" || ["ci", "run", "archive", "fetch"].includes(args[0])));
+	});
+}
+
+test("atomic writes preserve preexisting recovery sentinel on exclusive-create failure", (t) => {
+	const f = fixture(t);
+	writeFileSync(join(f.repo, "atomic-sentinel.mjs"), `
+import assert from "node:assert/strict";
+import { readFileSync, writeFileSync } from "node:fs";
+import { writeAtomic } from "./scripts/release-utils.mjs";
+const before = readFileSync("manifest.json");
+const recovery = "manifest.json.release-" + process.pid + ".tmp";
+writeFileSync(recovery, "preserve recovery sentinel");
+assert.throws(() => writeAtomic("manifest.json", "replacement"), { code: "EEXIST" });
+assert.equal(readFileSync(recovery, "utf8"), "preserve recovery sentinel");
+assert.deepEqual(readFileSync("manifest.json"), before);
+`);
+	const result = f.run("atomic-sentinel.mjs");
+	assert.equal(result.status, 0, result.stderr);
+	assert.equal(readdirSync(f.repo).filter((file) => /^manifest\.json\.release-\d+\.tmp$/.test(file)).length, 1);
 });

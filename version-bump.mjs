@@ -1,10 +1,12 @@
-import { cli, json, metadata, planChangelog, readBytes, validateToolchain, version, writeAtomic } from "./scripts/release-utils.mjs";
+import { cli, json, metadata, planChangelog, readBytes, validateManifest, validateToolchain, version, writeAtomic } from "./scripts/release-utils.mjs";
 
 cli(() => {
-	if (process.env.npm_config_git_tag_version !== "false") throw new Error("Use npm version <version> --no-git-tag-version; implicit release commits/tags are disabled.");
+	// npm 11 exports an explicitly disabled boolean as an empty string.
+	if (!["", "false"].includes(process.env.npm_config_git_tag_version)) throw new Error("Use npm version <version> --no-git-tag-version; implicit release commits/tags are disabled.");
 	validateToolchain();
 	const pkg = json(readBytes("package.json"));
 	const manifest = json(readBytes("manifest.json"));
+	validateManifest(manifest);
 	if (process.argv[2] === "--preflight") {
 		metadata(pkg.version);
 		planChangelog(readBytes("CHANGELOG.md").toString(), version(process.env.npm_new_version));

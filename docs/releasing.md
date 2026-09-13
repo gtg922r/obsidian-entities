@@ -20,15 +20,17 @@ npm run release:patch
 Use `release:minor` or `release:major` for the corresponding bump. Preparation
 requires a clean tree/index (including untracked files), aligned package, both
 lockfile versions, manifest and minimum-version mapping, and meaningful Unreleased
-notes. It fetches origin and requires exact upstream equality; reconcile divergence
-explicitly. It runs `npm ci` and `npm run check`, stopping on any failure, then
+notes. The manifest must identify `entities`, have a nonempty name and a boolean
+`isDesktopOnly`; malformed fields are rejected without repair. It fetches origin
+and requires exact upstream equality; reconcile divergence explicitly. It runs `npm ci` and `npm run check`, stopping on any failure, then
 `npm version <next-version> --no-git-tag-version`. It never stages, commits, tags,
 pushes, dispatches workflows or publishes. Review the five changed files:
 `package.json`, `package-lock.json`, `manifest.json`, `versions.json`, `CHANGELOG.md`.
 Commit the candidate metadata through review, keeping it off master during beta.
 
-The version lifecycle rejects implicit npm tagging. Direct lifecycle use must also
-include `--no-git-tag-version`. npm updates package/lock before the version hook;
+The version lifecycle rejects implicit npm tagging. It recognizes npm 11's
+empty-string encoding of an explicitly disabled `git-tag-version` flag. Direct
+lifecycle use must also include `--no-git-tag-version`. npm updates package/lock before the version hook;
 if a hook or write fails, inspect all five files. The script reports failure and
 retains partial edits for deliberate repair. It never resets unrelated work. Once
 package/lock agree on the intended version, rerunning the hook through

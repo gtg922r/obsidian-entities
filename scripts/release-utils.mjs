@@ -1,6 +1,6 @@
 import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { lstatSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
+import { closeSync, lstatSync, openSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 
 export const REPOSITORY = "gtg922r/obsidian-entities";
@@ -146,6 +146,15 @@ export function planChangelog(text, tag, date = new Date().toISOString().slice(0
 	return result;
 }
 
+/** Require the stable plugin identity and fields Obsidian needs to install this package. */
+export function validateManifest(manifest) {
+	if (manifest.id !== "entities") throw new Error("manifest.id must be entities.");
+	if (typeof manifest.name !== "string" || !manifest.name.trim()) throw new Error("manifest.name must be a nonempty string.");
+	if (typeof manifest.isDesktopOnly !== "boolean") throw new Error("manifest.isDesktopOnly must be a boolean.");
+	version(manifest.version);
+	version(manifest.minAppVersion);
+}
+
 /** Validate all version-bearing metadata, including both lockfile versions and the support mapping. */
 export function metadata(tag, read = readBytes) {
 	version(tag);
@@ -154,6 +163,7 @@ export function metadata(tag, read = readBytes) {
 	const lock = json(bytes["package-lock.json"]);
 	const manifest = json(bytes["manifest.json"]);
 	const versions = json(bytes["versions.json"]);
+	validateManifest(manifest);
 	if ([pkg.version, lock.version, lock.packages?.[""]?.version, manifest.version].some((v) => v !== tag)) throw new Error("Tag/package/lock/manifest versions disagree.");
 	version(manifest.minAppVersion);
 	if (versions[tag] !== manifest.minAppVersion) throw new Error("versions.json minimum version mapping disagrees with manifest.minAppVersion.");
@@ -163,10 +173,15 @@ export function metadata(tag, read = readBytes) {
 /** Atomic per-file writes, never rollback unrelated edits after a partial failure. */
 export function writeAtomic(path, bytes) {
 	const temporary = `${path}.release-${process.pid}.tmp`;
+	// Opening outside the cleanup block leaves a preexisting recovery file untouched on EEXIST.
+	let descriptor = openSync(temporary, "wx");
 	try {
-		writeFileSync(temporary, bytes, { flag: "wx" });
+		writeFileSync(descriptor, bytes);
+		closeSync(descriptor);
+		descriptor = undefined;
 		renameSync(temporary, path);
 	} finally {
+		if (descriptor !== undefined) closeSync(descriptor);
 		rmSync(temporary, { force: true });
 	}
 }
