@@ -10,12 +10,12 @@
 	"scripts": {
 		"dev": "node esbuild.config.mjs",
 		"build": "tsc -noEmit -skipLibCheck && node esbuild.config.mjs production",
-		"version": "node version-bump.mjs && node scripts/update-changelog.mjs && git add manifest.json versions.json package.json package-lock.json CHANGELOG.md",
+		"version": "node version-bump.mjs",
 		"test": "jest",
 		"fixture:recovery": "node scripts/create-recovery-vault.mjs",
 		"lint": "eslint src tests scripts \"*.config.{js,mjs}\" version-bump.mjs --max-warnings=0",
 		"lint:fix": "eslint src tests scripts \"*.config.{js,mjs}\" version-bump.mjs --fix",
-		"check": "npm run lint && npm test && npm run build",
+		"check": "npm run lint && npm run release:test && npm test && npm run build",
 		"release:check": "npm run check",
 		"release:assets": "node scripts/prepare-release-assets.mjs",
 		"release:notes": "node scripts/extract-release-notes.mjs",
@@ -23,7 +23,9 @@
 		"release:publish:brat": "node scripts/publish-release.mjs --prerelease",
 		"release:patch": "node scripts/release.mjs patch",
 		"release:minor": "node scripts/release.mjs minor",
-		"release:major": "node scripts/release.mjs major"
+		"release:major": "node scripts/release.mjs major",
+		"preversion": "node version-bump.mjs --preflight",
+		"release:test": "node --test scripts/tests/*.test.mjs"
 	},
 	"keywords": [],
 	"author": "",
