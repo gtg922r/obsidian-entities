@@ -188,3 +188,5 @@ describe("CharacterProvider", () => {
 		});
 	});
 });
+
+jest.mock("../../src/userComponents", () => ({ EntitiesNotice: jest.fn() }));

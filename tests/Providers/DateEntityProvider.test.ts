@@ -1,6 +1,6 @@
 import { getAction } from "../suggestionTestHelpers";
 import moment = require("moment");
-import { Plugin } from "obsidian";
+import { Plugin, TFile } from "obsidian";
 import { DateEntityProvider } from "../../src/Providers/DateEntityProvider";
 import { EntitiesNotice } from "../../src/userComponents";
 
@@ -12,6 +12,7 @@ jest.mock("obsidian", () => ({
 		}
 	},
 	Setting: class {},
+	TFile: class {},
 	moment,
 }));
 
@@ -24,8 +25,22 @@ function createPluginWithPlugins(
 	pluginsById: Record<string, unknown>,
 	fileManager: { generateMarkdownLink?: jest.Mock } = {}
 ): Plugin {
+	const liveFiles = new Map<string, TFile>();
+	const periodic = pluginsById["periodic-notes"] as { getPeriodicNote?: (...args: unknown[]) => TFile; createPeriodicNote?: (...args: unknown[]) => Promise<TFile> } | undefined;
+	for (const method of ["getPeriodicNote", "createPeriodicNote"] as const) {
+		const original = periodic?.[method];
+		if (original && jest.isMockFunction(original)) {
+			const implementation = original.getMockImplementation();
+			original.mockImplementation((...args: unknown[]) => {
+				const add = (file: TFile) => { if (file) liveFiles.set(file.path, file); return file; };
+				const result = implementation?.(...args);
+				return result instanceof Promise ? result.then(add) : add(result);
+			});
+		}
+	}
 	return {
 		app: {
+			vault: { getAbstractFileByPath: (path: string) => liveFiles.get(path) },
 			plugins: {
 				getPlugin: jest.fn((pluginId: string) => pluginsById[pluginId]),
 			},
@@ -83,7 +98,7 @@ describe("DateEntityProvider", () => {
 
 	test("returns an action that links an existing weekly periodic note", async () => {
 		freezeMomentNow("2026-05-18");
-		const weeklyFile = { path: "Periodic/Weeks/2026-W21.md" };
+		const weeklyFile = Object.assign(new TFile(), { path: "Periodic/Weeks/2026-W21.md" });
 		const generateMarkdownLink = jest
 			.fn()
 			.mockReturnValue("[[Periodic/Weeks/2026-W21|this week]]");
@@ -139,7 +154,7 @@ describe("DateEntityProvider", () => {
 
 	test("passes the semantic week date to Periodic Notes on locale week boundaries", async () => {
 		freezeMomentNow("2026-05-17");
-		const weeklyFile = { path: "Periodic/Weeks/2026-W21.md" };
+		const weeklyFile = Object.assign(new TFile(), { path: "Periodic/Weeks/2026-W21.md" });
 		const generateMarkdownLink = jest
 			.fn()
 			.mockReturnValue("[[Periodic/Weeks/2026-W21|this week]]");
@@ -194,7 +209,7 @@ describe("DateEntityProvider", () => {
 
 	test("creates a missing weekly periodic note before inserting the link", async () => {
 		freezeMomentNow("2026-05-18");
-		const weeklyFile = { path: "Periodic/Weeks/2026-W22.md" };
+		const weeklyFile = Object.assign(new TFile(), { path: "Periodic/Weeks/2026-W22.md" });
 		const generateMarkdownLink = jest
 			.fn()
 			.mockReturnValue("[[Periodic/Weeks/2026-W22|next week]]");
@@ -248,7 +263,7 @@ describe("DateEntityProvider", () => {
 
 	test("adds periodic note actions for explicit parsed week suggestions", async () => {
 		freezeMomentNow("2026-05-17");
-		const weeklyFile = { path: "Periodic/Weeks/2026-W21.md" };
+		const weeklyFile = Object.assign(new TFile(), { path: "Periodic/Weeks/2026-W21.md" });
 		const generateMarkdownLink = jest
 			.fn()
 			.mockReturnValue("[[Periodic/Weeks/2026-W21|week 21]]");
@@ -304,7 +319,7 @@ describe("DateEntityProvider", () => {
 
 	test("creates a missing daily periodic note before inserting the link", async () => {
 		freezeMomentNow("2026-05-18");
-		const dailyFile = { path: "Periodic/Days/2026-05-18.md" };
+		const dailyFile = Object.assign(new TFile(), { path: "Periodic/Days/2026-05-18.md" });
 		const generateMarkdownLink = jest
 			.fn()
 			.mockReturnValue("[[Periodic/Days/2026-05-18|today]]");
@@ -369,7 +384,7 @@ describe("DateEntityProvider", () => {
 		);
 	});
 
-	test("returns a wiki-link fallback when periodic note creation does not return a file", async () => {
+	test("returns no replacement when periodic note creation does not return a file", async () => {
 		freezeMomentNow("2026-05-18");
 		const periodicNotes = {
 			calendarSetManager: {
@@ -392,9 +407,7 @@ describe("DateEntityProvider", () => {
 			.find((item) => item.suggestionText === "this week");
 
 		expect(getAction(suggestion)).toBeDefined();
-		await expect(getAction(suggestion)?.(suggestion, null)).resolves.toBe(
-			"[[2026-W21]]"
-		);
+		await expect(getAction(suggestion)?.(suggestion, null)).resolves.toBeUndefined();
 	});
 
 	test("does not add an action when periodic note creation setting is disabled", () => {
@@ -453,7 +466,7 @@ describe("DateEntityProvider", () => {
 		expect(periodicNotes.createPeriodicNote).not.toHaveBeenCalled();
 	});
 
-	test("returns a wiki-link fallback when periodic note creation throws", async () => {
+	test("returns no replacement when periodic note creation throws", async () => {
 		freezeMomentNow("2026-05-18");
 		const error = new Error("creation failed");
 		const consoleErrorSpy = jest
@@ -482,16 +495,14 @@ describe("DateEntityProvider", () => {
 			.find((item) => item.suggestionText === "this week");
 
 		expect(getAction(suggestion)).toBeDefined();
-		await expect(getAction(suggestion)?.(suggestion, null)).resolves.toBe(
-			"[[2026-W21]]"
-		);
-		expect(consoleErrorSpy).toHaveBeenCalledTimes(1);
+		await expect(getAction(suggestion)?.(suggestion, null)).resolves.toBeUndefined();
+		expect(consoleErrorSpy).not.toHaveBeenCalled();
 		expect(EntitiesNotice).toHaveBeenCalledTimes(1);
 
 		consoleErrorSpy.mockRestore();
 	});
 
-	test("returns a periodic week fallback that matches the displayed semantic week", async () => {
+	test("does not turn a failed semantic week creation into an unresolved link", async () => {
 		freezeMomentNow("2026-05-17");
 		const periodicNotes = {
 			calendarSetManager: {
@@ -515,9 +526,7 @@ describe("DateEntityProvider", () => {
 			.find((item) => item.suggestionText === "this week");
 
 		expect(suggestion?.noteText).toBe("2026-W21");
-		await expect(getAction(suggestion)?.(suggestion, null)).resolves.toBe(
-			"[[2026-W21]]"
-		);
+		await expect(getAction(suggestion)?.(suggestion, null)).resolves.toBeUndefined();
 	});
 
 	test("does not add an action when Periodic Notes lacks active granularity API", () => {

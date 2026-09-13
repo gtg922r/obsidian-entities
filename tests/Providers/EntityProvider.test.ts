@@ -246,7 +246,7 @@ describe("EntityProvider base class", () => {
 			expect(results[1].suggestionText).toBe("New Project: Test");
 		});
 
-		test("template action returns link to new note", async () => {
+		test("failed template action returns no link", async () => {
 			const provider = new TestEntityProvider(mockPlugin, {
 				providerInstanceId: "test-instance",
 				entityCreationTemplates: [
@@ -261,7 +261,7 @@ describe("EntityProvider base class", () => {
 			const action = getAction(results[0])!;
 			// Note: action is async and calls createNewNoteFromTemplate
 			const result = await action(results[0], null);
-			expect(result).toBe("[[Alice]]");
+			expect(result).toBeUndefined();
 		});
 	});
 });
@@ -273,3 +273,5 @@ describe("RefreshBehavior enum", () => {
 		expect(RefreshBehavior.Never).toBe("never");
 	});
 });
+
+jest.mock("../../src/userComponents", () => ({ EntitiesNotice: jest.fn() }));

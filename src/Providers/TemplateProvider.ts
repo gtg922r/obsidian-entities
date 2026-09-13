@@ -1,12 +1,11 @@
 import { cloneSettings } from "../settingsData";
 import { EntitySuggestionItem } from "src/suggestion.types";
 import { EntityProvider, EntityProviderUserSettings } from "./EntityProvider";
-import { Plugin, Setting, TFile, TFolder } from "obsidian";
-import { EntitiesModalInput } from "src/userComponents";
-import {
-	createNewNoteFromTemplate,
-	insertTemplateUsingTemplater,
-} from "src/entitiesUtilities";
+import { EditorSuggestContext, Plugin, Setting, TFile, TFolder } from "obsidian";
+import { insertTemplateUsingTemplater } from "src/entitiesUtilities";
+import { createNewNoteFromTemplate, creationFailure, resolveDefaultCreationDestination } from "../entityCreation";
+import { creationResultLink } from "../creationFeedback";
+import { promptForCreationName } from "../creationPrompt";
 import { buildIconPickerSetting, buildFolderPathSummarySetting } from "src/ui/providerSettingsComponents";
 import { TriggerCharacter } from "src/entities.types";
 
@@ -80,7 +79,7 @@ export class TemplateEntityProvider extends EntityProvider<TemplateProviderUserS
             suggestionText: file.basename,
             icon: this.settings.actionType === "create" ? "file-plus" : "stamp",
             noteText: `${this.settings.actionType === "create" ? "Create from" : "Insert"} ${file.path}`,
-            target: { kind: "action", id: JSON.stringify([this.settings.actionType, file.path]), callback: () => this.actionFunction(file) },
+            target: { kind: "action", id: JSON.stringify([this.settings.actionType, file.path]), callback: (_item, context) => this.actionFunction(file, context) },
         }));
     }
 
@@ -140,34 +139,27 @@ export class TemplateEntityProvider extends EntityProvider<TemplateProviderUserS
 		);			
 	}
 
-    private actionFunction(file: TFile): Promise<string> {
-        if (this.settings.actionType === "create") {
-            return this.createFileFromTemplate(file);
-        } else {
-            return this.insertTemplate(file);
-        }
-    }
+	private actionFunction(file: TFile, context: EditorSuggestContext | null): Promise<string | undefined> {
+		return this.settings.actionType === "create" ? this.createFileFromTemplate(file, context) : this.insertTemplate(file);
+	}
 
-    private createFileFromTemplate(file: TFile): Promise<string> {
-        const modal = new EntitiesModalInput(this.plugin.app, {
-            placeholder: "Enter new note name...",
-            instructions: {
-                insertString: "to create a new note",
-                dismissString: "to dismiss",
-            },
-        });
-        modal.open();
-        return modal.getInput().then((NEW_TEMPLATE_NAME) => {
-            createNewNoteFromTemplate(
-                this.plugin,
-                file,
-                "", // Assuming FOLDER_SETTING is managed elsewhere or not needed
-                NEW_TEMPLATE_NAME,
-                false // Assuming OPEN_NEW_NOTE is managed elsewhere or not needed
-            );
-            return `[[${NEW_TEMPLATE_NAME}]]`;
-        });
-    }
+	private async createFileFromTemplate(file: TFile, context: EditorSuggestContext | null): Promise<string | undefined> {
+		const sourcePath = context?.file?.path ?? "";
+		try {
+			// The host's default destination policy depends on the actual output extension.
+			const destination = resolveDefaultCreationDestination(this.plugin.app, sourcePath, file.extension ? file.name : `${file.name}.md`);
+			const prompt = await promptForCreationName(this, {
+				placeholder: "Enter new note name...",
+				instructions: { insertString: "to create a new note", dismissString: "to dismiss" },
+			});
+			const result = prompt.name === undefined || !prompt.isCurrent() ? { status: "cancelled" as const } : await createNewNoteFromTemplate(this.plugin.app, {
+				engine: "templater", template: file, destination, name: prompt.name,
+			});
+			return creationResultLink(this.plugin.app, result, sourcePath);
+		} catch (error) {
+			return creationResultLink(this.plugin.app, creationFailure(error), sourcePath);
+		}
+	}
 
     private insertTemplate(file: TFile): Promise<string> {
         return insertTemplateUsingTemplater(this.plugin, file).then(() => "");

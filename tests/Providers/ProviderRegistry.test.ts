@@ -164,3 +164,5 @@ describe("ProviderRegistry tests", () => {
 		expect(providers.length).toBe(1);
 	});
 });
+
+jest.mock("../../src/userComponents", () => ({ EntitiesNotice: jest.fn() }));

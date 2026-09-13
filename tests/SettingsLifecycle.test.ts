@@ -319,6 +319,27 @@ test("save errors expose retry without discarding the visible edit", async () =>
 	expect(mockRows.some(row => row.name === "Settings have not been saved")).toBe(false);
 });
 
+test("recipe collection conflicts remain rejected by provider ID", async () => {
+	const recipes = [
+		{ engine: "core" as const, templatePath: "Core.md", entityName: "Person" },
+		{ engine: "templater" as const, templatePath: "Project.md", entityName: "Project" },
+	];
+	const { plugin, app } = createPlugin({ schemaVersion: 1, providerSettings: [
+		{ ...config("a"), entityCreationTemplates: recipes }, config("b"),
+	] });
+	await plugin.onload();
+	const tab = new EntitiesSettingTab(app, plugin);
+	tab.display(); const first = filterEdits.get("a")!;
+	tab.display(); const stale = filterEdits.get("a")!;
+	plugin.settingsStore.reorderProviders(["b", "a"]);
+	first(draft => { draft.entityCreationTemplates![1].entityName = "Updated project"; });
+	const canonical = plugin.settings;
+	stale(draft => { draft.entityCreationTemplates![0].entityName = "Stale person"; });
+	expect(plugin.settings).toEqual(canonical);
+	expect(plugin.settings.providerSettings[1].entityCreationTemplates![1].entityName).toBe("Updated project");
+	expect(EntitiesNotice).toHaveBeenCalledWith(expect.stringContaining("Your last edit was not applied"), "alert-triangle", 10000);
+});
+
 test.each(["edit another filter", "delete a filter"])("concurrent collection change is rejected and reopening recovers: %s", async action => {
 	const entityFilters = [
 		{ type: "include", property: "first", value: "old first" },

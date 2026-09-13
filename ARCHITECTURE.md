@@ -113,6 +113,15 @@ Shared UI builders eliminating duplication across provider settings:
   and optional note count.
 - `entityTemplateStatusLabel()` – Human-readable template status string.
 
+### Creation boundaries
+
+`entityCreation.ts` confirms actual live file outcomes without owning an editor
+or modal. Provider callbacks capture destinations/source paths and format confirmed
+results through `creationFeedback.ts`. `creationPrompt.ts` tracks pending name
+prompts once per plugin and checks provider/lifecycle state before engine startup.
+See [confirmed creation](docs/creation-recovery.md) for destination policies,
+recipe preservation, native-method evidence and the unresolved R4b insertion limits.
+
 ## Major Interfaces
 
 - **`EntityProvider<T>`** (abstract base class)
