@@ -118,20 +118,13 @@ dated advisory snapshot, not a runtime security guarantee.
 
 ## Releases
 
-Stable releases use production-shaped semver tags such as `0.4.5`:
+Release commands prepare reviewable metadata locally. Candidates use exact numeric
+semver tags such as `0.4.5`, are packaged from a committed revision with a hash
+receipt, and are explicitly published to BRAT as GitHub prereleases. Stable
+promotion remains blocked until the tested tag and bytes can be preserved.
 
-```bash
-npm run release:patch
-npm run release:minor
-npm run release:major
-```
-
-Beta testing with BRAT uses the same tag shape. Publish the GitHub Release as a prerelease instead of creating a beta manifest:
-
-```bash
-git tag 0.4.5
-npm run release:publish:brat -- 0.4.5
-```
+See [the release guide](docs/releasing.md) for preparation, observational dry runs,
+packaging, deliberate publication and recovery after failures.
 
 Contributions are welcome via pull requests.
 

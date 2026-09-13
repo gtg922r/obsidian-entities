@@ -1,79 +1,54 @@
-name: Release Obsidian plugin
+name: Prepare Obsidian release candidate
 
 on:
   workflow_dispatch:
     inputs:
       tag:
-        description: "Exact semver tag to release, e.g. 1.9.10"
+        description: "Existing exact semver tag to package (never publishes a release)"
         required: true
         type: string
-      prerelease:
-        description: "Mark the GitHub Release as a prerelease for BRAT beta installs"
-        required: true
-        default: false
-        type: boolean
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
-  release:
+  candidate:
     runs-on: ubuntu-latest
-
     steps:
       - name: Validate release tag
         env:
           RELEASE_TAG: ${{ inputs.tag }}
         run: |
-          if [[ ! "$RELEASE_TAG" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-            echo "Invalid release tag: $RELEASE_TAG"
-            echo "Tags must be exact semver without v prefix or prerelease suffix, e.g. 1.9.10."
+          if [[ ! "$RELEASE_TAG" =~ ^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]]; then
+            echo "Expected an exact semver tag without a prefix or suffix."
             exit 1
           fi
 
-      - name: Checkout release tag
+      - name: Checkout exact candidate tag
         uses: actions/checkout@v4
         with:
           ref: refs/tags/${{ inputs.tag }}
+          fetch-depth: 0
+          persist-credentials: false
 
-      - name: Use Node.js
+      - name: Record candidate commit
+        id: source
+        run: echo "commit=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
+      - name: Use pinned Node.js
         uses: actions/setup-node@v4
         with:
           node-version-file: .nvmrc
-          cache: npm
 
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Lint
-        run: npm run lint
-
-      - name: Test
-        run: npm test -- --runInBand
-
-      - name: Prepare release assets
-        run: npm run release:assets -- ${{ inputs.tag }}
-
-      - name: Prepare release notes
-        run: npm run release:notes -- ${{ inputs.tag }}
-
-      - name: Publish GitHub Release
+      - name: Validate, install, check and package exact source
         env:
-          GH_TOKEN: ${{ github.token }}
           RELEASE_TAG: ${{ inputs.tag }}
-          IS_PRERELEASE: ${{ inputs.prerelease }}
-        run: |
-          args=(
-            "$RELEASE_TAG"
-            --title "$RELEASE_TAG"
-            --notes-file dist/release/release-notes.md
-            dist/release/main.js
-            dist/release/manifest.json
-            dist/release/styles.css
-          )
+        run: node scripts/prepare-release-assets.mjs "$RELEASE_TAG"
 
-          if [[ "$IS_PRERELEASE" == "true" ]]; then
-            args+=(--prerelease)
-          fi
-
-          gh release create "${args[@]}"
+      - name: Retain candidate bytes and receipt for explicit BRAT publication
+        uses: actions/upload-artifact@v4
+        with:
+          name: entities-${{ inputs.tag }}-${{ steps.source.outputs.commit }}-${{ github.run_id }}
+          path: dist/release/${{ inputs.tag }}/
+          if-no-files-found: error
+          retention-days: 30

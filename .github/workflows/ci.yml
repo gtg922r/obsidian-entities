@@ -25,6 +25,9 @@ jobs:
       - name: Lint
         run: npm run lint
 
+      - name: Release tooling regression tests
+        run: npm run release:test
+
       - name: Test
         run: npm test -- --runInBand
 
