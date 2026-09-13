@@ -7,29 +7,17 @@ import {
 	EditorSuggestContext,
 	setIcon,
 	prepareFuzzySearch,
-	SearchResult,
+	Notice,
 	EditorSuggestTriggerInfo,
 } from "obsidian";
 import ProviderRegistry from "./Providers/ProviderRegistry";
 import { EntityProvider, EntityProviderUserSettings, RefreshBehavior } from "./Providers/EntityProvider";
 import { TriggerCharacter } from "./entities.types";
+import { EntitySuggestionItem } from "./suggestion.types";
+import { effectiveFileAlias, readSuggestionTarget, suggestionTargetKey, unresolvedWikilink } from "./suggestionTargets";
 
 // Pre-compiled whitespace matcher to avoid recreating a RegExp per character
 const WHITESPACE_RE = /\s/;
-
-/** A renderable suggestion with an optional insertion/action override. */
-export interface EntitySuggestionItem {
-	suggestionText: string;
-	replacementText?: string;
-	icon?: string;
-	flair?: string;
-	noteText?: string;
-	match?: SearchResult;
-	action?: (
-		item: EntitySuggestionItem,
-		context: EditorSuggestContext | null
-	) => Promise<string> | string | void;
-}
 
 type Provider = EntityProvider<EntityProviderUserSettings>;
 type ProviderStage = "policy" | "ordinary" | "creation" | "item" | "action";
@@ -211,10 +199,11 @@ export class EntitiesSuggestor extends EditorSuggest<EntitySuggestionItem> {
 				if (!item || typeof item !== "object") throw new Error("Invalid suggestion.");
 				const copy = { ...item } as EntitySuggestionItem;
 				if (typeof copy.suggestionText !== "string" || !copy.suggestionText.length ||
-					[copy.replacementText, copy.icon, copy.flair, copy.noteText].some(field => field !== undefined && typeof field !== "string") ||
-					(copy.action !== undefined && typeof copy.action !== "function")) {
+					[copy.icon, copy.flair, copy.noteText].some(field => field !== undefined && typeof field !== "string") ||
+					("action" in copy || "replacementText" in copy)) {
 					throw new Error("Invalid suggestion fields.");
 				}
+				copy.target = readSuggestionTarget(copy.target);
 				if (copy.match !== undefined) {
 					if (!Number.isFinite(copy.match?.score) || !Array.isArray(copy.match.matches)) throw new Error("Invalid suggestion match.");
 					copy.match = { ...copy.match, matches: copy.match.matches.map(range => [...range]) };
@@ -241,7 +230,7 @@ export class EntitiesSuggestor extends EditorSuggest<EntitySuggestionItem> {
 		const creation: EntitySuggestionItem[] = [];
 		const providers = this.providerRegistry.getProvidersForTrigger(trigger);
 		const remember = (item: EntitySuggestionItem, provider: Provider): EntitySuggestionItem => {
-			const copy = { ...item };
+			const copy = { ...item, target: { ...item.target } };
 			this.provenance.set(copy, { provider, registryRevision, epoch, context });
 			return copy;
 		};
@@ -289,8 +278,15 @@ export class EntitiesSuggestor extends EditorSuggest<EntitySuggestionItem> {
 		}
 
 		const uniqueSuggestions = new Map<string, EntitySuggestionItem>();
+		const fileIds = new Map<TFile, number>();
 		for (const result of [...ordinary, ...creation]) {
-			if (!uniqueSuggestions.has(result.suggestionText)) uniqueSuggestions.set(result.suggestionText, result);
+			const source = this.provenance.get(result)!;
+			const key = suggestionTargetKey(result.target, source.provider.providerInstanceId, fileIds);
+			const previous = uniqueSuggestions.get(key);
+			if (!previous || (result.match?.score ?? -10) > (previous.match?.score ?? -10)) {
+				// Keep the winning result and its existing R2 provenance, including source context.
+				uniqueSuggestions.set(key, result);
+			}
 		}
 		const sortedSuggestions = Array.from(uniqueSuggestions.values()).sort(
 			(a, b) => (b.match?.score ?? -10) - (a.match?.score ?? -10)
@@ -320,9 +316,9 @@ export class EntitiesSuggestor extends EditorSuggest<EntitySuggestionItem> {
 		}
 		// suggestionTitle.setText(value.suggestionText + ` (${value.match?.score ?? -10})`);
 		suggestionTitle.setText(value.suggestionText);
-		if (value.noteText) {
-			suggestionNote.setText(value.noteText);
-		}
+		const note = [value.noteText, value.target.kind === "file" ? value.target.file.path : undefined]
+			.filter(Boolean).join(" · ");
+		if (note) suggestionNote.setText(note);
 	}
 
 	private isCurrentProvider(source: SuggestionProvenance): boolean {
@@ -335,9 +331,10 @@ export class EntitiesSuggestor extends EditorSuggest<EntitySuggestionItem> {
 		if (!source || source.epoch !== this.resultEpoch || !this.isCurrentProvider(source)) return;
 		// Obsidian may close before selection. Provenance retains this result's context.
 		const originalContext = source.context;
-		if (value.action) {
+		const target = value.target;
+		if (target.kind === "action") {
 			try {
-				const actionResult = value.action(value, originalContext);
+				const actionResult = target.callback(value, originalContext);
 				Promise.resolve(actionResult).then((result) => {
 					// This only guards configuration/unload, not action side effects or editor/range safety (R4).
 					if (result != undefined && this.isCurrentProvider(source)) {
@@ -348,7 +345,31 @@ export class EntitiesSuggestor extends EditorSuggest<EntitySuggestionItem> {
 				this.reportFailure(source.provider, "action", error);
 			}
 		} else {
-			this.replaceTextAtContext(`[[${value.replacementText ?? value.suggestionText}]]`, originalContext);
+			let replacement: string;
+			switch (target.kind) {
+				case "file":
+					try {
+						if (this.plugin.app.vault.getAbstractFileByPath(target.file.path) !== target.file) {
+							new Notice("This note was deleted or replaced. Search again to select a current note.");
+							return;
+						}
+						replacement = this.plugin.app.fileManager.generateMarkdownLink(
+							target.file, originalContext.file.path, undefined, effectiveFileAlias(target.file, target.alias)
+						);
+						if (typeof replacement !== "string" || !replacement.length) throw new Error("No native link returned.");
+					} catch {
+						new Notice("Unable to make a link to this note. Please search again and retry.");
+						return;
+					}
+					break;
+				case "unresolved-link":
+					replacement = unresolvedWikilink(target.linkpath, target.alias);
+					break;
+				case "text":
+					replacement = target.text;
+					break;
+			}
+			this.replaceTextAtContext(replacement, originalContext);
 		}
 	}
 

@@ -6,7 +6,8 @@ import {
 	TFile,
 	moment,
 } from "obsidian";
-import { EntitySuggestionItem } from "src/EntitiesSuggestor";
+import { EntitySuggestionItem } from "src/suggestion.types";
+import { unresolvedWikilink } from "../suggestionTargets";
 import { EntityProvider, EntityProviderUserSettings } from "./EntityProvider";
 import {
 	AppWithPlugins,
@@ -37,7 +38,8 @@ interface NLPlugin extends Plugin {
 interface DateSuggestionCandidate {
 	suggestionText: string;
 	noteText: string;
-	replacementText: string;
+	linkpath: string;
+	alias?: string;
 	icon: string;
 	granularity?: PeriodicNotesGranularity;
 	date?: moment.Moment;
@@ -164,7 +166,7 @@ export class DateEntityProvider extends EntityProvider<DatesProviderUserSettings
 					this.buildDateSuggestion({
 						suggestionText,
 						noteText: replacementText,
-						replacementText,
+						linkpath: replacementText,
 						icon: "calendar-range",
 						granularity: "week",
 						date,
@@ -229,7 +231,8 @@ export class DateEntityProvider extends EntityProvider<DatesProviderUserSettings
 			this.buildDateSuggestion({
 				suggestionText: dateString,
 				noteText: `${replacementWeekText} (Wk of ${weekStartDateShort})`,
-				replacementText: `${replacementWeekText}|${replacementWeekText} (Wk of ${weekStartDateShort})`,
+				linkpath: replacementWeekText,
+				alias: `${replacementWeekText} (Wk of ${weekStartDateShort})`,
 				icon: "calendar-range",
 				granularity: "week",
 				date: weekMoment,
@@ -255,7 +258,7 @@ export class DateEntityProvider extends EntityProvider<DatesProviderUserSettings
 		return this.buildDateSuggestion({
 			suggestionText,
 			noteText: result?.formattedString ?? "",
-			replacementText: result?.formattedString ?? "",
+			linkpath: result?.formattedString ?? "",
 			icon,
 			granularity: date ? "day" : undefined,
 			date,
@@ -268,7 +271,7 @@ export class DateEntityProvider extends EntityProvider<DatesProviderUserSettings
 		const suggestion: EntitySuggestionItem = {
 			suggestionText: candidate.suggestionText,
 			noteText: candidate.noteText,
-			replacementText: candidate.replacementText,
+			target: { kind: "unresolved-link", linkpath: candidate.linkpath, alias: candidate.alias },
 			icon: candidate.icon,
 		};
 
@@ -279,8 +282,12 @@ export class DateEntityProvider extends EntityProvider<DatesProviderUserSettings
 			candidate.date &&
 			this.isPeriodicGranularityEnabled(candidate.granularity)
 		) {
-			suggestion.action = async (item, context) =>
-				this.createOrLinkPeriodicNote(candidate, item, context);
+			suggestion.target = {
+				kind: "action",
+				id: JSON.stringify(["periodic-note", candidate.granularity, candidate.date.format(),
+					candidate.suggestionText, candidate.linkpath, candidate.alias ?? null]),
+				callback: async (item, context) => this.createOrLinkPeriodicNote(candidate, item, context),
+			};
 		}
 
 		return suggestion;
@@ -321,7 +328,7 @@ export class DateEntityProvider extends EntityProvider<DatesProviderUserSettings
 		item: EntitySuggestionItem,
 		context: EditorSuggestContext | null
 	): Promise<string> {
-		const fallbackText = `[[${candidate.replacementText}]]`;
+		const fallbackText = unresolvedWikilink(candidate.linkpath, candidate.alias);
 		if (
 			!candidate.granularity ||
 			!candidate.date ||

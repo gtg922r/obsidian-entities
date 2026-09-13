@@ -25,6 +25,8 @@ This document explains the overall layout and flow of the **Entities** Obsidian 
 │   │   └── providerSettingsComponents.ts # Shared settings UI builders
 │   ├── EntitiesSuggestor.ts   # EditorSuggest implementation
 │   ├── EntitiesSettings.ts    # Settings tab & modal
+│   ├── suggestion.types.ts    # Required target union and suggestion presentation
+│   ├── suggestionTargets.ts    # Target validation, identity and effective aliases
 │   ├── entities.types.ts      # Shared types & interfaces
 │   ├── entitiesUtilities.ts   # Templater integration helpers
 │   ├── userComponents.ts      # Notices, modals, icon picker
@@ -57,8 +59,9 @@ This document explains the overall layout and flow of the **Entities** Obsidian 
      search, and deduplicates results.
    - Template creation suggestions are only requested from providers that
      support the `@` trigger and have templates configured.
-   - `selectSuggestion` either inserts a `[[wikilink]]` or executes the
-     provider's custom action.
+   - `selectSuggestion` validates real file identity and generates its native link
+     using the retrieval source note, or inserts deliberate unresolved links,
+     exact literal text, or the existing action callback result.
 
 3. **`EntitiesSettings`** – Settings tab where users add, configure, and remove
    provider instances. Provider classes supply their own settings UI via static
@@ -133,8 +136,13 @@ Shared UI builders eliminating duplication across provider settings:
   - Caches raw items by persisted provider instance ID and trigger, with one current
     query entry per pair. Each request filters fresh clones and records private
     provider/revision/result provenance for selection.
-  - Performs fuzzy search and deduplication.
-  - Handles text insertion and provider actions.
+  - Deduplicates after fuzzy matching by file/effective alias, unresolved
+    linkpath/effective alias, exact text, or provider-scoped action ID. Keeps the
+    best score and deterministic provider-order ties, with the winner's provenance.
+  - Shows vault-relative paths on every file row, preserving explanatory notes.
+  - Calls `fileManager.generateMarkdownLink` only at selection, after verifying
+    `vault.getAbstractFileByPath(file.path) === file`. Uses that row's captured
+    source context and native output unchanged; failures give feedback with no write.
 
 - **`RegisterableEntityProvider`** – Type describing provider classes that can be
   registered. Requires static `providerTypeID`, `getDescription()`,

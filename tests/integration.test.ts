@@ -4,7 +4,8 @@
  */
 import { App, Editor, EditorSuggestContext, TFile } from "obsidian";
 import Entities from "../src/main";
-import { EntitiesSuggestor, EntitySuggestionItem } from "../src/EntitiesSuggestor";
+import { EntitiesSuggestor } from "../src/EntitiesSuggestor";
+import { EntitySuggestionItem } from "../src/suggestion.types";
 import { EntityProvider, EntityProviderUserSettings, RefreshBehavior } from "../src/Providers/EntityProvider";
 import ProviderRegistry from "../src/Providers/ProviderRegistry";
 import { TriggerCharacter } from "../src/entities.types";
@@ -142,14 +143,14 @@ describe("Integration: Full suggestion flow", () => {
 
 			// Create instances with specific items
 			const atProvider = new AtTriggerProvider(mockPlugin, { providerInstanceId: "at-instance" }, [
-				{ suggestionText: "AtItem1" },
-				{ suggestionText: "AtItem2" },
+				{ suggestionText: "AtItem1", target: { kind: "unresolved-link" as const, linkpath: "AtItem1" } },
+				{ suggestionText: "AtItem2", target: { kind: "unresolved-link" as const, linkpath: "AtItem2" } },
 			]);
 			const slashProvider = new SlashTriggerProvider(mockPlugin, { providerInstanceId: "slash-instance" }, [
-				{ suggestionText: "SlashItem1" },
+				{ suggestionText: "SlashItem1", target: { kind: "unresolved-link" as const, linkpath: "SlashItem1" } },
 			]);
 			const colonProvider = new ColonTriggerProvider(mockPlugin, { providerInstanceId: "colon-instance" }, [
-				{ suggestionText: "ColonItem1" },
+				{ suggestionText: "ColonItem1", target: { kind: "unresolved-link" as const, linkpath: "ColonItem1" } },
 			]);
 
 			// Manually add providers to registry
@@ -296,7 +297,7 @@ describe("Integration: Provider refresh behavior", () => {
 
 		getEntityList(): EntitySuggestionItem[] {
 			RefreshingProvider.callCount++;
-			return [{ suggestionText: `Item${RefreshingProvider.callCount}` }];
+			return [{ suggestionText: `Item${RefreshingProvider.callCount}`, target: { kind: "unresolved-link" as const, linkpath: `Item${RefreshingProvider.callCount}` } }];
 		}
 
 		static getDescription() { return "Refreshing Provider"; }
@@ -318,7 +319,7 @@ describe("Integration: Provider refresh behavior", () => {
 
 		getEntityList(): EntitySuggestionItem[] {
 			NeverRefreshProvider.callCount++;
-			return [{ suggestionText: `Static${NeverRefreshProvider.callCount}` }];
+			return [{ suggestionText: `Static${NeverRefreshProvider.callCount}`, target: { kind: "unresolved-link" as const, linkpath: `Static${NeverRefreshProvider.callCount}` } }];
 		}
 
 		static getDescription() { return "Never Refresh Provider"; }
@@ -390,7 +391,7 @@ describe("Integration: Suggestion selection", () => {
 		suggestor = new EntitiesSuggestor(mockPlugin, registry);
 	});
 
-	test("selecting item without action inserts wiki link", () => {
+	test("selecting an unresolved target inserts an explicit wikilink", () => {
 		const mockEditor = {
 			replaceRange: jest.fn(),
 			setCursor: jest.fn(),
@@ -408,7 +409,7 @@ describe("Integration: Suggestion selection", () => {
 		(suggestor as any).context = context;
 
 		const suggestion: EntitySuggestionItem = {
-			suggestionText: "TestNote",
+			suggestionText: "TestNote", target: { kind: "unresolved-link" as const, linkpath: "TestNote" },
 		};
 
 		const provider = new AtTriggerProvider(mockPlugin, { providerInstanceId: "selected" }, [suggestion]);
@@ -424,7 +425,7 @@ describe("Integration: Suggestion selection", () => {
 		);
 	});
 
-	test("selecting item with replacementText uses it in link", () => {
+	test("selecting an unresolved target preserves its separate alias", () => {
 		const mockEditor = {
 			replaceRange: jest.fn(),
 			setCursor: jest.fn(),
@@ -442,8 +443,7 @@ describe("Integration: Suggestion selection", () => {
 		(suggestor as any).context = context;
 
 		const suggestion: EntitySuggestionItem = {
-			suggestionText: "Ali",
-			replacementText: "Alice|Ali",
+			suggestionText: "Ali", target: { kind: "unresolved-link" as const, linkpath: "Alice", alias: "Ali" },
 		};
 
 		const provider = new AtTriggerProvider(mockPlugin, { providerInstanceId: "selected" }, [suggestion]);
@@ -479,8 +479,7 @@ describe("Integration: Suggestion selection", () => {
 		(suggestor as any).context = context;
 
 		const suggestion: EntitySuggestionItem = {
-			suggestionText: "Action Item",
-			action: actionMock,
+			suggestionText: "Action Item", target: { kind: "action" as const, id: "test-action", callback: actionMock },
 		};
 
 		const provider = new AtTriggerProvider(mockPlugin, { providerInstanceId: "selected" }, [suggestion]);

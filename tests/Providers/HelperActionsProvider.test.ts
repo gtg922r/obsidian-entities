@@ -1,3 +1,4 @@
+import { getAction } from "../suggestionTestHelpers";
 import { App, Editor, EditorSuggestContext, Plugin } from "obsidian";
 import { HelperEntityProvider } from "../../src/Providers/HelperActionsProvider";
 import { TriggerCharacter } from "../../src/entities.types";
@@ -50,7 +51,7 @@ describe("HelperEntityProvider callout suggestions", () => {
             query: "/quo",
         } as unknown as EditorSuggestContext;
 
-        item.action!(item, context);
+        getAction(item)!(item, context);
 
         expect(mockEditor.replaceRange).toHaveBeenNthCalledWith(1, "", { line: 0, ch: 15 }, { line: 0, ch: 19 });
         expect(mockEditor.replaceRange).toHaveBeenNthCalledWith(2, "> [!quote]\n> this is a quote", { line: 0, ch: 0 }, { line: 0, ch: mockEditor.getLine(0).length });

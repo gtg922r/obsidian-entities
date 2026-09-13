@@ -1,4 +1,4 @@
-import { EntitySuggestionItem } from "src/EntitiesSuggestor";
+import { EntitySuggestionItem } from "src/suggestion.types";
 import { entityFromTemplateSettings } from "../entities.types";
 import { createNewNoteFromTemplate } from "../entitiesUtilities";
 import { Plugin, SearchResult } from "obsidian";
@@ -88,16 +88,21 @@ export abstract class EntityProvider<T extends EntityProviderUserSettings> {
 		return creationTemplates.map((template) => ({
 			suggestionText: `New ${template.entityName}: ${query}`,
 			icon: "plus-circle",
-			action: async () => {
-				await createNewNoteFromTemplate(
-					this.plugin,
-					template.templatePath,
-					template.folderPath ?? "",
-					query,
-					false
-				);
-				await new Promise(resolve => window.setTimeout(resolve, 20));
-				return `[[${query}]]`;
+			noteText: `Create from ${template.templatePath}`,
+			target: {
+				kind: "action",
+				id: JSON.stringify(["create", template.engine, template.templatePath, template.folderPath ?? "", query]),
+				callback: async () => {
+					await createNewNoteFromTemplate(
+						this.plugin,
+						template.templatePath,
+						template.folderPath ?? "",
+						query,
+						false
+					);
+					await new Promise(resolve => window.setTimeout(resolve, 20));
+					return `[[${query}]]`;
+				},
 			},
 			match: { score: -10, matches: [] } as SearchResult,
 		}));

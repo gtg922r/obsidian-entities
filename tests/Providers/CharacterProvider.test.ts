@@ -99,9 +99,9 @@ describe("CharacterProvider", () => {
 			const results = provider.getEntityList("grin", TriggerCharacter.Colon);
 			expect(results.length).toBeGreaterThan(0);
 			// Emoji results have flair that is an emoji character
-			// and no icon property, with replacementText being the emoji
+			// and no icon property, with a literal emoji target
 			const hasEmoji = results.some(r => 
-				r.flair && r.replacementText && r.flair === r.replacementText
+				r.flair && r.target.kind === "text" && r.flair === r.target.text
 			);
 			expect(hasEmoji).toBe(true);
 		});
@@ -149,7 +149,7 @@ describe("CharacterProvider", () => {
 			expect(results).toEqual([]);
 		});
 
-		test("suggestions have action that returns character", async () => {
+		test("suggestions contain exact literal characters", async () => {
 			const provider = new CharacterProvider(mockPlugin, { providerInstanceId: "test-instance" });
 			const results = provider.getEntityList("smile", TriggerCharacter.Colon);
 			const smileSuggestion = results.find(r => 
@@ -157,11 +157,7 @@ describe("CharacterProvider", () => {
 				r.suggestionText.toLowerCase().includes("grinning")
 			);
 			expect(smileSuggestion).toBeDefined();
-			expect(smileSuggestion!.action).toBeDefined();
-			expect(smileSuggestion!.replacementText).toBeDefined();
-			// Action should return the character
-			const actionResult = await smileSuggestion!.action!(smileSuggestion!, null);
-			expect(actionResult).toBe(smileSuggestion!.replacementText);
+			expect(smileSuggestion!.target).toEqual({ kind: "text", text: smileSuggestion!.flair });
 		});
 
 		test("suggestions include flair with character", () => {

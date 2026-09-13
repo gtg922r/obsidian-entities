@@ -1,6 +1,6 @@
 import { cloneSettings } from "../settingsData";
 import { ExtraButtonComponent, Plugin, SearchResult, Setting, TFile } from "obsidian";
-import { EntitySuggestionItem } from "src/EntitiesSuggestor";
+import { EntitySuggestionItem } from "src/suggestion.types";
 import { EntityProvider, EntityProviderUserSettings } from "./EntityProvider";
 import { AppWithPlugins } from "src/entities.types";
 import { createNewNoteFromTemplate } from "src/entitiesUtilities";
@@ -95,7 +95,7 @@ export class MetadataMenuProvider extends EntityProvider<MetadataMenuProviderUse
 		const mdmPathsAndFileClasses: [string, MDMFileClass][] = Array.from(
 			this.mdmPlugin.fieldIndex.fileClassesPath
 		);
-		const fileClassTemplates: Map<string, { template: TFile, icon: string }> = new Map();
+		const fileClassTemplates: Map<string, { template: TFile, icon: string, fileClassName: string }> = new Map();
 		mdmPathsAndFileClasses.forEach(([path, fileClass]) => {			
 			const fileCache = this.plugin.app.metadataCache.getCache(path);
 			if (fileCache && fileCache.frontmatter) {
@@ -111,14 +111,14 @@ export class MetadataMenuProvider extends EntityProvider<MetadataMenuProviderUse
 				if (strippedFileName) {
 					const newNoteTemplateFile = this.plugin.app.metadataCache.getFirstLinkpathDest(strippedFileName, path);
 					if (newNoteTemplateFile) {
-						fileClassTemplates.set(fileClass.name, { template: newNoteTemplateFile, icon: newEntityIcon });
+						fileClassTemplates.set(path, { template: newNoteTemplateFile, icon: newEntityIcon, fileClassName: fileClass.name });
 					}
 				}
 			}
 		});
 
 		// TODO add support for both Template and Templater
-		return Array.from(fileClassTemplates).map(([fileClassName, { template, icon }]) => {
+		return Array.from(fileClassTemplates).map(([fileClassPath, { template, icon, fileClassName }]) => {
 			const fileClass = this.mdmPlugin?.fieldIndex?.fileClassesName.get(fileClassName);
 			if (!fileClass) {
 				throw new Error(
@@ -128,16 +128,21 @@ export class MetadataMenuProvider extends EntityProvider<MetadataMenuProviderUse
 			return {
 				suggestionText: `New ${fileClassName}: ${query}`,
 				icon: icon,
-				action: async () => {
-					await createNewNoteFromTemplate(
-						this.plugin,
-						template,
-						"", // TODO THINK ABOUT FOLDER
-						query,
-						false
-					);
-					await new Promise((resolve) => window.setTimeout(resolve, 20));
-					return `[[${query}]]`;
+				noteText: `Create from ${template.path}`,
+				target: {
+					kind: "action" as const,
+					id: JSON.stringify(["create", fileClassPath, template.path, query]),
+					callback: async () => {
+						await createNewNoteFromTemplate(
+							this.plugin,
+							template,
+							"", // TODO THINK ABOUT FOLDER
+							query,
+							false
+						);
+						await new Promise((resolve) => window.setTimeout(resolve, 20));
+						return `[[${query}]]`;
+					},
 				},
 				match: { score: -10, matches: [] } as SearchResult,
 			};

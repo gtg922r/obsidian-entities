@@ -1,3 +1,4 @@
+import { getAction } from "../suggestionTestHelpers";
 import moment = require("moment");
 import { Plugin } from "obsidian";
 import { DateEntityProvider } from "../../src/Providers/DateEntityProvider";
@@ -116,8 +117,8 @@ describe("DateEntityProvider", () => {
 			.getEntityList("this week")
 			.find((item) => item.suggestionText === "this week");
 
-		expect(suggestion?.action).toBeDefined();
-		await expect(suggestion?.action?.(suggestion, null)).resolves.toBe(
+		expect(getAction(suggestion)).toBeDefined();
+		await expect(getAction(suggestion)?.(suggestion, null)).resolves.toBe(
 			"[[Periodic/Weeks/2026-W21|this week]]"
 		);
 		expect(periodicNotes.getPeriodicNote).toHaveBeenCalledWith(
@@ -177,9 +178,8 @@ describe("DateEntityProvider", () => {
 			"2026-W20"
 		);
 		expect(suggestion?.noteText).toBe("2026-W21");
-		expect(suggestion?.replacementText).toBe("2026-W21");
-		expect(suggestion?.action).toBeDefined();
-		await expect(suggestion?.action?.(suggestion, null)).resolves.toBe(
+		expect(getAction(suggestion)).toBeDefined();
+		await expect(getAction(suggestion)?.(suggestion, null)).resolves.toBe(
 			"[[Periodic/Weeks/2026-W21|this week]]"
 		);
 		expect(periodicNotes.getPeriodicNote).toHaveBeenCalledWith(
@@ -228,7 +228,7 @@ describe("DateEntityProvider", () => {
 			.getEntityList("next week")
 			.find((item) => item.suggestionText === "next week");
 
-		await expect(suggestion?.action?.(suggestion, null)).resolves.toBe(
+		await expect(getAction(suggestion)?.(suggestion, null)).resolves.toBe(
 			"[[Periodic/Weeks/2026-W22|next week]]"
 		);
 		expect(periodicNotes.createPeriodicNote).toHaveBeenCalledWith(
@@ -282,9 +282,9 @@ describe("DateEntityProvider", () => {
 			.getEntityList("week 21")
 			.find((item) => item.suggestionText === "week 21");
 
-		expect(suggestion?.replacementText).toBe("2026-W21|2026-W21 (Wk of 5/18)");
-		expect(suggestion?.action).toBeDefined();
-		await expect(suggestion?.action?.(suggestion, null)).resolves.toBe(
+		expect(suggestion?.noteText).toBe("2026-W21 (Wk of 5/18)");
+		expect(getAction(suggestion)).toBeDefined();
+		await expect(getAction(suggestion)?.(suggestion, null)).resolves.toBe(
 			"[[Periodic/Weeks/2026-W21|week 21]]"
 		);
 		expect(periodicNotes.getPeriodicNote).toHaveBeenCalledWith(
@@ -351,8 +351,8 @@ describe("DateEntityProvider", () => {
 			.getEntityList("today")
 			.find((item) => item.suggestionText === "today");
 
-		expect(suggestion?.action).toBeDefined();
-		await expect(suggestion?.action?.(suggestion, null)).resolves.toBe(
+		expect(getAction(suggestion)).toBeDefined();
+		await expect(getAction(suggestion)?.(suggestion, null)).resolves.toBe(
 			"[[Periodic/Days/2026-05-18|today]]"
 		);
 		expect(periodicNotes.createPeriodicNote).toHaveBeenCalledWith(
@@ -391,8 +391,8 @@ describe("DateEntityProvider", () => {
 			.getEntityList("this week")
 			.find((item) => item.suggestionText === "this week");
 
-		expect(suggestion?.action).toBeDefined();
-		await expect(suggestion?.action?.(suggestion, null)).resolves.toBe(
+		expect(getAction(suggestion)).toBeDefined();
+		await expect(getAction(suggestion)?.(suggestion, null)).resolves.toBe(
 			"[[2026-W21]]"
 		);
 	});
@@ -419,8 +419,8 @@ describe("DateEntityProvider", () => {
 			.getEntityList("this week")
 			.find((item) => item.suggestionText === "this week");
 
-		expect(suggestion?.action).toBeUndefined();
-		expect(suggestion?.replacementText).toBe("2026-W21");
+		expect(getAction(suggestion)).toBeUndefined();
+		expect(suggestion?.target).toEqual({ kind: "unresolved-link", linkpath: "2026-W21" });
 		expect(periodicNotes.getPeriodicNote).not.toHaveBeenCalled();
 		expect(periodicNotes.createPeriodicNote).not.toHaveBeenCalled();
 	});
@@ -447,8 +447,8 @@ describe("DateEntityProvider", () => {
 			.getEntityList("this week")
 			.find((item) => item.suggestionText === "this week");
 
-		expect(suggestion?.action).toBeUndefined();
-		expect(suggestion?.replacementText).toBe("2026-W21");
+		expect(getAction(suggestion)).toBeUndefined();
+		expect(suggestion?.target).toEqual({ kind: "unresolved-link", linkpath: "2026-W21" });
 		expect(periodicNotes.getPeriodicNote).not.toHaveBeenCalled();
 		expect(periodicNotes.createPeriodicNote).not.toHaveBeenCalled();
 	});
@@ -481,8 +481,8 @@ describe("DateEntityProvider", () => {
 			.getEntityList("this week")
 			.find((item) => item.suggestionText === "this week");
 
-		expect(suggestion?.action).toBeDefined();
-		await expect(suggestion?.action?.(suggestion, null)).resolves.toBe(
+		expect(getAction(suggestion)).toBeDefined();
+		await expect(getAction(suggestion)?.(suggestion, null)).resolves.toBe(
 			"[[2026-W21]]"
 		);
 		expect(consoleErrorSpy).toHaveBeenCalledTimes(1);
@@ -515,8 +515,7 @@ describe("DateEntityProvider", () => {
 			.find((item) => item.suggestionText === "this week");
 
 		expect(suggestion?.noteText).toBe("2026-W21");
-		expect(suggestion?.replacementText).toBe("2026-W21");
-		await expect(suggestion?.action?.(suggestion, null)).resolves.toBe(
+		await expect(getAction(suggestion)?.(suggestion, null)).resolves.toBe(
 			"[[2026-W21]]"
 		);
 	});
@@ -542,7 +541,7 @@ describe("DateEntityProvider", () => {
 			.getEntityList("this week")
 			.find((item) => item.suggestionText === "this week");
 
-		expect(suggestion?.action).toBeUndefined();
+		expect(getAction(suggestion)).toBeUndefined();
 	});
 
 	test("does not add an action when Periodic Notes lacks creation APIs", () => {
@@ -564,7 +563,7 @@ describe("DateEntityProvider", () => {
 			.getEntityList("this week")
 			.find((item) => item.suggestionText === "this week");
 
-		expect(suggestion?.action).toBeUndefined();
+		expect(getAction(suggestion)).toBeUndefined();
 	});
 });
 
@@ -574,20 +573,20 @@ test("re-resolves NLP and Periodic Notes capabilities on each evaluation", () =>
 	expect(provider.getEntityList("today")).toEqual([]);
 	const nlp = createNlDatesPlugin();
 	integrations["nldates-obsidian"] = nlp;
-	expect(provider.getEntityList("today").find(item => item.suggestionText === "today")?.replacementText).toBe("2026-05-17");
+	expect(provider.getEntityList("today").find(item => item.suggestionText === "today")?.noteText).toBe("2026-05-17");
 	const periodic = (format: string) => ({
 		calendarSetManager: { getActiveGranularities: () => ["week"], getFormat: () => format },
 		getPeriodicNote: jest.fn(), createPeriodicNote: jest.fn(),
 	});
 	integrations["periodic-notes"] = periodic("[First week]");
 	let week = provider.getEntityList("today").find(item => item.suggestionText === "this week")!;
-	expect(week.replacementText).toBe("First week"); expect(week.action).toBeDefined();
+	expect(week.noteText).toBe("First week"); expect(getAction(week)).toBeDefined();
 	integrations["periodic-notes"] = periodic("[Replacement week]");
 	week = provider.getEntityList("today").find(item => item.suggestionText === "this week")!;
-	expect(week.replacementText).toBe("Replacement week");
+	expect(week.noteText).toBe("Replacement week");
 	integrations["periodic-notes"] = {}; // Partial API is unavailable.
 	week = provider.getEntityList("today").find(item => item.suggestionText === "this week")!;
-	expect(week.action).toBeUndefined(); expect(week.replacementText).not.toBe("Replacement week");
+	expect(getAction(week)).toBeUndefined(); expect(week.noteText).not.toBe("Replacement week");
 	const replacementNlp = createNlDatesPlugin();
 	integrations["nldates-obsidian"] = replacementNlp;
 	nlp.parseDate.mockClear();

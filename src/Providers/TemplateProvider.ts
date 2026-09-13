@@ -1,5 +1,5 @@
 import { cloneSettings } from "../settingsData";
-import { EntitySuggestionItem } from "src/EntitiesSuggestor";
+import { EntitySuggestionItem } from "src/suggestion.types";
 import { EntityProvider, EntityProviderUserSettings } from "./EntityProvider";
 import { Plugin, Setting, TFile, TFolder } from "obsidian";
 import { EntitiesModalInput } from "src/userComponents";
@@ -79,7 +79,8 @@ export class TemplateEntityProvider extends EntityProvider<TemplateProviderUserS
         return this.getTemplateFiles(this.settings.path).map((file) => ({
             suggestionText: file.basename,
             icon: this.settings.actionType === "create" ? "file-plus" : "stamp",
-            action: () => this.actionFunction(file),
+            noteText: `${this.settings.actionType === "create" ? "Create from" : "Insert"} ${file.path}`,
+            target: { kind: "action", id: JSON.stringify([this.settings.actionType, file.path]), callback: () => this.actionFunction(file) },
         }));
     }
 

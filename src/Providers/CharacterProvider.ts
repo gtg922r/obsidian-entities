@@ -1,6 +1,6 @@
 import { cloneSettings } from "../settingsData";
 import { Plugin, Setting } from "obsidian";
-import { EntitySuggestionItem } from "src/EntitiesSuggestor";
+import { EntitySuggestionItem } from "src/suggestion.types";
 import { EntityProvider, EntityProviderUserSettings, ProviderSettingsInput } from "./EntityProvider";
 import emojilib from "emojilib";
 import { TriggerCharacter } from "../entities.types";
@@ -102,11 +102,10 @@ export class CharacterProvider extends EntityProvider<CharacterProviderUserSetti
 						// suggestionText: `${entry.char}: ${prefix}-${entry.name} (${keyword})`,
 						// suggestionText: `${entry.name} (${prefix}: ${keyword})`,
 						suggestionText: `${entry.name} (${prefix})${isSynonym ? ` for "${keyword}"` : ''}`,
-						replacementText: entry.char,
+						target: { kind: "text", text: entry.char },
 						// icon: this.settings.icon,
 						flair: entry.char,
 						// flair: prefix,
-						action: async () => entry.char,
 					});
 				}
 			}

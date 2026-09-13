@@ -1,5 +1,5 @@
 import { cloneSettings } from "../settingsData";
-import { EntitySuggestionItem } from "src/EntitiesSuggestor";
+import { EntitySuggestionItem } from "src/suggestion.types";
 import { EntityProvider, EntityProviderUserSettings, ProviderSettingsInput, RefreshBehavior } from "./EntityProvider";
 import {
 	EditorSuggestContext,
@@ -128,43 +128,37 @@ export class HelperEntityProvider extends EntityProvider<HelperProviderUserSetti
 		return RefreshBehavior.Never; // Use the "Never" refresh behavior
 	}
 
-        getEntityList(query: string, trigger: TriggerCharacter): EntitySuggestionItem[] {
-                if (trigger === TriggerCharacter.Slash) {
-                        const checkboxSuggestions = checkboxTypes.map(type => {
-                                const [checkboxType, checkboxContent] = Object.entries(type)[0];
-                                return {
-                                        suggestionText: `Checkbox: ${checkboxType.charAt(0).toUpperCase() + checkboxType.slice(1)}`,
-                                        icon: this.settings.checkboxIcon ?? "square-asterisk",
-                                        action: (item, context) => {
-                                                if (context) {
-                                                        this.checkboxUtilityFunction(checkboxContent, context);
-                                                } else {
-                                                        console.log("Utility Function Provider: No context given");
-                                                }
-                                                return undefined;
-                                        },
-                                } as EntitySuggestionItem;
-                        });
-
-                        const calloutSuggestions = calloutTypes.map(type => {
-                                return {
-                                        suggestionText: `Callout: ${type.charAt(0).toUpperCase() + type.slice(1)}`,
-                                        icon: this.settings.calloutIcon ?? "square-chevron-right",
-                                        action: (item, context) => {
-                                                if (context) {
-                                                        this.calloutUtilityFunction(type, context);
-                                                } else {
-                                                        console.log("Utility Function Provider: No context given");
-                                                }
-                                                return undefined;
-                                        },
-                                } as EntitySuggestionItem;
-                        });
-
-                        return [...checkboxSuggestions, ...calloutSuggestions];
-                }
-                return [];
-        }
+	getEntityList(query: string, trigger: TriggerCharacter): EntitySuggestionItem[] {
+		if (trigger !== TriggerCharacter.Slash) return [];
+		const checkboxSuggestions = checkboxTypes.map((type): EntitySuggestionItem => {
+			const [checkboxType, checkboxContent] = Object.entries(type)[0];
+			return {
+				suggestionText: `Checkbox: ${checkboxType.charAt(0).toUpperCase() + checkboxType.slice(1)}`,
+				icon: this.settings.checkboxIcon ?? "square-asterisk",
+				target: {
+					kind: "action",
+					id: JSON.stringify(["checkbox", checkboxContent]),
+					callback: (item, context) => {
+						if (context) this.checkboxUtilityFunction(checkboxContent, context);
+						else console.log("Utility Function Provider: No context given");
+					},
+				},
+			};
+		});
+		const calloutSuggestions = calloutTypes.map((type): EntitySuggestionItem => ({
+			suggestionText: `Callout: ${type.charAt(0).toUpperCase() + type.slice(1)}`,
+			icon: this.settings.calloutIcon ?? "square-chevron-right",
+			target: {
+				kind: "action",
+				id: JSON.stringify(["callout", type]),
+				callback: (item, context) => {
+					if (context) this.calloutUtilityFunction(type, context);
+					else console.log("Utility Function Provider: No context given");
+				},
+			},
+		}));
+		return [...checkboxSuggestions, ...calloutSuggestions];
+	}
 
 	private checkboxUtilityFunction(
 		checkboxType: string,
