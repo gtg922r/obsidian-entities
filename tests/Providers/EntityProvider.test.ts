@@ -1,4 +1,4 @@
-import { getAction } from "../suggestionTestHelpers";
+import { actionContext, getAction } from "../suggestionTestHelpers";
 import { Plugin } from "obsidian";
 import {
 	EntityProvider,
@@ -19,10 +19,6 @@ jest.mock("obsidian", () => ({
 	},
 }));
 
-// Mock entitiesUtilities
-jest.mock("../../src/entitiesUtilities", () => ({
-	createNewNoteFromTemplate: jest.fn().mockResolvedValue(undefined),
-}));
 
 // Test implementation of EntityProvider
 interface TestProviderSettings extends EntityProviderUserSettings {
@@ -260,8 +256,8 @@ describe("EntityProvider base class", () => {
 			const results = provider.getTemplateCreationSuggestions("Alice");
 			const action = getAction(results[0])!;
 			// Note: action is async and calls createNewNoteFromTemplate
-			const result = await action(results[0], null);
-			expect(result).toBeUndefined();
+			const result = await action(actionContext());
+			expect(result).toMatchObject({ status: "failed" });
 		});
 	});
 });

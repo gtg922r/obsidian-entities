@@ -1,3 +1,5 @@
+import { EditorBindings } from "../src/editorBindings";
+import { destroyTestEditors, mountTestEditor, TestEvents } from "./editorTestHarness";
 /**
  * Integration tests for the full suggestion flow
  * Tests provider interactions, trigger priority, and end-to-end behavior
@@ -12,6 +14,7 @@ import { TriggerCharacter } from "../src/entities.types";
 
 jest.mock("obsidian", () => {
 	return {
+		...jest.requireActual("./__mocks__/obsidian"),
 		EditorSuggest: class { close() {} },
 		Plugin: class {
 			app: jest.MockedObject<App>;
@@ -381,114 +384,23 @@ describe("Integration: Provider refresh behavior", () => {
 });
 
 describe("Integration: Suggestion selection", () => {
-	let suggestor: EntitiesSuggestor;
-	let registry: ProviderRegistry;
-
-	beforeEach(() => {
-		(ProviderRegistry as any).instance = null;
-		ProviderRegistry.initializeRegistry(mockPlugin as any);
-		registry = ProviderRegistry.getInstance();
-		suggestor = new EntitiesSuggestor(mockPlugin, registry);
-	});
-
-	test("selecting an unresolved target inserts an explicit wikilink", () => {
-		const mockEditor = {
-			replaceRange: jest.fn(),
-			setCursor: jest.fn(),
-			posToOffset: jest.fn().mockReturnValue(0),
-			offsetToPos: jest.fn().mockReturnValue({ line: 0, ch: 12 }),
-		} as unknown as jest.Mocked<Editor>;
-
-		const context = {
-			editor: mockEditor,
-			start: { line: 0, ch: 1 },
-			end: { line: 0, ch: 5 },
-			query: "@test",
-		} as unknown as EditorSuggestContext;
-
-		(suggestor as any).context = context;
-
-		const suggestion: EntitySuggestionItem = {
-			suggestionText: "TestNote", target: { kind: "unresolved-link" as const, linkpath: "TestNote" },
-		};
-
-		const provider = new AtTriggerProvider(mockPlugin, { providerInstanceId: "selected" }, [suggestion]);
+	afterEach(destroyTestEditors);
+	test.each([
+		[{ kind: "unresolved-link", linkpath: "TestNote" }, "[[TestNote]]"],
+		[{ kind: "unresolved-link", linkpath: "Alice", alias: "Ali" }, "[[Alice|Ali]]"],
+	] as const)("selects ordinary target %p synchronously", (target, expected) => {
+		const source = Object.assign(new TFile(), { path: "Source.md" });
+		Object.assign(mockPlugin.app, { workspace: new TestEvents(), vault: { getAbstractFileByPath: () => source } });
+		const bindings = new EditorBindings(mockPlugin.app);
+		const h = mountTestEditor(mockPlugin.app, bindings, source);
+		const provider = new AtTriggerProvider(mockPlugin, { providerInstanceId: "selected" }, [{ suggestionText: "Target", target }]);
+		const registry = ProviderRegistry.initializeRegistry(mockPlugin);
 		jest.spyOn(registry, "getProviders").mockReturnValue([provider]);
 		jest.spyOn(registry, "getProvidersForTrigger").mockReturnValue([provider]);
-		const [result] = suggestor.getSuggestions({ ...context, query: "@" });
-		suggestor.selectSuggestion(result, {} as MouseEvent);
-
-		expect(mockEditor.replaceRange).toHaveBeenCalledWith(
-			"[[TestNote]]",
-			{ line: 0, ch: 0 },
-			{ line: 0, ch: 5 }
-		);
-	});
-
-	test("selecting an unresolved target preserves its separate alias", () => {
-		const mockEditor = {
-			replaceRange: jest.fn(),
-			setCursor: jest.fn(),
-			posToOffset: jest.fn().mockReturnValue(0),
-			offsetToPos: jest.fn().mockReturnValue({ line: 0, ch: 18 }),
-		} as unknown as jest.Mocked<Editor>;
-
-		const context = {
-			editor: mockEditor,
-			start: { line: 0, ch: 1 },
-			end: { line: 0, ch: 5 },
-			query: "@test",
-		} as unknown as EditorSuggestContext;
-
-		(suggestor as any).context = context;
-
-		const suggestion: EntitySuggestionItem = {
-			suggestionText: "Ali", target: { kind: "unresolved-link" as const, linkpath: "Alice", alias: "Ali" },
-		};
-
-		const provider = new AtTriggerProvider(mockPlugin, { providerInstanceId: "selected" }, [suggestion]);
-		jest.spyOn(registry, "getProviders").mockReturnValue([provider]);
-		jest.spyOn(registry, "getProvidersForTrigger").mockReturnValue([provider]);
-		const [result] = suggestor.getSuggestions({ ...context, query: "@" });
-		suggestor.selectSuggestion(result, {} as MouseEvent);
-
-		expect(mockEditor.replaceRange).toHaveBeenCalledWith(
-			"[[Alice|Ali]]",
-			{ line: 0, ch: 0 },
-			{ line: 0, ch: 5 }
-		);
-	});
-
-	test("selecting item with action calls action", async () => {
-		const actionMock = jest.fn().mockReturnValue("custom result");
-
-		const mockEditor = {
-			replaceRange: jest.fn(),
-			setCursor: jest.fn(),
-			posToOffset: jest.fn().mockReturnValue(0),
-			offsetToPos: jest.fn().mockReturnValue({ line: 0, ch: 13 }),
-		} as unknown as jest.Mocked<Editor>;
-
-		const context = {
-			editor: mockEditor,
-			start: { line: 0, ch: 1 },
-			end: { line: 0, ch: 5 },
-			query: "@test",
-		} as unknown as EditorSuggestContext;
-
-		(suggestor as any).context = context;
-
-		const suggestion: EntitySuggestionItem = {
-			suggestionText: "Action Item", target: { kind: "action" as const, id: "test-action", callback: actionMock },
-		};
-
-		const provider = new AtTriggerProvider(mockPlugin, { providerInstanceId: "selected" }, [suggestion]);
-		jest.spyOn(registry, "getProviders").mockReturnValue([provider]);
-		jest.spyOn(registry, "getProvidersForTrigger").mockReturnValue([provider]);
-		const [result] = suggestor.getSuggestions({ ...context, query: "@" });
-		suggestor.selectSuggestion(result, {} as MouseEvent);
-
-		expect(actionMock).toHaveBeenCalledWith(result, { ...context, query: "@" });
+		const suggestor = new EntitiesSuggestor(mockPlugin, registry, bindings);
+		suggestor.selectSuggestion(suggestor.getSuggestions(h.context)[0], {} as MouseEvent);
+		expect(h.editor.getValue()).toBe(expected);
+		expect(h.editor.transaction).toHaveBeenCalledTimes(1);
 	});
 });
 

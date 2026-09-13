@@ -28,7 +28,9 @@ This document explains the overall layout and flow of the **Entities** Obsidian 
 │   ├── suggestion.types.ts    # Required target union and suggestion presentation
 │   ├── suggestionTargets.ts    # Target validation, identity and effective aliases
 │   ├── entities.types.ts      # Shared types & interfaces
-│   ├── entitiesUtilities.ts   # Templater integration helpers
+│   ├── actionCoordinator.ts   # Typed outcomes and one guarded editor commit
+│   ├── editorBindings.ts      # Public editor extension and lifecycle observations
+│   ├── helperEdits.ts         # Pure affected-line transformations
 │   ├── userComponents.ts      # Notices, modals, icon picker
 │   └── main.ts                # Plugin entry point
 ├── tests/              # Jest unit & integration tests
@@ -46,7 +48,7 @@ This document explains the overall layout and flow of the **Entities** Obsidian 
    - Initializes the singleton `ProviderRegistry`.
    - Registers all provider classes.
    - Instantiates provider instances from saved settings.
-   - Creates an `EntitiesSuggestor` and registers it with Obsidian.
+   - Registers a narrow public editor binding extension before creating and registering `EntitiesSuggestor`.
    - Registers data/index listeners once through Obsidian lifecycle cleanup.
    - On unload, drains pending saves, disposes suggestions, and resets providers.
 
@@ -61,7 +63,7 @@ This document explains the overall layout and flow of the **Entities** Obsidian 
      support the `@` trigger and have templates configured.
    - `selectSuggestion` validates real file identity and generates its native link
      using the retrieval source note, or inserts deliberate unresolved links,
-     exact literal text, or the existing action callback result.
+     exact literal text, or a typed action outcome through the same guarded transaction.
 
 3. **`EntitiesSettings`** – Settings tab where users add, configure, and remove
    provider instances. Provider classes supply their own settings UI via static
@@ -116,11 +118,11 @@ Shared UI builders eliminating duplication across provider settings:
 ### Creation boundaries
 
 `entityCreation.ts` confirms actual live file outcomes without owning an editor
-or modal. Provider callbacks capture destinations/source paths and format confirmed
-results through `creationFeedback.ts`. `creationPrompt.ts` tracks pending name
+or modal. Provider callbacks capture destinations/source paths and return confirmed
+results to `actionCoordinator.ts`. `creationPrompt.ts` tracks pending name
 prompts once per plugin and checks provider/lifecycle state before engine startup.
 See [confirmed creation](docs/creation-recovery.md) for destination policies,
-recipe preservation, native-method evidence and the unresolved R4b insertion limits.
+recipe preservation, native-method evidence and the temporary Template insertion limitation.
 
 ## Major Interfaces
 
@@ -152,6 +154,13 @@ recipe preservation, native-method evidence and the unresolved R4b insertion lim
   - Calls `fileManager.generateMarkdownLink` only at selection, after verifying
     `vault.getAbstractFileByPath(file.path) === file`. Uses that row's captured
     source context and native output unchanged; failures give feedback with no write.
+  - Consumes the displayed epoch synchronously, then lets the coordinator retain
+    provider/lifetime validity independently of fresh retrieval and cache changes.
+    ActionContext copies the source path, document, exact span and selections; it
+    exposes only `canStartWork()` for later engine startup checks.
+  - Commits one `Editor.transaction` with `input.complete` origin and a caret in
+    the resulting document after final binding, revision, source, selection and
+    range checks. Created files remain created if later insertion is refused.
 
 - **`RegisterableEntityProvider`** – Type describing provider classes that can be
   registered. Requires static `providerTypeID`, `getDescription()`,
@@ -246,3 +255,28 @@ are skipped individually and diagnostics are bounded per provider/stage.
 6. Use `EntityFilters` for frontmatter-based filtering if needed.
 7. Register the class in `main.ts` → `registerEntityProviders()`.
 8. Add tests in `tests/Providers/`.
+
+## Editor ownership and observed limits
+
+`editorBindings.ts` installs one `ViewPlugin` through `registerEditorExtension`.
+It reads optional public `editorInfoField` and retains the exact Editor, info,
+TFile, EditorView and owner document/window. Missing fields, replacement, destroy,
+detachment observed by layout checks and popout closure fail safely. Focus changes
+to another mapped editor invalidate pending work; selection seeds the focus
+baseline so modal blur and return to the same editor remain valid.
+
+Immediate public `editor-change` revisions detect delivered edit→undo even when
+text is restored. Delivered activation events are tracked separately from lookup
+cache revisions. Native activation is debounced: undelivered same-task programmatic
+A→B→A is not detectable. Final active binding/document/selection checks still apply.
+No private editor fields, setter interception, arbitrary timer or syntax classifier
+is used. CodeMirror state/view remain host-external imports; direct development
+declarations pin the already-resolved versions. Required public APIs exist in
+Obsidian 1.7.2 declarations, which does not establish live floor/popout acceptance.
+
+Helpers calculate one whole-line edit without touching an editor, preserving
+indentation, text outside the trigger and existing created metadata. Templater
+insertion is always unavailable through Entities; preserved rows/settings explain
+the manual native command. No append, parser, command dispatch or alternate
+creation is attempted. Live Source/Live Preview, popout, undo/redo and mobile
+acceptance remain NOT RUN; see the runtime acceptance matrix.

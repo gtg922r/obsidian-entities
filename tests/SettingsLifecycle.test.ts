@@ -20,12 +20,14 @@ jest.mock("obsidian", () => {
 		setCta() { return this; }
 	}
 	return {
+		...jest.requireActual("./__mocks__/obsidian"),
 		Plugin: class {
 			constructor(public app: App, public manifest: PluginManifest) {}
 			loadData = jest.fn();
 			saveData = jest.fn().mockResolvedValue(undefined);
 			addSettingTab = jest.fn();
 			registerEditorSuggest = jest.fn();
+			registerEditorExtension = jest.fn();
 			register = jest.fn();
 			registerEvent = jest.fn();
 		},
@@ -53,7 +55,6 @@ jest.mock("obsidian", () => {
 });
 
 jest.mock("../src/userComponents", () => ({ EntitiesNotice: jest.fn(), IconPickerModal: jest.fn() }));
-jest.mock("../src/entitiesUtilities", () => ({}));
 jest.mock("../src/EntitiesSuggestor", () => ({ EntitiesSuggestor: class { dispose() {} invalidateData() {} } }));
 jest.mock("../src/Providers/FolderEntityProvider", () => ({}));
 jest.mock("../src/Providers/DataviewEntityProvider", () => ({}));
@@ -93,7 +94,7 @@ function createPlugin(data: unknown, dir = "config/plugins/entities") {
 		}),
 		write: jest.fn(async (path: string, raw: string) => { files.set(path, raw); }),
 	};
-	const app = { vault: { configDir: "config", adapter, on: jest.fn() }, metadataCache: { on: jest.fn() }, workspace: { onLayoutReady: jest.fn() } } as unknown as App;
+	const app = { vault: { configDir: "config", adapter, on: jest.fn() }, metadataCache: { on: jest.fn() }, workspace: { on: jest.fn(), onLayoutReady: jest.fn() } } as unknown as App;
 	const plugin = instantiatePlugin(app, dir);
 	return { plugin, adapter, app, files };
 }

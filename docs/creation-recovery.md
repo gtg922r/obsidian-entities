@@ -1,4 +1,4 @@
-# Confirmed creation (R4a)
+# Confirmed creation and guarded insertion (R4a/R4b)
 
 Choosing a creation action now awaits the integration and links only its returned,
 live vault file. Native link formatting uses the source path captured before the
@@ -57,10 +57,48 @@ independent effects. The separate native parser/module harness reproduced shared
 configuration contamination during concurrent Templater runs; confirmed returned
 file identity does not imply isolation or correctness of concurrent template content.
 
-R4b remains a release blocker. This stage preserves existing action arguments and
-string-or-void outcomes (including async void), and leaves native Template insertion
-unchanged. It does not supply document-revision/editor-binding guards, duplicate
-selection consumption, helper transactions, safe replacement of native append,
-or general stale-editor-write safety. Once an engine starts, later invalidation
-cannot undo its creation. Live desktop/mobile, rendered links, cursor/selection,
-properties, undo and runtime upgrade acceptance are **NOT RUN** in this stage.
+R4b supplies typed action outcomes and an editor coordinator. All Entities-owned
+edits, including ordinary links and Helpers, go through one public transaction
+with explicit completion origin and resulting-document caret. Captured source
+identity/path, full document, exact trigger, selections, public binding, delivered
+edit revisions and observed activation generations must remain valid. A delivered
+edit then undo cancels pending insertion. Fresh retrieval, menu close, modal blur,
+return to the same editor, unrelated layout and target/index events alone do not.
+A pending Editor slot prevents duplicate action work; old completion cannot release
+a newer slot. Composition-confirmation selection is ignored without consuming the row.
+
+The extension uses public `editorInfoField` and owns its `EditorView`; no private
+Editor field or active-editor fallback is used. Missing/replaced bindings and
+observed detach/destroy fail safely. Activation events are debounced; undelivered
+same-task programmatic A→B→A remains an observation limit. Final unchanged binding,
+document, source and selection checks still apply. Native template effects already
+running remain outside cancellation; no abort/rollback promise is made.
+
+## Temporary Template insertion limitation
+
+**Template insertion through Entities is unavailable during recovery.** Existing
+insertion providers keep their action type, template path, trigger, identity and
+unknown settings, and remain identifiable in settings and autocomplete. Selecting
+one settles once, runs no engine and leaves the trigger, document and selection
+unchanged. This applies to every Templater presence/version/capability state.
+
+To insert manually, dismiss autocomplete, remove the trigger text, then run
+**Templater: Open insert template modal** and choose the named template, or use
+your existing template hotkey. Entities never dispatches that command, clears the
+trigger, substitutes another engine or changes insertion into note creation.
+The native operation is outside Entities' guard; it is not a claim of safer native
+concurrency. Note creation continues through the separate R4a adapter.
+
+Inspected native append writes to a later editor selection. Lower-level rendering
+shares mutable modules/configuration and includes with external native runs; an
+Entities-only queue cannot establish isolated output. Restoring insertion requires
+a reviewed upstream integration with isolated per-run state and a guarded commit,
+including properties/cursor/hooks parity. No parser adapter is shipped here.
+
+Focused R4b regressions use real CodeMirror state/view/extension with synthetic
+Obsidian events and modal/provider fixtures. Inert extracted native methods verify
+transaction and activation boundaries on 1.12.7/1.14.1. Public APIs are declared
+at 1.7.2, but the manifest/floor is unchanged and those declarations do not certify
+scheduling or mounting behavior. Live desktop/mobile, Source/Live Preview/popout,
+rendered links, properties, immediate undo/redo, manual native-command routing and
+runtime upgrade acceptance are **NOT RUN**. See the runtime acceptance matrix.

@@ -1,6 +1,7 @@
 import { Events, Notice, Plugin } from "obsidian";
 import { EntitiesSettingTab } from "./EntitiesSettings";
 import { EntitiesSettings } from "./entities.types";
+import { EditorBindings } from "./editorBindings";
 import { EntitiesSuggestor } from "./EntitiesSuggestor";
 import ProviderRegistry from "./Providers/ProviderRegistry";
 import {
@@ -55,7 +56,9 @@ export default class Entities extends Plugin {
 		if (this.unloaded || store.isClosed || this.settingsStore !== store) return;
 		this.settingsTab = new EntitiesSettingTab(this.app, this);
 		this.addSettingTab(this.settingsTab);
-		this.suggestor = new EntitiesSuggestor(this, this.providerRegistry);
+		const bindings = new EditorBindings(this.app);
+		bindings.register(this);
+		this.suggestor = new EntitiesSuggestor(this, this.providerRegistry, bindings);
 		this.registerEditorSuggest(this.suggestor);
 		const suggestor = this.suggestor;
 		this.register(() => suggestor.dispose());

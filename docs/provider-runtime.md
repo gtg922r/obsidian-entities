@@ -50,11 +50,12 @@ dismissal span, so the same text can reopen with current settings.
   `dataview:index-ready`, `dataview:api-ready`, `metadata-menu:indexed`,
   `metadata-menu:fileclass-indexed`, `metadata-menu:fields-changed`.
 
-Data/index events advance only the data revision, marking the cache dirty while
+Lookup data/index events advance only the data revision, marking the cache dirty while
 keeping the displayed results selectable. They neither close the menu nor
 advance its result epoch. The next request evaluates current data and replaces
 the result epoch, making callbacks from the previous batch obsolete.
-Layout readiness uses the same invalidation path with an unload/instance guard.
+Separate source delete/rename observers invalidate editor bindings; target changes
+remain lookup-only. Layout readiness uses the same cache invalidation path with an unload/instance guard.
 Obsidian lifecycle cleanup releases listeners; unload also disposes the suggestor
 immediately. Deferred callbacks cannot revive it. No generic plugin-enable event
 is assumed and there are no provider timers or background queries.
@@ -83,13 +84,27 @@ membership. Retained callbacks from replaced configurations or older result
 batches do nothing. Ordinary menu close does not advance the epoch, so valid
 selection works whether the host closes before or after invoking it.
 
-After awaiting an action, a second check gates only provider generation and
-unload, so normal close or an index event from the action itself does not discard
-its returned string. It does **not** cancel action side effects, detect document
-switches/edits, validate replacement ranges, or solve cancellation, double
-selection and undo. Those editor/action guarantees remain R4. Public
-`EntitySuggestionItem` now requires one target; callback arguments and string-or-void
-outcomes remain unchanged.
+At selection entry, ignore composition confirmation, validate the retained source,
+and consume the displayed result synchronously. One current pending operation per
+Editor rejects fresh duplicate retrieval of the unchanged source span. Started
+work checks registry/provider/unload validity independently of result epochs,
+data revisions and menu visibility. Invalidated old work cannot clear a newer slot.
+
+Callbacks receive `ActionContext`: copied source file/path, full document snapshot,
+exact trigger offsets/text/query, all selection offsets and `canStartWork()`. The
+wrappers are immutable; the native TFile is retained without freezing it. There is
+no Editor, mutable suggest context, row or active-editor fallback in this contract.
+After a prompt/await, check `canStartWork()` immediately before engine invocation,
+alongside the prompt's own lifetime guard.
+
+Return `ActionResult`: R4a `created`/`existing` with actual file and optional alias,
+`cancelled`/`failed`, an intentional non-action `target`, one `edit`, or
+`unavailable`. String/void/malformed outcomes fail once without cleanup edits.
+Providers do not format native links or mutate editors. The coordinator validates
+public binding, source identity/path, immediate edit revision, delivered activation,
+full document, selections and range before one named transaction, with no await
+between final checks and commit. A created file remains created if insertion fails.
+Trusted native effects already running cannot be rolled back by this guard.
 
 `tests/RuntimeFreshness.test.ts` exercises cache timing/bounds, concrete provider
 instances, fault isolation, runtime events and retained selection with controlled
@@ -134,17 +149,17 @@ No new persisted template-row IDs are introduced.
 At real-file selection, `vault.getAbstractFileByPath(file.path) === file` must hold.
 A renamed live file uses its current path. A deleted/replaced file gives a notice
 and no editor write. Native formatting is evaluated at selection as
-`app.fileManager.generateMarkdownLink(file, sourceContext.file.path, undefined, effectiveAlias)`.
+`app.fileManager.generateMarkdownLink(file, capturedSourcePath, undefined, effectiveAlias)`.
 Source context comes from R2 provenance, never whichever editor happens to be
 active. Preferences changed after caching take effect; fresh retrieval for another
 source can reuse cached raw targets. Formatting failure gives a notice without
 an editor write or guessed fallback. The native string is passed through unchanged.
 
-The deliberate unresolved-date boundary remains explicit wikilinks in R3, even
+The deliberate unresolved-date boundary remains explicit wikilinks, even
 under Markdown preferences. Date splits linkpath/alias at its producer, with no
 generic parsing of pipe-containing strings and no fabricated files or private
-preference reads. Date creation callbacks preserve their existing fallback and
-native alias behavior until R4. Their IDs include granularity/date, operative
+preference reads. Date creation callbacks return actual creation outcomes and their operative alias;
+a failed creation never falls back to an unresolved success. Their IDs include granularity/date, operative
 output alias (`today` versus `this sunday`), and fallback linkpath/alias.
 
 ## Evidence boundary
@@ -157,11 +172,19 @@ actual Obsidian 1.12.7/1.14.1 native formatting with inert vault indexes/prefere
 (240 cases per version), including exact forwarding through this suggestor and
 selection-time source/preferences/file-event checks. The actual installed Dataview
 0.5.66 DataArray class/proxy also passes the provider/suggestor alias flow.
-These do not prove live UI behavior or the proposed minimum-version gate.
+These historical R3 method checks do not prove R4b live UI behavior or the proposed minimum-version gate.
 
 Native aliases and unusual filenames have host quirks: e.g. `A]]B` can produce
 `[[Unique Note|A]]B]]`; `#`, `%` and parentheses in destinations are not generally
 escaped. R3 adds no escaping/parser layer. Unusual punctuation/filename rendered
-resolution, live UI, and actual created-file outcomes remain unverified host/R4
+resolution, live UI and actual runtime created-file insertion remain unverified host
 acceptance cases for the coordinator's dedicated fixture run. Do not infer
 arbitrary punctuation safety from a successful native-string parity check.
+
+R4b tests additionally exercise real CodeMirror state/view/extension lifecycle with
+synthetic public Obsidian events, including edit→undo, focus changes, binding reuse,
+missing fields, malformed results and duplicate selection. Separate inert native
+transaction evidence confirms old-document change coordinates and resulting-document
+caret coordinates. These are not live Source/Live Preview/popout or undo acceptance.
+Template insertion rows always return `unavailable`, preserving configuration and
+text; their message names the manual Templater command and exact template path.

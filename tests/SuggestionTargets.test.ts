@@ -1,3 +1,5 @@
+import { destroyTestEditors, mountTestEditor, TestEvents } from "./editorTestHarness";
+import { EditorBindings } from "../src/editorBindings";
 import { App, Editor, EditorSuggestContext, Notice, TFile, TFolder, prepareFuzzySearch } from "obsidian";
 import type Entities from "../src/main";
 import { EntitiesSuggestor } from "../src/EntitiesSuggestor";
@@ -12,7 +14,6 @@ import { DateEntityProvider } from "../src/Providers/DateEntityProvider";
 import moment = require("moment");
 import { MetadataMenuProvider } from "../src/Providers/MetadataMenuProvider";
 import { TriggerCharacter } from "../src/entities.types";
-import { insertTemplateUsingTemplater } from "../src/entitiesUtilities";
 
 jest.mock("obsidian", () => ({
 	...jest.requireActual("./__mocks__/obsidian"),
@@ -22,7 +23,6 @@ jest.mock("obsidian", () => ({
 	prepareFuzzySearch: jest.fn(),
 	setIcon: jest.fn(),
 }));
-jest.mock("../src/entitiesUtilities", () => ({ createNewNoteFromTemplate: jest.fn(), insertTemplateUsingTemplater: jest.fn(async () => {}) }));
 jest.mock("../src/userComponents", () => ({ EntitiesNotice: jest.fn() }));
 jest.mock("emojilib", () => ({ __esModule: true, default: { "🐈": ["cat", "cat_face"], "👩🏽‍💻": ["coder", "coding"] } }));
 
@@ -31,7 +31,7 @@ const file = (path: string): TFile => {
 	return Object.assign(new TFile(), { path, name, basename: name.slice(0, name.lastIndexOf(".")), extension: name.split(".").pop()! });
 };
 const item = (target: SuggestionTarget, suggestionText = "Shared", noteText?: string): EntitySuggestionItem => ({ target, suggestionText, noteText });
-const editor = () => ({ replaceRange: jest.fn(), setCursor: jest.fn(), posToOffset: jest.fn(() => 0), offsetToPos: jest.fn(() => ({ line: 0, ch: 1 })) }) as unknown as jest.Mocked<Editor>;
+const editor = () => ({ transaction: jest.fn(), replaceRange: jest.fn(), setCursor: jest.fn(), posToOffset: jest.fn(() => 0), offsetToPos: jest.fn(() => ({ line: 0, ch: 1 })) }) as unknown as jest.Mocked<Editor>;
 const context = (query = "@", path = "Writing/Drafts/Source.md"): EditorSuggestContext => ({ query, editor: editor(), file: file(path), start: { line: 0, ch: 1 }, end: { line: 0, ch: query.length } });
 
 function harness() {
@@ -41,6 +41,7 @@ function harness() {
 	const integrations: Record<string, unknown> = {};
 	const generate = jest.fn(() => "native link");
 	const app = {
+		workspace: new TestEvents(),
 		vault: { getAbstractFileByPath: (path: string) => files.get(path) ?? null, getFolderByPath: (path: string) => ({ children: folders.get(path) ?? [] }) },
 		metadataCache: { getFileCache: (file: TFile) => ({ frontmatter: metadata.get(file.path) }), getCache: (path: string) => ({ frontmatter: metadata.get(path) }), getFirstLinkpathDest: jest.fn((path: string) => files.get(path)) },
 		plugins: { getPlugin: (id: string) => integrations[id] },
@@ -50,7 +51,17 @@ function harness() {
 	let providers: EntityProvider<EntityProviderUserSettings>[] = [];
 	let onChange = () => {};
 	const registry = { revision: 1, onChange: (cb: () => void) => { onChange = cb; return () => {}; }, getProviders: () => providers, getProvidersForTrigger: (trigger: TriggerCharacter) => providers.filter(p => p.triggers.includes(trigger)) } as unknown as ProviderRegistry;
-	const suggestor = new EntitiesSuggestor(plugin, registry);
+	const bindings = new EditorBindings(app);
+	const suggestor = new EntitiesSuggestor(plugin, registry, bindings);
+	const retrieve = suggestor.getSuggestions.bind(suggestor), mounted = new WeakSet<Editor>();
+	jest.spyOn(suggestor, "getSuggestions").mockImplementation(ctx => {
+		if (!mounted.has(ctx.editor)) {
+			files.set(ctx.file.path, ctx.file);
+			mountTestEditor(app, bindings, ctx.file, ctx.query, ctx.query, ctx.editor);
+			mounted.add(ctx.editor);
+		}
+		return retrieve(ctx);
+	});
 	const use = (...rows: EntityProvider<EntityProviderUserSettings>[]) => { providers = rows; };
 	const replaceProviders = (...rows: EntityProvider<EntityProviderUserSettings>[]) => { use(...rows); Object.assign(registry, { revision: registry.revision + 1 }); onChange(); };
 	const source = (id: string, rows: EntitySuggestionItem[], creation: EntitySuggestionItem[] = []) => ({
@@ -60,6 +71,8 @@ function harness() {
 	}) as unknown as EntityProvider<EntityProviderUserSettings>;
 	return { app, plugin, files, folders, metadata, integrations, generate, suggestor, use, source, replaceProviders };
 }
+
+afterEach(destroyTestEditors);
 
 beforeEach(() => {
 	jest.clearAllMocks();
@@ -80,7 +93,7 @@ test("Folder and Dataview retain duplicate paths/aliases and collapse the identi
 		const selected = rows.find(row => row.target.kind === "file" && row.target.file === target)!;
 		h.suggestor.selectSuggestion(selected, {} as MouseEvent);
 		expect(h.generate).toHaveBeenLastCalledWith(target, ctx.file.path, undefined, "Shared alias");
-		expect(ctx.editor.replaceRange).toHaveBeenCalledWith("native link", { line: 0, ch: 0 }, ctx.end);
+		expect(ctx.editor.getValue()).toBe("native link");
 	}
 });
 
@@ -138,14 +151,14 @@ test("native formatting uses selection-time preferences and each retrieval's sou
 	h.generate.mockReturnValue("[A [label] | 東京](../../People/Zoë%20東京.md)");
 	h.suggestor.selectSuggestion(rowA, {} as MouseEvent);
 	expect(h.generate).toHaveBeenLastCalledWith(f, a.file.path, undefined, "A [label] | 東京");
-	expect(a.editor.replaceRange).toHaveBeenCalledWith(h.generate.mock.results[0].value, { line: 0, ch: 0 }, a.end);
-	expect(b.editor.replaceRange).not.toHaveBeenCalled();
+	expect(a.editor.getValue()).toBe(h.generate.mock.results[0].value);
+	expect(b.editor.transaction).not.toHaveBeenCalled();
 	const [rowB] = h.suggestor.getSuggestions(b);
 	expect(provider.getEntityList).toHaveBeenCalledTimes(1);
 	h.generate.mockReturnValue("[[People/Zoë 東京|A [label] | 東京]]");
 	h.suggestor.selectSuggestion(rowB, {} as MouseEvent);
 	expect(h.generate).toHaveBeenLastCalledWith(f, b.file.path, undefined, "A [label] | 東京");
-	expect(b.editor.replaceRange).toHaveBeenCalledWith(h.generate.mock.results[1].value, { line: 0, ch: 0 }, b.end);
+	expect(b.editor.getValue()).toBe(h.generate.mock.results[1].value);
 });
 
 test("attachment default aliases stay visible and share identity with the explicit full filename", () => {
@@ -170,11 +183,11 @@ test.each(["rename", "delete", "replace", "format throws", "format empty"])("pre
 	h.suggestor.selectSuggestion(row, {} as MouseEvent);
 	if (change === "rename") {
 		expect(h.generate).toHaveBeenCalledWith(f, ctx.file.path, undefined, undefined);
-		expect(ctx.editor.replaceRange).toHaveBeenCalledTimes(1);
+		expect(ctx.editor.transaction).toHaveBeenCalledTimes(1);
 		expect(Notice).not.toHaveBeenCalled();
 	} else {
-		expect(ctx.editor.replaceRange).not.toHaveBeenCalled();
-		expect(Notice).toHaveBeenCalledWith(expect.stringMatching(/note|link/));
+		expect(ctx.editor.transaction).not.toHaveBeenCalled();
+		expect(Notice).toHaveBeenCalledWith(expect.stringMatching(/file|link/), 8000);
 		if (change === "delete" || change === "replace") expect(h.generate).not.toHaveBeenCalled();
 	}
 });
@@ -227,7 +240,7 @@ test("Character synonyms dedupe literal Unicode without link wrapping", () => {
 	for (const [query, literal] of [[":cat", "🐈"], [":cod", "👩🏽‍💻"]]) {
 		const ctx = context(query), rows = h.suggestor.getSuggestions(ctx);
 		expect(rows).toHaveLength(1); h.suggestor.selectSuggestion(rows[0], {} as MouseEvent);
-		expect(ctx.editor.replaceRange).toHaveBeenCalledWith(literal, { line: 0, ch: 0 }, ctx.end);
+		expect(ctx.editor.getValue()).toBe(literal);
 	}
 	expect(h.generate).not.toHaveBeenCalled();
 });
@@ -239,10 +252,11 @@ test("same-label template actions from two paths and two providers invoke only t
 	h.use(one, two);
 	for (const [index, target] of [[0, a], [1, b]] as const) {
 		const ctx = context("/"), rows = h.suggestor.getSuggestions(ctx);
-		expect(rows).toHaveLength(2); expect(rows[index].noteText).toBe(`Insert ${target.path}`);
+		expect(rows).toHaveLength(2); expect(rows[index].noteText).toBe(`Insertion unavailable in Entities: ${target.path}`);
 		h.suggestor.selectSuggestion(rows[index], {} as MouseEvent); await Promise.resolve();
-		expect(insertTemplateUsingTemplater).toHaveBeenLastCalledWith(h.plugin, target);
-		expect(insertTemplateUsingTemplater).toHaveBeenCalledTimes(index + 1);
+		expect(Notice).toHaveBeenLastCalledWith(expect.stringContaining(target.path), 8000);
+		expect(Notice).toHaveBeenCalledTimes(index + 1);
+		expect(ctx.editor.transaction).not.toHaveBeenCalled();
 	}
 	// Two paths in a single configured source also survive (legacy array paths are supported).
 	h.replaceProviders(new TemplateEntityProvider(h.plugin, { providerInstanceId: "both", path: ["A", "B"] as unknown as string, actionType: "insert" }));
@@ -271,7 +285,7 @@ test("Metadata Menu action identity includes file class, template path and query
 	expect(first.target.kind === "action" && JSON.parse(first.target.id)).toEqual(["create", "Classes/Person.md", a.path, "New"]);
 	h.metadata.set("Classes/Person.md", { newNoteTemplate: "[[Templates/B.md]]" });
 	expect(provider.getTemplateCreationSuggestions("New")[0].target).not.toEqual(first.target);
-	expect(insertTemplateUsingTemplater).not.toHaveBeenCalled();
+	expect(Notice).not.toHaveBeenCalled();
 });
 
 test("real-file rows show the current vault-relative path alongside existing explanatory notes", () => {
@@ -300,7 +314,8 @@ test("Date actions keep distinct operative output aliases for the same date", as
 		expect(rows.filter(r => r.suggestionText === "today")).toHaveLength(1);
 		const selected = rows.find(r => r.suggestionText === alias)!;
 		expect(selected.target.kind).toBe("action");
-		h.suggestor.selectSuggestion(selected, {} as MouseEvent); await Promise.resolve();
+		h.suggestor.selectSuggestion(selected, {} as MouseEvent);
+		for (let i = 0; i < 5; i++) await Promise.resolve();
 		expect(h.generate).toHaveBeenLastCalledWith(f, ctx.file.path, undefined, alias);
 	}
 	expect(getPeriodicNote).toHaveBeenCalledTimes(2);
@@ -325,7 +340,7 @@ test.each(["undefined", "reject", "missing-template"])("real recipe selection le
 	const row = h.suggestor.getSuggestions(ctx).find(item => item.target.kind === "action")!;
 	h.suggestor.selectSuggestion(row, {} as MouseEvent);
 	for (let i = 0; i < 8; i++) await Promise.resolve();
-	expect(ctx.editor.replaceRange).not.toHaveBeenCalled();
+	expect(ctx.editor.transaction).not.toHaveBeenCalled();
 	expect(ctx.editor.setCursor).not.toHaveBeenCalled();
 	expect(h.generate).not.toHaveBeenCalled();
 });
@@ -338,7 +353,7 @@ test("Date no-create rows carry explicit unresolved linkpath/alias and preserve 
 	const selected = rows.find(row => row.target.kind === "unresolved-link" && row.target.alias)!;
 	expect(selected.target).toEqual({ kind: "unresolved-link", linkpath: "2026-W21", alias: "2026-W21 (Wk of 5/18)" });
 	h.suggestor.selectSuggestion(selected, {} as MouseEvent);
-	expect(ctx.editor.replaceRange).toHaveBeenCalledWith("[[2026-W21|2026-W21 (Wk of 5/18)]]", { line: 0, ch: 0 }, ctx.end);
+	expect(ctx.editor.getValue()).toBe("[[2026-W21|2026-W21 (Wk of 5/18)]]");
 	expect(h.generate).not.toHaveBeenCalled();
 });
 

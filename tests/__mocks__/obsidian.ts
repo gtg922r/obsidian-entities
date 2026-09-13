@@ -1,3 +1,4 @@
+export { editorInfoField } from "../editorInfoFixture";
 // import EventEmitter from "events";
 
 /** Basic obsidian abstraction for any file or folder in a vault. */

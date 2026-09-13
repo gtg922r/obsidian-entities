@@ -1,7 +1,6 @@
 import { EntitySuggestionItem } from "src/suggestion.types";
 import { entityFromTemplateSettings } from "../entities.types";
 import { createNewNoteFromTemplate } from "../entityCreation";
-import { creationResultLink } from "../creationFeedback";
 import { Plugin, SearchResult } from "obsidian";
 import { cloneSettings } from "../settingsData";
 import { TriggerCharacter } from "../entities.types";
@@ -93,15 +92,14 @@ export abstract class EntityProvider<T extends EntityProviderUserSettings> {
 			target: {
 				kind: "action",
 				id: JSON.stringify(["create", template.engine, template.templatePath, template.folderPath ?? "", query]),
-				callback: async (_item, context) => {
-					const sourcePath = context?.file?.path ?? "";
-					const result = await createNewNoteFromTemplate(this.plugin.app, {
+				callback: context => {
+					if (!context.canStartWork()) return { status: "cancelled" };
+					return createNewNoteFromTemplate(this.plugin.app, {
 						engine: template.engine,
 						template: template.templatePath,
 						destination: { kind: "explicit", path: template.folderPath ?? "" },
 						name: query,
 					});
-					return creationResultLink(this.plugin.app, result, sourcePath);
 				},
 			},
 			match: { score: -10, matches: [] } as SearchResult,
