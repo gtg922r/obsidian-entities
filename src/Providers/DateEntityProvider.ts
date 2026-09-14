@@ -5,17 +5,18 @@ import {
 	moment,
 } from "obsidian";
 import { ActionContext, ActionResult, EntitySuggestionItem } from "src/suggestion.types";
-import { createOrReusePeriodicNote, creationFailure } from "../entityCreation";
+import { createOrReusePeriodicNote } from "../entityCreation";
 import { EntityProvider, EntityProviderUserSettings } from "./EntityProvider";
 import {
 	AppWithPlugins,
 	PeriodicNotesGranularity,
-	PeriodicNotesPlugin,
 } from "src/entities.types";
 import { EntitiesNotice } from "src/userComponents";
 import { RefreshBehavior } from "./EntityProvider";
 import { IconPickerModal } from "src/userComponents";
 import { setValidationStatus } from "src/ui/validationStatus";
+import { capturePeriodicRoute, getPeriodicLookupDate, lookupPeriodicFile, PeriodicRoute, PeriodicRouteSnapshot, periodicLinkpath } from "../periodicNotes";
+import { classifyExplicitWeek } from "./explicitWeek";
 
 const dateProviderTypeID = "nlDates";
 
@@ -39,29 +40,28 @@ interface DateSuggestionCandidate {
 	linkpath: string;
 	alias?: string;
 	icon: string;
-	granularity?: PeriodicNotesGranularity;
-	date?: moment.Moment;
+	granularity: PeriodicNotesGranularity;
+	date: moment.Moment;
 }
 
 export interface DatesProviderUserSettings extends EntityProviderUserSettings {
 	providerTypeID: string;
 	shouldCreateIfNotExists: boolean;
-	includeWeekSuggestions: boolean; // New setting
+	includeWeekSuggestions: boolean;
 }
 
 const defaultDatesProviderUserSettings: DatesProviderUserSettings = {
 	providerTypeID: dateProviderTypeID,
 	enabled: true,
 	icon: "calendar",
-	shouldCreateIfNotExists: true, // Not yet implemented
-	includeWeekSuggestions: true, // Default to true
+	shouldCreateIfNotExists: true,
+	includeWeekSuggestions: true,
 	entityCreationTemplates: [],
 };
 
+/** Synchronous date interpretation and current calendar-set targets. */
 export class DateEntityProvider extends EntityProvider<DatesProviderUserSettings> {
 	static readonly providerTypeID: string = dateProviderTypeID;
-	private nlpPlugin: NLPlugin | undefined;
-	private periodicNotesPlugin: PeriodicNotesPlugin | undefined;
 
 	static getDescription(settings?: DatesProviderUserSettings): string {
 		if (settings) {
@@ -82,253 +82,98 @@ export class DateEntityProvider extends EntityProvider<DatesProviderUserSettings
 		return DateEntityProvider.getDefaultSettings();
 	}
 
-	private resolveCapabilities() {
-		const appWithPlugins = this.plugin.app as AppWithPlugins;
-		const nlpPlugin = appWithPlugins.plugins?.getPlugin?.(
-			"nldates-obsidian"
-		) as Partial<NLPlugin> | undefined;
-		if (!nlpPlugin || typeof nlpPlugin.parseDate !== "function") {
-			this.nlpPlugin = undefined;
-		} else {
-			this.nlpPlugin = nlpPlugin as NLPlugin;
-		}
-
-		const periodicNotesPlugin = appWithPlugins.plugins?.getPlugin?.(
-			"periodic-notes"
-		) as Partial<PeriodicNotesPlugin> | undefined;
-		if (
-			periodicNotesPlugin &&
-			typeof periodicNotesPlugin.getPeriodicNote === "function" &&
-			typeof periodicNotesPlugin.createPeriodicNote === "function"
-		) {
-			this.periodicNotesPlugin = periodicNotesPlugin as PeriodicNotesPlugin;
-		} else {
-			this.periodicNotesPlugin = undefined;
-		}
-	}
-
 	getEntityList(query: string): EntitySuggestionItem[] {
-		this.resolveCapabilities();
-		if (!this.nlpPlugin) {
-			return [];
+		let nlp: NLPlugin | undefined;
+		try {
+			nlp = (this.plugin.app as AppWithPlugins).plugins?.getPlugin?.("nldates-obsidian") as NLPlugin | undefined;
+			if (typeof nlp?.parseDate !== "function") return [];
+		} catch { return []; }
+
+		// Route reads belong to this evaluation, never a provider-wide cache or a preset row.
+		const routes = new Map<PeriodicNotesGranularity, PeriodicRoute>();
+		const getRoute = (granularity: PeriodicNotesGranularity): PeriodicRoute => {
+			let route = routes.get(granularity);
+			if (!route) {
+				route = capturePeriodicRoute(this.plugin.app, granularity);
+				routes.set(granularity, route);
+			}
+			return route;
+		};
+		const dates: EntitySuggestionItem[] = [];
+		const add = (candidate: DateSuggestionCandidate) => {
+			const suggestion = this.buildDateSuggestion(candidate, getRoute(candidate.granularity));
+			if (suggestion) dates.push(suggestion);
+		};
+		const parse = nlp.parseDate;
+		const addNaturalDate = (phrase: string, icon: string) => {
+			try {
+				const result = parse.call(nlp, phrase);
+				if (!result?.date || !moment.isMoment(result.moment) || !result.moment.isValid() ||
+					typeof result.formattedString !== "string" || !result.formattedString) return;
+				add({ suggestionText: phrase, noteText: result.formattedString, linkpath: result.formattedString,
+					icon, granularity: "day", date: result.moment.clone() });
+			} catch { /* An invalid NLP result does not suppress other dates. */ }
+		};
+		for (const phrase of ["today", "tomorrow", "yesterday"]) addNaturalDate(phrase, "calendar");
+		for (const prefix of ["next", "last", "this"]) {
+			for (const day of ["sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"]) {
+				addNaturalDate(`${prefix} ${day}`, "calendar");
+			}
 		}
 
-		const dates = this.dateStringsToDateResults([
-			"today",
-			"tomorrow",
-			"yesterday",
-		]);
-
-		const daysOfWeeks = [
-			"sunday",
-			"monday",
-			"tuesday",
-			"wednesday",
-			"thursday",
-			"friday",
-			"saturday",
-		];
-
-		const prefixes = ["next", "last", "this"];
-		prefixes.forEach((prefix) => {
-			dates.push(
-				...this.dateStringsToDateResults(
-					daysOfWeeks.map((day) => `${prefix} ${day}`)
-				)
-			);
-		});
-
+		const now = moment();
+		const explicit = classifyExplicitWeek(query, now);
 		if (this.settings.includeWeekSuggestions) {
-			const semanticWeeks = [
-				{
-					suggestionText: "this week",
-					date: moment(),
-				},
-				{
-					suggestionText: "last week",
-					date: moment().subtract(1, "week"),
-				},
-				{
-					suggestionText: "next week",
-					date: moment().add(1, "week"),
-				},
-			];
-
-			semanticWeeks.forEach(({ suggestionText, date }) => {
-				const isoWeekDate = date.clone().startOf("isoWeek");
-				const week = isoWeekDate.isoWeek().toString().padStart(2, "0");
-				const isoDate = `${isoWeekDate.isoWeekYear()}-W${week}`;
-				const replacementText =
-					this.getPeriodicWeekText(date) ?? isoDate;
-				dates.push(
-					this.buildDateSuggestion({
-						suggestionText,
-						noteText: replacementText,
-						linkpath: replacementText,
-						icon: "calendar-range",
-						granularity: "week",
-						date,
-					})
-				);
-			});
-
-			dates.push(...this.dateStringToWeekResults(query));
+			for (const [phrase, offset] of [["this week", 0], ["last week", -1], ["next week", 1]] as const) {
+				// Semantic weeks retain the selected day for the configured locale-week format.
+				const date = now.clone().add(offset, "week");
+				const linkpath = date.format("GGGG-[W]WW");
+				add({ suggestionText: phrase, noteText: linkpath, linkpath, icon: "calendar-range", granularity: "week", date });
+			}
+			if (explicit.kind === "valid") {
+				const date = explicit.date;
+				const linkpath = date.format("GGGG-[W]WW");
+				const noteText = `${linkpath} (Wk of ${date.format("M/D")})`;
+				add({ suggestionText: query, noteText, linkpath, alias: noteText, icon: "calendar-range", granularity: "week", date });
+			}
 		}
-
-		const result = this.nlpPlugin.parseDate(query);
-		if (result && result.date) {
-			dates.push(
-				this.buildNlDateSuggestion(query, result, this.settings.icon)
-			);
-		}
-
+		if (explicit.kind === "ordinary") addNaturalDate(query, this.settings.icon);
 		return dates;
 	}
 
-	private dateStringToWeekResults(dateString: string): EntitySuggestionItem[] {
-		// Matching rules:
-		// - Optional year (2 or 4 digits)
-		// - Optional dash or space
-		// - Week abbreviation (w, wk, week)
-		// - Optional dash or space
-		// - Week number (1 to 99)
-		const regex = /(?:(\d{2}|\d{4})?[-\s]?(?:w|wk|week)\s?(\d{1,2}))/i;
-		const match = dateString.match(regex);
-
-		if (!match) {
-			return [];
-		}
-
-		const currentMoment = moment();
-		const currentYear = currentMoment.year();
-		const currentWeek = currentMoment.isoWeek();
-
-		let year = match[1]
-			? match[1].length === 2
-				? `20${match[1]}`
-				: match[1]
-			: currentYear.toString();
-		const week = parseInt(match[2]);
-
-		// If year is not specified and the week is more than 4 weeks before the current week,
-		// use next year
-		if (!match[1] && week < currentWeek - 4) {
-			year = (currentYear + 1).toString();
-		}
-
-		const weekMoment = moment()
-			.year(parseInt(year))
-			.isoWeek(week)
-			.startOf("isoWeek");
-		const weekStartDateShort = weekMoment.format("M/D");
-		const weekText = `${year}-W${week.toString().padStart(2, "0")}`;
-		const replacementWeekText =
-			this.getPeriodicWeekText(weekMoment) ?? weekText;
-
-		return [
-			this.buildDateSuggestion({
-				suggestionText: dateString,
-				noteText: `${replacementWeekText} (Wk of ${weekStartDateShort})`,
-				linkpath: replacementWeekText,
-				alias: `${replacementWeekText} (Wk of ${weekStartDateShort})`,
-				icon: "calendar-range",
-				granularity: "week",
-				date: weekMoment,
-			}),
-		];
-	}
-
-	private dateStringsToDateResults(
-		dateStrings: string[]
-	): EntitySuggestionItem[] {
-		return dateStrings.map((dateString) => {
-			const result = this.nlpPlugin?.parseDate(dateString);
-			return this.buildNlDateSuggestion(dateString, result, "calendar");
-		});
-	}
-
-	private buildNlDateSuggestion(
-		suggestionText: string,
-		result: NLDResult | undefined,
-		icon: string
-	): EntitySuggestionItem {
-		const date = result?.date ? result.moment : undefined;
-		return this.buildDateSuggestion({
-			suggestionText,
-			noteText: result?.formattedString ?? "",
-			linkpath: result?.formattedString ?? "",
-			icon,
-			granularity: date ? "day" : undefined,
-			date,
-		});
-	}
-
-	private buildDateSuggestion(
-		candidate: DateSuggestionCandidate
-	): EntitySuggestionItem {
+	private buildDateSuggestion(candidate: DateSuggestionCandidate, route: PeriodicRoute): EntitySuggestionItem | undefined {
+		if (route.kind === "unavailable") return undefined;
 		const suggestion: EntitySuggestionItem = {
-			suggestionText: candidate.suggestionText,
-			noteText: candidate.noteText,
+			suggestionText: candidate.suggestionText, noteText: candidate.noteText, icon: candidate.icon,
 			target: { kind: "unresolved-link", linkpath: candidate.linkpath, alias: candidate.alias },
-			icon: candidate.icon,
 		};
-
-		if (
-			this.settings.shouldCreateIfNotExists &&
-			this.periodicNotesPlugin &&
-			candidate.granularity &&
-			candidate.date &&
-			this.isPeriodicGranularityEnabled(candidate.granularity)
-		) {
-			suggestion.target = {
-				kind: "action",
-				id: JSON.stringify(["periodic-note", candidate.granularity, candidate.date.format(),
-					candidate.suggestionText, candidate.linkpath, candidate.alias ?? null]),
-				callback: context => this.createOrLinkPeriodicNote(candidate, context),
-			};
-		}
-
-		return suggestion;
-	}
-
-	private isPeriodicGranularityEnabled(
-		granularity: PeriodicNotesGranularity
-	): boolean {
-		const calendarSetManager = this.periodicNotesPlugin?.calendarSetManager;
-		if (
-			!calendarSetManager ||
-			typeof calendarSetManager.getActiveGranularities !== "function"
-		) {
-			return false;
-		}
-
-		return calendarSetManager
-			.getActiveGranularities()
-			.includes(granularity);
-	}
-
-	private getPeriodicWeekText(date: moment.Moment): string | undefined {
-		if (
-			!this.settings.shouldCreateIfNotExists ||
-			!this.periodicNotesPlugin ||
-			!this.isPeriodicGranularityEnabled("week")
-		) {
-			return undefined;
-		}
-
-		const format =
-			this.periodicNotesPlugin.calendarSetManager?.getFormat?.("week");
-		return format ? date.format(format) : undefined;
+		if (route.kind === "none") return suggestion;
+		try {
+			const snapshot = route.snapshot;
+			const title = candidate.date.format(snapshot.format);
+			const linkpath = periodicLinkpath(snapshot, candidate.date);
+			suggestion.noteText = candidate.alias ? `${title} (Wk of ${candidate.date.format("M/D")})` : title;
+			const existing = lookupPeriodicFile(this.plugin.app, snapshot, candidate.date);
+			if (existing != null) {
+				suggestion.target = { kind: "file", file: existing, alias: candidate.suggestionText };
+			} else if (this.settings.shouldCreateIfNotExists && snapshot.create) {
+				suggestion.target = {
+					kind: "action",
+					id: JSON.stringify(["periodic-note", candidate.granularity, candidate.date.format(), candidate.suggestionText, linkpath]),
+					callback: context => this.createOrLinkPeriodicNote(candidate, snapshot, context),
+				};
+			} else {
+				suggestion.target = { kind: "unresolved-link", linkpath, alias: candidate.suggestionText };
+			}
+			return suggestion;
+		} catch { return undefined; }
 	}
 
 	private async createOrLinkPeriodicNote(
-		candidate: DateSuggestionCandidate,
-		context: ActionContext
+		candidate: DateSuggestionCandidate, expectedRoute: PeriodicRouteSnapshot, context: ActionContext
 	): Promise<ActionResult> {
-		if (!context.canStartWork()) return { status: "cancelled" };
-		const result = candidate.granularity && candidate.date
-			? await createOrReusePeriodicNote(this.plugin.app, candidate.granularity, candidate.date)
-			: creationFailure(new Error("The periodic date is unavailable."));
+		const result = await createOrReusePeriodicNote(this.plugin.app, candidate.granularity, candidate.date,
+			{ expectedRoute, canStartWork: context.canStartWork });
 		return result.status === "created" || result.status === "existing" ? { ...result, alias: candidate.suggestionText } : result;
 	}
 
@@ -343,11 +188,16 @@ export class DateEntityProvider extends EntityProvider<DatesProviderUserSettings
 			"nldates-obsidian"
 		) as NLPlugin;
 		const pluginIsConfigured =
-			nlpPlugin && nlpPlugin.parseDate !== undefined;
+			typeof nlpPlugin?.parseDate === "function";
 
 		const pluginConflicts =
-			nlpPlugin?.settings.autocompleteTriggerPhrase === "@" &&
-			nlpPlugin?.settings.isAutosuggestEnabled === true;
+			nlpPlugin?.settings?.autocompleteTriggerPhrase === "@" &&
+			nlpPlugin?.settings?.isAutosuggestEnabled === true;
+		const granularities: PeriodicNotesGranularity[] = settings.includeWeekSuggestions ? ["day", "week"] : ["day"];
+		const routes = granularities.map(granularity => ({ granularity, route: capturePeriodicRoute(plugin.app, granularity) }));
+		const unavailableGranularity = routes.find(({ route }) => route.kind === "unavailable")?.granularity;
+		const now = moment();
+		const limitedRoute = routes.find(({ route }) => route.kind === "ready" && !getPeriodicLookupDate(route.snapshot.format, now))?.route;
 
 		settingContainer.addExtraButton((button) => {
 			if (!pluginIsConfigured) {
@@ -373,6 +223,11 @@ export class DateEntityProvider extends EntityProvider<DatesProviderUserSettings
 					);
 				});
 				return;
+			} else if (unavailableGranularity) {
+				setValidationStatus(button, "package-x", `Periodic Notes ${unavailableGranularity} calendar unavailable; check its active configuration`, "error");
+			} else if (limitedRoute?.kind === "ready") {
+				const { granularity, format } = limitedRoute.snapshot;
+				setValidationStatus(button, "alert-triangle", `Periodic Notes ${granularity} format cannot resolve ${now.format(format)} without an existing note at its configured path. Check the format in Periodic Notes.`, "warning");
 			} else {
 				setValidationStatus(
 					button,

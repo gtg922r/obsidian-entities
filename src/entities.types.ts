@@ -65,13 +65,14 @@ export type PeriodicNotesGranularity =
 
 export interface PeriodicNotesConfig {
 	enabled: boolean;
-	openAtStartup: boolean;
-	format: string;
-	folder: string;
+	format?: string;
+	folder?: string;
 	templatePath?: string;
 }
 
+/** The current calendar-set API; older flat settings are a different integration. */
 export interface PeriodicNotesCalendarSetManager {
+	getActiveId(): string;
 	getActiveGranularities(): PeriodicNotesGranularity[];
 	getActiveConfig(granularity: PeriodicNotesGranularity): PeriodicNotesConfig;
 	getFormat(granularity: PeriodicNotesGranularity): string;

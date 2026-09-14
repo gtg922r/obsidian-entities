@@ -47,6 +47,9 @@ property (for example, `ldap: hopeb@`). Both apply the same explicit file filter
 See [file sources, aliases and filters](docs/file-providers.md) for scope, defaults
 and invalid-configuration behavior.
 
+See [date suggestions](docs/date-provider.md) for explicit ISO weeks, configured
+existing-note lookup, and the limits of guarded periodic-note creation.
+
 See [ARCHITECTURE.md](ARCHITECTURE.md) for implementation details.
 
 ## Installation
