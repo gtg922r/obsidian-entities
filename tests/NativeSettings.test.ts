@@ -11,6 +11,7 @@ import { CharacterProvider } from "../src/Providers/CharacterProvider";
 import { MetadataMenuProvider } from "../src/Providers/MetadataMenuProvider";
 import { InputSuggestScope } from "../src/ui/inputSuggestLifecycle";
 import { NativeSettingsLifetime } from "../src/ui/nativeSettingsLifetime";
+import { FrontmatterKeySuggest } from "../src/ui/FrontmatterKeySuggest";
 import { EntitiesNotice, IconPickerModal } from "../src/userComponents";
 import { control, nativeTab, pageNames, row } from "./nativeSettingsHostMock";
 import { installNativeDom, modals } from "./nativeSettingsTestSupport";
@@ -24,6 +25,7 @@ jest.mock("obsidian", () => ({
 	Notice: class {}, moment: jest.requireActual("moment"),
 	getIconIds: () => ["star", "box"], getIcon: () => document.createElementNS("http://www.w3.org/2000/svg", "svg"),
 	sanitizeHTMLToDom: (text: string) => text,
+	normalizePath: (path: string) => path.replace(/\\/g, "/").replace(/\/+/g, "/").replace(/^\/|\/$/g, "") || "/",
 }));
 jest.mock("../src/userComponents", () => ({ ...jest.requireActual("../src/userComponents"), EntitiesNotice: jest.fn() }));
 jest.mock("@popperjs/core", () => ({ createPopper: jest.requireActual("./inputSuggestHostMock").createPopper }));
@@ -408,9 +410,30 @@ test("filter structural edits close the real property popup and release old sele
 	const h = await harness(FolderEntityProvider, { entityFilters: [filter("yes")] }); h.open();
 	const old = control(h.tab, "Filter 1 property"); old.inputEl.focus(); const popup = poppers.at(-1)!;
 	const oldChoice = suggestionRows(old.inputEl)[0];
+	expect(oldChoice).toBeDefined();
 	control(h.tab, "Add filter", "button").click();
-	expect(popup.destroy).toHaveBeenCalledTimes(1); oldChoice?.click(); old.change("stale choice");
+	expect(popup.destroy).toHaveBeenCalledTimes(1); oldChoice.click(); old.change("stale choice");
 	expect(h.store.settings.providerSettings[0]).toMatchObject({ entityFilters: [filter("yes"), { type: "include", property: "", value: "" }] });
+});
+
+describe.each([FolderEntityProvider, DataviewEntityProvider].map(Provider => [Provider.providerTypeID, Provider] as const))("%s retained alias controls", (_type, Provider) => {
+	test.each(["hide", "update"])("retained key selector cannot save after %s", async mode => {
+		const h = await harness(Provider, { propertyToCreateEntitiesFor: "before" }); h.open();
+		const old = control(h.tab, "Frontmatter alias property");
+		const retained = new FrontmatterKeySuggest(h.app, old.inputEl);
+		if (mode === "hide") h.tab.hide(); else h.tab.update();
+		expect(old.inputEl.isConnected).toBe(false);
+		retained.selectSuggestion("after-removal");
+		expect(h.store.settings.providerSettings[0]).toMatchObject({ propertyToCreateEntitiesFor: "before" });
+	});
+	test.each(["hide", "update"])("retained toggle cannot save after %s or poison the next edit", async mode => {
+		const h = await harness(Provider, { shouldCreateEntitiesForAliases: false }); h.open();
+		const old = control(h.tab, "Suggest native aliases", "toggle");
+		if (mode === "hide") h.tab.hide(); else h.tab.update();
+		old.change(true); if (mode === "hide") h.open();
+		input(control(h.tab, "Frontmatter alias property").inputEl, "ldap");
+		expect(h.store.settings.providerSettings[0]).toMatchObject({ shouldCreateEntitiesForAliases: false, propertyToCreateEntitiesFor: "ldap" });
+	});
 });
 
 test.each(["Folder", "Characters"])("%s retired toggles cannot contaminate the next valid field edit", async type => {
@@ -563,6 +586,28 @@ test("Metadata Menu's unused provider icon is preserved without an ineffective c
 	expect(names(h.tab.getSettingDefinitions())).not.toContain("Icon");
 	expect(h.store.settings.providerSettings[0].icon).toBe("stored unused icon");
 	expect(h.write).not.toHaveBeenCalled();
+});
+
+test.each(["missing NLP", "NLP conflict", "Core title"])("native Date status preserves %s precedence and refreshes after repair", async problem => {
+	const h = await harness(DateEntityProvider, { includeWeekSuggestions: false });
+	const root = h.app.vault.getRoot(); Object.assign(root, { isRoot: () => true });
+	const options = { format: "[bad.md]", folder: "", template: "" };
+	const create = jest.fn(); const lookup = jest.fn();
+	Object.assign(h.app, {
+		internalPlugins: { getPluginById: () => ({ enabled: true, instance: { options, getFormat: () => options.format, getDailyNote: create } }) },
+		fileManager: { getNewFileParent: () => root },
+	});
+	Object.assign(h.app.vault, { getAbstractFileByPathInsensitive: lookup });
+	if (problem !== "missing NLP") h.integrations["nldates-obsidian"] = {
+		parseDate: jest.fn(), settings: { autocompleteTriggerPhrase: problem === "NLP conflict" ? "@" : "#", isAutosuggestEnabled: true },
+	};
+	h.open();
+	expect(control(h.tab, "Date availability", "extra").tooltip).toContain(problem === "missing NLP" ? "NLDates plugin not found" : problem === "NLP conflict" ? "conflicts with autocomplete" : "Daily Notes cannot resolve missing notes");
+	h.integrations["nldates-obsidian"] = { parseDate: jest.fn(), settings: { autocompleteTriggerPhrase: "#", isAutosuggestEnabled: true } };
+	options.format = "YYYY-MM-DD";
+	control(h.tab, "Create non-existent dates", "toggle").change(false);
+	expect(control(h.tab, "Date availability", "extra").tooltip).toBe("NLDates plugin OK");
+	expect(create).not.toHaveBeenCalled(); expect(lookup).not.toHaveBeenCalled();
 });
 
 test("icon searches release removed results and only the current result can settle", async () => {
