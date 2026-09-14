@@ -1,5 +1,6 @@
 import { Editor, EditorSuggestContext, EditorTransaction, MarkdownFileInfo, TFile, editorInfoField, App } from "obsidian";
-import { EditorState } from "@codemirror/state";
+import { replayLanguage } from "./nativeSyntaxFixture";
+import { EditorState, Extension } from "@codemirror/state";
 import { EditorView } from "@codemirror/view";
 import { EditorBindings } from "../src/editorBindings";
 
@@ -20,7 +21,7 @@ const mounted: EditorView[] = [];
 export function destroyTestEditors(): void { mounted.splice(0).forEach(view => { view.destroy(); view.dom.parentElement?.remove(); }); }
 
 /** Real CodeMirror state/view/extension, with an Editor implementing the public transaction semantics. */
-export function mountTestEditor(app: App, bindings: Pick<EditorBindings, "extension">, file: TFile, snapshot = "@", query = snapshot, providedEditor?: Editor) {
+export function mountTestEditor(app: App, bindings: Pick<EditorBindings, "extension">, file: TFile, snapshot = "@", query = snapshot, providedEditor?: Editor, syntax: Extension = replayLanguage()) {
 	const info = { app, file } as MarkdownFileInfo;
 	const offset = (state: EditorState, pos: { line: number; ch: number }) => state.doc.line(pos.line + 1).from + pos.ch;
 	const position = (state: EditorState, n: number) => { const line = state.doc.lineAt(n); return { line: line.number - 1, ch: n - line.from }; };
@@ -42,11 +43,11 @@ export function mountTestEditor(app: App, bindings: Pick<EditorBindings, "extens
 	info.editor = editor;
 	const parent = document.createElement("div"); document.body.appendChild(parent);
 	const view = new EditorView({ parent, state: EditorState.create({ doc: snapshot, selection: { anchor: from + query.length }, extensions: [
-		editorInfoField.init(() => info), bindings.extension,
+		editorInfoField.init(() => info), syntax, bindings.extension,
 		EditorView.updateListener.of(update => { if (update.docChanged) (app.workspace as unknown as TestEvents).trigger("editor-change", editor, info); }),
 	] }) });
 	mounted.push(view);
 	app.workspace.activeEditor = info;
-	const context: EditorSuggestContext = { editor, file, query, start: position(view.state, from + 1), end: position(view.state, from + query.length) };
+	const context: EditorSuggestContext = { editor, file, query, start: position(view.state, from + (query ? 1 : 0)), end: position(view.state, from + query.length) };
 	return { view, info, editor, context, setInfo: (next: MarkdownFileInfo | undefined) => view.dispatch({ effects: setEditorInfo.of(next) }) };
 }

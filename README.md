@@ -63,7 +63,28 @@ See the development requirements below if you use a different Node version manag
 
 ## Usage
 
-Open **Settings → Entities** to add providers and configure their options. Start typing `@`, `:` or `/` to see the autocomplete menu.
+Open **Settings → Entities** to add providers and configure their options. Start
+`@`, `:` or `/` at the beginning of a line or after whitespace to open its menu.
+`@Bob Hope`, `@8/17`, and `@folder/name` remain entity queries. A newer starter
+takes over: `@Bob /todo` offers actions, and `@Bob :cat` offers symbols.
+
+`:` and `/` stop at whitespace. Emails, URLs, embedded `word/command`, and
+multi-component paths such as `/usr/local` do not open a menu. A single `/usr`
+can still be a slash query. A lone mark opens its provider list; `@` followed
+only by spaces stays quiet. Backslash-escaped marks are literal.
+
+Entities stays quiet in Obsidian-recognized code, wiki links, and Markdown link
+destinations, including the unfinished destination after a recognized `[label](`.
+Ordinary Markdown link labels and prose after closed syntax remain eligible.
+This follows Obsidian's syntax boundaries, including its handling of malformed
+links. If the current syntax tree is unavailable, a later normal editor request
+can retry.
+
+Press **Escape** to dismiss the current phrase. Continuing that phrase stays
+quiet; deleting or replacing its mark, leaving it, or starting a new trigger
+allows a new menu. Dismissal belongs to that editor and document. Selection,
+creation cancellation, empty results, and ordinary menu closure do not dismiss
+a later search at the same position.
 
 ## Development
 

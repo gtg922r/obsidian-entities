@@ -1,0 +1,303 @@
+{
+  "evidence": "Exact extracted host HyperMD tokenizer, CM6 StringStream, parseLine and node-name factory; synthetic documents and inert node-property/emit sink. Not live EditorView, full native tree/manager or supported floor acceptance.",
+  "hosts": [{"version": "1.12.7", "appSHA256": "cc6d0c363cba3935207fb70e7d78736c9f0c2024545787871095288a1b185851"}, {"version": "1.14.1", "appSHA256": "d9f5d092066844a9dafe1696cce079fa3030b33d354b2af1b91134bd8c545862"}],
+  "cases": [
+    {
+      "name": "destination-nested-open",
+      "doc": "[label](nested(a) @Bob",
+      "nodes": [
+        {"name": "formatting_formatting-link_link", "from": 0, "to": 1, "text": "[", "kind": "token"},
+        {"name": "link", "from": 1, "to": 6, "text": "label", "kind": "token"},
+        {"name": "formatting_formatting-link_link", "from": 6, "to": 7, "text": "]", "kind": "token"},
+        {"name": "formatting_formatting-link-string_string_url", "from": 7, "to": 8, "text": "(", "kind": "token"},
+        {"name": "string_url", "from": 8, "to": 16, "text": "nested(a", "kind": "token"},
+        {"name": "formatting_formatting-link-string_string_url", "from": 16, "to": 17, "text": ")", "kind": "token"}
+      ]
+    },
+    {
+      "name": "destination-closed-tail",
+      "doc": "[label](dest) prose @Bob",
+      "nodes": [
+        {"name": "formatting_formatting-link_link", "from": 0, "to": 1, "text": "[", "kind": "token"},
+        {"name": "link", "from": 1, "to": 6, "text": "label", "kind": "token"},
+        {"name": "formatting_formatting-link_link", "from": 6, "to": 7, "text": "]", "kind": "token"},
+        {"name": "formatting_formatting-link-string_string_url", "from": 7, "to": 8, "text": "(", "kind": "token"},
+        {"name": "string_url", "from": 8, "to": 12, "text": "dest", "kind": "token"},
+        {"name": "formatting_formatting-link-string_string_url", "from": 12, "to": 13, "text": ")", "kind": "token"}
+      ]
+    },
+    {
+      "name": "destination-spaced",
+      "doc": "[label] ( @Bob",
+      "nodes": [
+        {"name": "formatting_formatting-link_hmd-barelink_link", "from": 0, "to": 1, "text": "[", "kind": "token"},
+        {"name": "hmd-barelink_link", "from": 1, "to": 6, "text": "label", "kind": "token"},
+        {"name": "formatting_formatting-link_hmd-barelink_link", "from": 6, "to": 7, "text": "]", "kind": "token"}
+      ]
+    },
+    {
+      "name": "destination-literal",
+      "doc": "ordinary ( @Bob",
+      "nodes": [
+
+      ]
+    },
+    {
+      "name": "barelink",
+      "doc": "[label] @Bob",
+      "nodes": [
+        {"name": "formatting_formatting-link_hmd-barelink_link", "from": 0, "to": 1, "text": "[", "kind": "token"},
+        {"name": "hmd-barelink_link", "from": 1, "to": 6, "text": "label", "kind": "token"},
+        {"name": "formatting_formatting-link_hmd-barelink_link", "from": 6, "to": 7, "text": "]", "kind": "token"}
+      ]
+    },
+    {
+      "name": "wiki-alias-closed",
+      "doc": "[[Bob| @Robert]] prose @Alice",
+      "nodes": [
+        {"name": "formatting-link_formatting-link-start", "from": 0, "to": 2, "text": "[[", "kind": "token"},
+        {"name": "hmd-internal-link_link-has-alias", "from": 2, "to": 5, "text": "Bob", "kind": "token"},
+        {"name": "hmd-internal-link_link-alias-pipe", "from": 5, "to": 6, "text": "|", "kind": "token"},
+        {"name": "hmd-internal-link_link-alias", "from": 6, "to": 14, "text": " @Robert", "kind": "token"},
+        {"name": "formatting-link_formatting-link-end", "from": 14, "to": 16, "text": "]]", "kind": "token"}
+      ]
+    },
+    {
+      "name": "wiki-half-close",
+      "doc": "[[Bob] prose @Alice",
+      "nodes": [
+        {"name": "formatting_formatting-link_hmd-barelink_link", "from": 0, "to": 1, "text": "[", "kind": "token"},
+        {"name": "hmd-barelink_link", "from": 1, "to": 19, "text": "[Bob] prose @Alice", "kind": "token"}
+      ]
+    },
+    {
+      "name": "embed-open",
+      "doc": "![[Bob| @Robert",
+      "nodes": [
+        {"name": "formatting_formatting-link_hmd-barelink_link", "from": 1, "to": 3, "text": "[[", "kind": "token"},
+        {"name": "hmd-barelink_link", "from": 3, "to": 15, "text": "Bob| @Robert", "kind": "token"}
+      ]
+    },
+    {
+      "name": "reference",
+      "doc": "[label][ @Bob",
+      "nodes": [
+        {"name": "formatting_formatting-link_link", "from": 0, "to": 1, "text": "[", "kind": "token"},
+        {"name": "link", "from": 1, "to": 6, "text": "label", "kind": "token"},
+        {"name": "formatting_formatting-link_link", "from": 6, "to": 7, "text": "]", "kind": "token"},
+        {"name": "formatting_formatting-link_hmd-barelink_link", "from": 7, "to": 8, "text": "[", "kind": "token"},
+        {"name": "hmd-barelink_link", "from": 8, "to": 13, "text": " @Bob", "kind": "token"}
+      ]
+    },
+    {
+      "name": "prose",
+      "doc": "Hello @Bob Hope",
+      "nodes": [
+
+      ]
+    },
+    {
+      "name": "inline",
+      "doc": "` @Bob` after @Alice",
+      "nodes": [
+        {"name": "formatting_formatting-code_inline-code", "from": 0, "to": 1, "text": "`", "kind": "token"},
+        {"name": "inline-code", "from": 1, "to": 6, "text": " @Bob", "kind": "token"},
+        {"name": "formatting_formatting-code_inline-code", "from": 6, "to": 7, "text": "`", "kind": "token"}
+      ]
+    },
+    {
+      "name": "inline-open",
+      "doc": "` @Bob",
+      "nodes": [
+        {"name": "formatting_formatting-code_inline-code", "from": 0, "to": 1, "text": "`", "kind": "token"},
+        {"name": "inline-code", "from": 1, "to": 6, "text": " @Bob", "kind": "token"}
+      ]
+    },
+    {
+      "name": "inline-double",
+      "doc": "`` @Bob`` after",
+      "nodes": [
+        {"name": "formatting_formatting-code_inline-code", "from": 0, "to": 2, "text": "``", "kind": "token"},
+        {"name": "inline-code", "from": 2, "to": 7, "text": " @Bob", "kind": "token"},
+        {"name": "formatting_formatting-code_inline-code", "from": 7, "to": 9, "text": "``", "kind": "token"}
+      ]
+    },
+    {
+      "name": "fence",
+      "doc": "```\n@Bob /todo\n```\n@Alice",
+      "nodes": [
+        {"name": "formatting_formatting-code-block_hmd-codeblock", "from": 0, "to": 3, "text": "```", "kind": "token"},
+        {"name": "HyperMD-codeblock_HyperMD-codeblock-begin_HyperMD-codeblock-begin-bg_HyperMD-codeblock-bg", "from": 0, "to": 3, "text": "```", "kind": "line"},
+        {"name": "hmd-codeblock", "from": 4, "to": 14, "text": "@Bob /todo", "kind": "token"},
+        {"name": "HyperMD-codeblock_HyperMD-codeblock-bg", "from": 4, "to": 14, "text": "@Bob /todo", "kind": "line"},
+        {"name": "formatting_formatting-code-block_hmd-codeblock", "from": 15, "to": 18, "text": "```", "kind": "token"},
+        {"name": "HyperMD-codeblock_HyperMD-codeblock-bg_HyperMD-codeblock-end_HyperMD-codeblock-end-bg", "from": 15, "to": 18, "text": "```", "kind": "line"}
+      ]
+    },
+    {
+      "name": "fence-open",
+      "doc": "```\n@Bob",
+      "nodes": [
+        {"name": "formatting_formatting-code-block_hmd-codeblock", "from": 0, "to": 3, "text": "```", "kind": "token"},
+        {"name": "HyperMD-codeblock_HyperMD-codeblock-begin_HyperMD-codeblock-begin-bg_HyperMD-codeblock-bg", "from": 0, "to": 3, "text": "```", "kind": "line"},
+        {"name": "hmd-codeblock", "from": 4, "to": 8, "text": "@Bob", "kind": "token"},
+        {"name": "HyperMD-codeblock_HyperMD-codeblock-bg", "from": 4, "to": 8, "text": "@Bob", "kind": "line"}
+      ]
+    },
+    {
+      "name": "tilde-fence",
+      "doc": "~~~\n@Bob\n~~~",
+      "nodes": [
+        {"name": "formatting_formatting-code-block_hmd-codeblock", "from": 0, "to": 3, "text": "~~~", "kind": "token"},
+        {"name": "HyperMD-codeblock_HyperMD-codeblock-begin_HyperMD-codeblock-begin-bg_HyperMD-codeblock-bg", "from": 0, "to": 3, "text": "~~~", "kind": "line"},
+        {"name": "hmd-codeblock", "from": 4, "to": 8, "text": "@Bob", "kind": "token"},
+        {"name": "HyperMD-codeblock_HyperMD-codeblock-bg", "from": 4, "to": 8, "text": "@Bob", "kind": "line"},
+        {"name": "formatting_formatting-code-block_hmd-codeblock", "from": 9, "to": 12, "text": "~~~", "kind": "token"},
+        {"name": "HyperMD-codeblock_HyperMD-codeblock-bg_HyperMD-codeblock-end_HyperMD-codeblock-end-bg", "from": 9, "to": 12, "text": "~~~", "kind": "line"}
+      ]
+    },
+    {
+      "name": "indented",
+      "doc": "    @Bob",
+      "nodes": [
+        {"name": "hmd-indented-code_inline-code", "from": 4, "to": 8, "text": "@Bob", "kind": "token"}
+      ]
+    },
+    {
+      "name": "wiki-open",
+      "doc": "[[ @Bob",
+      "nodes": [
+        {"name": "formatting_formatting-link_hmd-barelink_link", "from": 0, "to": 2, "text": "[[", "kind": "token"},
+        {"name": "hmd-barelink_link", "from": 2, "to": 7, "text": " @Bob", "kind": "token"}
+      ]
+    },
+    {
+      "name": "wiki-alias-open",
+      "doc": "[[Bob| @Robert",
+      "nodes": [
+        {"name": "formatting_formatting-link_hmd-barelink_link", "from": 0, "to": 2, "text": "[[", "kind": "token"},
+        {"name": "hmd-barelink_link", "from": 2, "to": 14, "text": "Bob| @Robert", "kind": "token"}
+      ]
+    },
+    {
+      "name": "wiki-closed",
+      "doc": "[[ @Bob]] prose",
+      "nodes": [
+        {"name": "formatting-link_formatting-link-start", "from": 0, "to": 2, "text": "[[", "kind": "token"},
+        {"name": "hmd-internal-link", "from": 2, "to": 7, "text": " @Bob", "kind": "token"},
+        {"name": "formatting-link_formatting-link-end", "from": 7, "to": 9, "text": "]]", "kind": "token"}
+      ]
+    },
+    {
+      "name": "markdown-dest",
+      "doc": "[label]( @Bob) prose",
+      "nodes": [
+        {"name": "formatting_formatting-link_link", "from": 0, "to": 1, "text": "[", "kind": "token"},
+        {"name": "link", "from": 1, "to": 6, "text": "label", "kind": "token"},
+        {"name": "formatting_formatting-link_link", "from": 6, "to": 7, "text": "]", "kind": "token"},
+        {"name": "formatting_formatting-link-string_string_url", "from": 7, "to": 8, "text": "(", "kind": "token"},
+        {"name": "string_url", "from": 8, "to": 13, "text": " @Bob", "kind": "token"},
+        {"name": "formatting_formatting-link-string_string_url", "from": 13, "to": 14, "text": ")", "kind": "token"}
+      ]
+    },
+    {
+      "name": "markdown-dest-open",
+      "doc": "[label]( @Bob",
+      "nodes": [
+        {"name": "formatting_formatting-link_link", "from": 0, "to": 1, "text": "[", "kind": "token"},
+        {"name": "link", "from": 1, "to": 6, "text": "label", "kind": "token"},
+        {"name": "formatting_formatting-link_link", "from": 6, "to": 7, "text": "]", "kind": "token"}
+      ]
+    },
+    {
+      "name": "markdown-label",
+      "doc": "[ @Bob](target)",
+      "nodes": [
+        {"name": "formatting_formatting-link_link", "from": 0, "to": 1, "text": "[", "kind": "token"},
+        {"name": "link", "from": 1, "to": 6, "text": " @Bob", "kind": "token"},
+        {"name": "formatting_formatting-link_link", "from": 6, "to": 7, "text": "]", "kind": "token"},
+        {"name": "formatting_formatting-link-string_string_url", "from": 7, "to": 8, "text": "(", "kind": "token"},
+        {"name": "string_url", "from": 8, "to": 14, "text": "target", "kind": "token"},
+        {"name": "formatting_formatting-link-string_string_url", "from": 14, "to": 15, "text": ")", "kind": "token"}
+      ]
+    },
+    {
+      "name": "wiki-then-prose",
+      "doc": "[[Bob]] @Alice",
+      "nodes": [
+        {"name": "formatting-link_formatting-link-start", "from": 0, "to": 2, "text": "[[", "kind": "token"},
+        {"name": "hmd-internal-link", "from": 2, "to": 5, "text": "Bob", "kind": "token"},
+        {"name": "formatting-link_formatting-link-end", "from": 5, "to": 7, "text": "]]", "kind": "token"}
+      ]
+    },
+    {
+      "name": "inline-then-prose",
+      "doc": "`code` @Alice",
+      "nodes": [
+        {"name": "formatting_formatting-code_inline-code", "from": 0, "to": 1, "text": "`", "kind": "token"},
+        {"name": "inline-code", "from": 1, "to": 5, "text": "code", "kind": "token"},
+        {"name": "formatting_formatting-code_inline-code", "from": 5, "to": 6, "text": "`", "kind": "token"}
+      ]
+    },
+    {
+      "name": "fence-language",
+      "doc": "```js\nconst a = \" @Bob\";\n```",
+      "nodes": [
+        {"name": "formatting_formatting-code-block_hmd-codeblock", "from": 0, "to": 5, "text": "```js", "kind": "token"},
+        {"name": "HyperMD-codeblock_HyperMD-codeblock-begin_HyperMD-codeblock-begin-bg_HyperMD-codeblock-bg", "from": 0, "to": 5, "text": "```js", "kind": "line"},
+        {"name": "hmd-codeblock", "from": 6, "to": 24, "text": "const a = \" @Bob\";", "kind": "token"},
+        {"name": "HyperMD-codeblock_HyperMD-codeblock-bg", "from": 6, "to": 24, "text": "const a = \" @Bob\";", "kind": "line"},
+        {"name": "formatting_formatting-code-block_hmd-codeblock", "from": 25, "to": 28, "text": "```", "kind": "token"},
+        {"name": "HyperMD-codeblock_HyperMD-codeblock-bg_HyperMD-codeblock-end_HyperMD-codeblock-end-bg", "from": 25, "to": 28, "text": "```", "kind": "line"}
+      ]
+    },
+    {
+      "name": "fence-empty",
+      "doc": "```\n\n@Bob",
+      "nodes": [
+        {"name": "formatting_formatting-code-block_hmd-codeblock", "from": 0, "to": 3, "text": "```", "kind": "token"},
+        {"name": "HyperMD-codeblock_HyperMD-codeblock-begin_HyperMD-codeblock-begin-bg_HyperMD-codeblock-bg", "from": 0, "to": 3, "text": "```", "kind": "line"},
+        {"name": "HyperMD-codeblock_HyperMD-codeblock-bg", "from": 4, "to": 4, "text": "", "kind": "token"},
+        {"name": "hmd-codeblock", "from": 5, "to": 9, "text": "@Bob", "kind": "token"},
+        {"name": "HyperMD-codeblock_HyperMD-codeblock-bg", "from": 5, "to": 9, "text": "@Bob", "kind": "line"}
+      ]
+    },
+    {
+      "name": "indent-after-prose",
+      "doc": "prose\n    @Bob",
+      "nodes": [
+
+      ]
+    },
+    {
+      "name": "markdown-url",
+      "doc": "[label](folder/ @Bob)",
+      "nodes": [
+        {"name": "formatting_formatting-link_link", "from": 0, "to": 1, "text": "[", "kind": "token"},
+        {"name": "link", "from": 1, "to": 6, "text": "label", "kind": "token"},
+        {"name": "formatting_formatting-link_link", "from": 6, "to": 7, "text": "]", "kind": "token"},
+        {"name": "formatting_formatting-link-string_string_url", "from": 7, "to": 8, "text": "(", "kind": "token"},
+        {"name": "string_url", "from": 8, "to": 20, "text": "folder/ @Bob", "kind": "token"},
+        {"name": "formatting_formatting-link-string_string_url", "from": 20, "to": 21, "text": ")", "kind": "token"}
+      ]
+    },
+    {
+      "name": "wiki-closed-query",
+      "doc": "@Bob [[Wiki]] tail",
+      "nodes": [
+        {"name": "formatting-link_formatting-link-start", "from": 5, "to": 7, "text": "[[", "kind": "token"},
+        {"name": "hmd-internal-link", "from": 7, "to": 11, "text": "Wiki", "kind": "token"},
+        {"name": "formatting-link_formatting-link-end", "from": 11, "to": 13, "text": "]]", "kind": "token"}
+      ]
+    },
+    {
+      "name": "inline-query",
+      "doc": "@Bob `code` tail",
+      "nodes": [
+        {"name": "formatting_formatting-code_inline-code", "from": 5, "to": 6, "text": "`", "kind": "token"},
+        {"name": "inline-code", "from": 6, "to": 10, "text": "code", "kind": "token"},
+        {"name": "formatting_formatting-code_inline-code", "from": 10, "to": 11, "text": "`", "kind": "token"}
+      ]
+    }
+  ]
+}

@@ -123,6 +123,9 @@ describe("Integration: Full suggestion flow", () => {
 	let mockEditor: jest.Mocked<Editor>;
 	let mockFile: jest.Mocked<TFile>;
 	let registry: ProviderRegistry;
+	let bindings: EditorBindings;
+	let app: App;
+	afterEach(destroyTestEditors);
 
 	beforeEach(() => {
 		// Reset the singleton
@@ -130,11 +133,13 @@ describe("Integration: Full suggestion flow", () => {
 		ProviderRegistry.initializeRegistry(mockPlugin as any);
 		registry = ProviderRegistry.getInstance();
 
-		suggestor = new EntitiesSuggestor(mockPlugin, registry);
+		app = { workspace: new TestEvents() } as unknown as App;
+		bindings = new EditorBindings(app);
+		suggestor = new EntitiesSuggestor({ app } as Entities, registry, bindings);
 		mockEditor = {
 			getLine: jest.fn(),
 		} as unknown as jest.Mocked<Editor>;
-		mockFile = {} as unknown as TFile;
+		mockFile = new TFile();
 	});
 
 	describe("provider filtering by trigger", () => {
@@ -161,7 +166,7 @@ describe("Integration: Full suggestion flow", () => {
 		});
 
 		test("@ trigger only returns @ providers", async () => {
-			mockEditor.getLine.mockReturnValue("@test");
+			({ editor: mockEditor } = mountTestEditor(app, bindings, mockFile, "@test", "@test".slice(0, 5)));
 			const trigger = suggestor.onTrigger(
 				{ line: 0, ch: 5 },
 				mockEditor as Editor,
@@ -181,7 +186,7 @@ describe("Integration: Full suggestion flow", () => {
 		});
 
 		test("/ trigger only returns / providers", async () => {
-			mockEditor.getLine.mockReturnValue("/test");
+			({ editor: mockEditor } = mountTestEditor(app, bindings, mockFile, "/test", "/test".slice(0, 5)));
 			const trigger = suggestor.onTrigger(
 				{ line: 0, ch: 5 },
 				mockEditor as Editor,
@@ -200,7 +205,7 @@ describe("Integration: Full suggestion flow", () => {
 		});
 
 		test(": trigger only returns : providers", async () => {
-			mockEditor.getLine.mockReturnValue(":test");
+			({ editor: mockEditor } = mountTestEditor(app, bindings, mockFile, ":test", ":test".slice(0, 5)));
 			const trigger = suggestor.onTrigger(
 				{ line: 0, ch: 5 },
 				mockEditor as Editor,
@@ -220,8 +225,8 @@ describe("Integration: Full suggestion flow", () => {
 	});
 
 	describe("trigger priority", () => {
-		test("@ takes priority over / when both present", () => {
-			mockEditor.getLine.mockReturnValue("@date/time");
+		test("slash within an entity phrase is not a new starter", () => {
+			({ editor: mockEditor } = mountTestEditor(app, bindings, mockFile, "@date/time", "@date/time".slice(0, 10)));
 			const result = suggestor.onTrigger(
 				{ line: 0, ch: 10 },
 				mockEditor as Editor,
@@ -233,8 +238,8 @@ describe("Integration: Full suggestion flow", () => {
 			expect(result!.query).toBe("@date/time");
 		});
 
-		test("@ takes priority when in same token as /", () => {
-			mockEditor.getLine.mockReturnValue("text @file/path");
+		test("embedded slash preserves the entity query", () => {
+			({ editor: mockEditor } = mountTestEditor(app, bindings, mockFile, "text @file/path", "text @file/path".slice(0, 15)));
 			const result = suggestor.onTrigger(
 				{ line: 0, ch: 15 },
 				mockEditor as Editor,
@@ -246,7 +251,7 @@ describe("Integration: Full suggestion flow", () => {
 		});
 
 		test(": and / are token-scoped triggers", () => {
-			mockEditor.getLine.mockReturnValue("text :emoji");
+			({ editor: mockEditor } = mountTestEditor(app, bindings, mockFile, "text :emoji", "text :emoji".slice(0, 11)));
 			const result = suggestor.onTrigger(
 				{ line: 0, ch: 11 },
 				mockEditor as Editor,
@@ -260,7 +265,7 @@ describe("Integration: Full suggestion flow", () => {
 
 	describe("multi-word queries", () => {
 		test("@ allows multi-word queries with spaces", () => {
-			mockEditor.getLine.mockReturnValue("@John Doe");
+			({ editor: mockEditor } = mountTestEditor(app, bindings, mockFile, "@John Doe", "@John Doe".slice(0, 9)));
 			const result = suggestor.onTrigger(
 				{ line: 0, ch: 9 },
 				mockEditor as Editor,
@@ -272,7 +277,7 @@ describe("Integration: Full suggestion flow", () => {
 		});
 
 		test(": is token-scoped (no spaces)", () => {
-			mockEditor.getLine.mockReturnValue(":emoji more text");
+			({ editor: mockEditor } = mountTestEditor(app, bindings, mockFile, ":emoji more text", ":emoji more text".slice(0, 6)));
 			const result = suggestor.onTrigger(
 				{ line: 0, ch: 6 },
 				mockEditor as Editor,
