@@ -664,3 +664,32 @@ test("a retained settings button cannot rebuild or mutate a hidden view", async 
 	expect(display).not.toHaveBeenCalled();
 	expect(plugin.settings.providerSettings.map(p => p.providerInstanceId)).toEqual(["a", "b"]);
 });
+
+
+test.each(["inputs", "store", "suggestor", "registry"] as const)("unload attempts every cleanup when %s cleanup throws", async target => {
+	const { plugin } = createPlugin(currentData);
+	await plugin.onload();
+	const failure = new Error(`synthetic ${target} cleanup failure`);
+	const errors = jest.spyOn(console, "error").mockImplementation(() => {});
+	const cleanups = {
+		inputs: jest.spyOn(plugin.inputSuggestions, "dispose"),
+		store: jest.spyOn(plugin.settingsStore, "close"),
+		suggestor: jest.spyOn(plugin.suggestor, "dispose"),
+		registry: jest.spyOn(plugin.providerRegistry, "resetProviders"),
+	};
+	cleanups[target].mockImplementationOnce(() => { throw failure; });
+	try {
+		expect(() => plugin.onunload()).not.toThrow();
+		for (const cleanup of Object.values(cleanups)) expect(cleanup).toHaveBeenCalledTimes(1);
+		await tick();
+		expect(errors.mock.calls.some(args => args.includes(failure))).toBe(true);
+		expect(Notice).not.toHaveBeenCalled();
+		expect(EntitiesNotice).not.toHaveBeenCalled();
+	} finally {
+		Object.values(cleanups).forEach(cleanup => cleanup.mockRestore());
+		plugin.inputSuggestions.dispose();
+		await plugin.settingsStore.close();
+		plugin.suggestor.dispose(); plugin.providerRegistry.resetProviders();
+		errors.mockRestore();
+	}
+});

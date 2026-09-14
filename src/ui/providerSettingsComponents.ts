@@ -16,23 +16,27 @@ export function buildIconPickerSetting(
 	onShouldSave: () => void,
 	app: App
 ): void {
+	const owner = inputSuggestScope(container);
 	new Setting(container)
 		.setName(label)
 		.setDesc("Icon for the entities returned by this provider")
-		.addButton((button) =>
+		.addButton((button) => {
+			const applyIcon = (iconName: string) => {
+				settings.icon = iconName;
+				onShouldSave();
+				button.setIcon(iconName);
+			};
+			const saveIcon = owner ? owner.guard(applyIcon) : applyIcon;
+			const openIcon = () => {
+				const iconPickerModal = new IconPickerModal(app);
+				iconPickerModal.open();
+				void iconPickerModal.getInput().then(saveIcon);
+			};
 			button
 				.setIcon(settings.icon ?? defaultIcon)
 				.setDisabled(false)
-				.onClick(() => {
-					const iconPickerModal = new IconPickerModal(app);
-					iconPickerModal.open();
-					iconPickerModal.getInput().then((iconName) => {
-						settings.icon = iconName;
-						onShouldSave();
-						button.setIcon(iconName);
-					});
-				})
-		);
+				.onClick(owner ? owner.guard(openIcon) : openIcon);
+		});
 }
 
 /**
@@ -69,32 +73,29 @@ export function buildTemplateCreationSetting<T extends { entityCreationTemplates
 	onShouldSave: (newSettings: T) => void,
 	app: App
 ): void {
+	const owner = inputSuggestScope(container);
 	const newEntityFromTemplatesSetting = new Setting(container)
 		.setName("New entity from templates")
 		.setDesc(
 			"Create entity which uses the template for a new file with the query as the file name."
 		);
-	newEntityFromTemplatesSetting.addButton((button) =>
+	newEntityFromTemplatesSetting.addButton((button) => {
+		const openTemplate = async () => {
+			const initialSettings = settings.entityCreationTemplates ?? [];
+			const templateDetails = await openTemplateDetailsModal(app, initialSettings[0], owner);
+			if (owner && !owner.active) return;
+			if (templateDetails) {
+				settings.entityCreationTemplates = [{ ...initialSettings[0], ...templateDetails }, ...initialSettings.slice(1)];
+				button.setButtonText(entityTemplateStatusLabel(settings.entityCreationTemplates));
+				onShouldSave(settings);
+			}
+		};
 		button
 			.setButtonText(
 				entityTemplateStatusLabel(settings.entityCreationTemplates ?? [])
 			)
-			.onClick(async () => {
-				const initialSettings = settings.entityCreationTemplates ?? [];
-				const templateDetails = await openTemplateDetailsModal(
-					app,
-					initialSettings[0],
-					inputSuggestScope(container)
-				);
-				if (templateDetails) {
-					settings.entityCreationTemplates = [{ ...initialSettings[0], ...templateDetails }, ...initialSettings.slice(1)];
-					button.setButtonText(
-						entityTemplateStatusLabel(settings.entityCreationTemplates)
-					);
-					onShouldSave(settings);
-				}
-			})
-	);
+			.onClick(owner ? owner.guard(openTemplate) : openTemplate);
+	});
 }
 
 /**

@@ -27,7 +27,7 @@ SOFTWARE.
 
 import { createPopper, type Instance as PopperInstance } from "@popperjs/core";
 import { App, type ISuggestOwner, Scope } from "obsidian";
-import { inputSuggestScope } from "./inputSuggestLifecycle";
+import { inputSuggestScope, runInputCleanups } from "./inputSuggestLifecycle";
 
 const wrapAround = (value: number, size: number): number => ((value % size) + size) % size;
 
@@ -95,9 +95,13 @@ class Suggest<T> {
 	}
 
 	dispose(): void {
-		this.setSuggestions([]);
-		this.containerEl.removeEventListener("click", this.onClick);
-		this.containerEl.removeEventListener("mousemove", this.onMouseover);
+		this.values = [];
+		this.suggestions = [];
+		runInputCleanups(
+			() => this.containerEl.empty(),
+			() => this.containerEl.removeEventListener("click", this.onClick),
+			() => this.containerEl.removeEventListener("mousemove", this.onMouseover)
+		);
 	}
 }
 
@@ -113,6 +117,8 @@ export abstract class TextInputSuggest<T> implements ISuggestOwner<T> {
 	private readonly scope: Scope;
 	private readonly suggestEl: HTMLElement;
 	private readonly suggest: Suggest<T>;
+	private readonly attachedDocument: Document;
+	private readonly attachedWindow: Document["defaultView"];
 	private opened = false;
 	private disposed = false;
 	private committing = false;
@@ -122,24 +128,29 @@ export abstract class TextInputSuggest<T> implements ISuggestOwner<T> {
 		let catalog: T[];
 		try { catalog = this.getCatalog(); } catch { catalog = []; }
 		// Build locally: reentrant teardown/focus loss cannot publish a late catalog.
-		if (!this.usable() || this.inputEl.ownerDocument.activeElement !== this.inputEl) return;
+		if (!this.usable() || this.attachedDocument.activeElement !== this.inputEl) return;
 		this.catalog = catalog;
 		this.onInput();
 	};
 	private readonly onInput = () => {
-		if (!this.usable() || this.committing || this.inputEl.ownerDocument.activeElement !== this.inputEl) return;
+		if (!this.usable() || this.committing || this.attachedDocument.activeElement !== this.inputEl) return;
 		const values = this.getSuggestions(this.inputEl.value);
 		if (!values.length) { this.close(); return; }
 		this.suggest.setSuggestions(values);
 		this.open();
 	};
-	private readonly onBlur = () => this.close();
+	private readonly onBlur = () => {
+		if (this.inputEl.ownerDocument !== this.attachedDocument) this.dispose();
+		else this.close();
+	};
 	private readonly onPageHide = () => this.dispose();
 	private readonly preventBlur = (event: MouseEvent) => event.preventDefault();
 
 	constructor(protected app: App, protected inputEl: HTMLInputElement, options: TextInputSuggestOptions = {}) {
+		this.attachedDocument = inputEl.ownerDocument;
+		this.attachedWindow = this.attachedDocument.defaultView;
 		this.scope = new Scope();
-		this.suggestEl = inputEl.ownerDocument.createElement("div");
+		this.suggestEl = this.attachedDocument.createElement("div");
 		this.suggestEl.classList.add("suggestion-container", "popover");
 		const classes = options.additionalClasses ?? [];
 		this.suggestEl.addClass(...(Array.isArray(classes) ? classes : classes.split(/\s+/).filter(Boolean)));
@@ -151,12 +162,14 @@ export abstract class TextInputSuggest<T> implements ISuggestOwner<T> {
 		inputEl.addEventListener("input", this.onInput);
 		inputEl.addEventListener("blur", this.onBlur);
 		this.suggestEl.addEventListener("mousedown", this.preventBlur);
-		inputEl.ownerDocument.defaultView?.addEventListener("blur", this.onBlur);
-		inputEl.ownerDocument.defaultView?.addEventListener("pagehide", this.onPageHide);
+		this.attachedWindow?.addEventListener("blur", this.onBlur);
+		this.attachedWindow?.addEventListener("pagehide", this.onPageHide);
 		this.releaseOwner = inputSuggestScope(inputEl)?.own(() => this.dispose());
 	}
 
 	private usable(): boolean {
+		// An adopted input needs a new owner; never move a live popup across documents.
+		if (this.inputEl.ownerDocument !== this.attachedDocument) this.dispose();
 		return !this.disposed && this.inputEl.isConnected && !this.inputEl.disabled;
 	}
 
@@ -165,11 +178,11 @@ export abstract class TextInputSuggest<T> implements ISuggestOwner<T> {
 	}
 
 	open(): void {
-		if (!this.usable() || this.committing || this.inputEl.ownerDocument.activeElement !== this.inputEl) return;
+		if (!this.usable() || this.committing || this.attachedDocument.activeElement !== this.inputEl) return;
 		if (this.opened) { void this.popper?.update(); return; }
 		this.opened = true;
 		this.app.keymap.pushScope(this.scope);
-		this.inputEl.ownerDocument.body.appendChild(this.suggestEl);
+		this.attachedDocument.body.appendChild(this.suggestEl);
 		try {
 			// Native 1.12.7/1.13.4/1.14.1 close leaks a capture-scroll listener; see docs/input-suggestions.md.
 			// eslint-disable-next-line obsidianmd/prefer-abstract-input-suggest -- Retain owned lifecycle until native public disposal is corrected and verified.
@@ -191,18 +204,22 @@ export abstract class TextInputSuggest<T> implements ISuggestOwner<T> {
 	}
 
 	close(): void {
-		if (this.opened) this.app.keymap.popScope(this.scope);
+		const opened = this.opened;
+		const popper = this.popper;
 		this.opened = false;
-		this.popper?.destroy();
 		this.popper = undefined;
-		this.suggest.setSuggestions([]);
-		this.suggestEl.remove();
+		runInputCleanups(
+			() => { if (opened) this.app.keymap.popScope(this.scope); },
+			() => popper?.destroy(),
+			() => this.suggest.setSuggestions([]),
+			() => this.suggestEl.remove()
+		);
 	}
 
 	/** Commit exact text once using the input's own window, without reopening. */
 	protected commitValue(value: string): void {
 		if (!this.usable() || !this.opened || this.committing) return;
-		const win = this.inputEl.ownerDocument.defaultView;
+		const win = this.attachedWindow;
 		if (!win) return;
 		this.committing = true;
 		this.close();
@@ -218,17 +235,20 @@ export abstract class TextInputSuggest<T> implements ISuggestOwner<T> {
 	dispose(): void {
 		if (this.disposed) return;
 		this.disposed = true;
-		this.close();
 		this.catalog = [];
-		this.suggest.dispose();
-		this.inputEl.removeEventListener("focus", this.onFocus);
-		this.inputEl.removeEventListener("input", this.onInput);
-		this.inputEl.removeEventListener("blur", this.onBlur);
-		this.suggestEl.removeEventListener("mousedown", this.preventBlur);
-		this.inputEl.ownerDocument.defaultView?.removeEventListener("blur", this.onBlur);
-		this.inputEl.ownerDocument.defaultView?.removeEventListener("pagehide", this.onPageHide);
-		this.releaseOwner?.();
+		const releaseOwner = this.releaseOwner;
 		this.releaseOwner = undefined;
+		runInputCleanups(
+			() => this.close(),
+			() => this.suggest.dispose(),
+			() => this.inputEl.removeEventListener("focus", this.onFocus),
+			() => this.inputEl.removeEventListener("input", this.onInput),
+			() => this.inputEl.removeEventListener("blur", this.onBlur),
+			() => this.suggestEl.removeEventListener("mousedown", this.preventBlur),
+			() => this.attachedWindow?.removeEventListener("blur", this.onBlur),
+			() => this.attachedWindow?.removeEventListener("pagehide", this.onPageHide),
+			() => releaseOwner?.()
+		);
 	}
 
 	protected abstract getCatalog(): T[];

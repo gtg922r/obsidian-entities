@@ -13,10 +13,18 @@ owns its suggestion cleanup. Hide, replacement, close and plugin unload dispose
 those resources. An open popup has one keymap scope and one Popper instance;
 repeated typing updates that instance. Close is safe before opening, and teardown
 removes the input, popup and window listeners, clears catalogs, and unregisters
-shorter-lived owners. Popup DOM belongs to the input's document. R1 still owns
-canonical settings and field/collection conflicts; callbacks retained after their
-own view is disposed cannot save. Other live views still use the same conflict
-checks. No settings schema, provider retrieval, or editor autocomplete changes.
+shorter-lived owners. Cleanup attempts every step and reports failures to the
+console without interrupting sibling cleanup or settings drain. Listeners are
+removed from the window where they were attached. Popup DOM belongs to the input's
+original document; observing adoption into another document retires that input's
+suggestions instead of rebinding its popup.
+
+Each provider modal render receives a detached settings draft. Icon and template
+buttons capture that render's owner before they can open a child or accept its
+result. Retained controls and delayed results therefore cannot contaminate the
+current draft's next valid save. R1 still owns canonical settings and
+field/collection conflicts, including other live views. No settings schema,
+provider retrieval, or editor autocomplete changes.
 
 ## Public API migration deferred
 

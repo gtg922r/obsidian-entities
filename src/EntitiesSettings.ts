@@ -332,6 +332,8 @@ export class ProviderSettingsModal extends Modal {
 	display() {
 		this.renderScope?.dispose();
 		if (this.plugin.inputSuggestions && !this.plugin.inputSuggestions.active) return;
+		// Detached controls may still mutate their captured draft before a guarded save.
+		this.providerSettings = cloneSettings(this.providerSettings);
 		const { contentEl } = this;
 		const view = this.renderScope = new InputSuggestScope(contentEl, this.plugin.inputSuggestions);
 		this.releaseOwner = this.plugin.inputSuggestions?.own(() => this.close());

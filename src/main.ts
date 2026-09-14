@@ -20,7 +20,7 @@ import { SettingsStore } from "./SettingsStore";
 import { createProviderInstanceId } from "./settingsData";
 import { claimSettingsHandoff } from "./settingsHandoff";
 import { SettingsStorage } from "./SettingsStorage";
-import { InputSuggestScope } from "./ui/inputSuggestLifecycle";
+import { InputSuggestScope, runInputCleanups } from "./ui/inputSuggestLifecycle";
 
 export default class Entities extends Plugin {
 	inputSuggestions = new InputSuggestScope();
@@ -86,11 +86,13 @@ export default class Entities extends Plugin {
 
 	onunload() {
 		this.unloaded = true;
-		this.inputSuggestions.dispose();
 		// Obsidian does not await this hook. Start draining immediately and report failures.
-		void this.settingsStore?.close();
-		this.suggestor?.dispose();
-		this.providerRegistry?.resetProviders();
+		runInputCleanups(
+			() => { void this.settingsStore?.close(); },
+			() => this.inputSuggestions.dispose(),
+			() => this.suggestor?.dispose(),
+			() => this.providerRegistry?.resetProviders()
+		);
 	}
 
 	registerEntityProviders() {

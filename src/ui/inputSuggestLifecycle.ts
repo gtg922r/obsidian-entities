@@ -1,5 +1,12 @@
 const scopes = new WeakMap<HTMLElement, InputSuggestScope>();
 
+/** Attempt every teardown step even if an external cleanup fails. */
+export function runInputCleanups(...cleanups: (() => void)[]): void {
+	for (const cleanup of cleanups) {
+		try { cleanup(); } catch (error) { console.error("Entities cleanup failed", error); }
+	}
+}
+
 /** Find the rendered view that owns an input or a nested settings editor. */
 export function inputSuggestScope(element: HTMLElement): InputSuggestScope | undefined {
 	for (let current: HTMLElement | null = element; current; current = current.parentElement) {
@@ -14,26 +21,31 @@ export class InputSuggestScope {
 	private cleanups = new Set<() => void>();
 	private releaseParent?: () => void;
 	private disposed = false;
+	private readonly attachedDocument?: Document;
+	private readonly attachedWindow?: Window | null;
 	private readonly onPageHide = () => this.dispose();
 
 	constructor(private root?: HTMLElement, parent?: InputSuggestScope) {
+		this.attachedDocument = root?.ownerDocument;
+		this.attachedWindow = this.attachedDocument?.defaultView;
 		if (root) {
 			scopes.get(root)?.dispose();
 			parent ??= root.parentElement ? inputSuggestScope(root.parentElement) : undefined;
 			scopes.set(root, this);
-			root.ownerDocument?.defaultView?.addEventListener("pagehide", this.onPageHide);
+			this.attachedWindow?.addEventListener("pagehide", this.onPageHide);
 		}
 		this.releaseParent = parent?.own(() => this.dispose());
 	}
 
 	get active(): boolean {
+		if (this.root && this.root.ownerDocument !== this.attachedDocument) this.dispose();
 		return !this.disposed && this.root?.isConnected !== false;
 	}
 
 	/** Return an unregister function so shorter-lived children do not accumulate. */
 	own(cleanup: () => void): () => void {
 		if (this.disposed) {
-			cleanup();
+			runInputCleanups(cleanup);
 			return () => {};
 		}
 		this.cleanups.add(cleanup);
@@ -50,13 +62,16 @@ export class InputSuggestScope {
 	dispose(): void {
 		if (this.disposed) return;
 		this.disposed = true;
-		this.releaseParent?.();
+		const releaseParent = this.releaseParent;
 		this.releaseParent = undefined;
 		const cleanups = Array.from(this.cleanups);
 		this.cleanups.clear();
-		for (const cleanup of cleanups) cleanup();
-		this.root?.ownerDocument?.defaultView?.removeEventListener("pagehide", this.onPageHide);
 		if (this.root && scopes.get(this.root) === this) scopes.delete(this.root);
 		this.root = undefined;
+		runInputCleanups(
+			() => releaseParent?.(),
+			() => this.attachedWindow?.removeEventListener("pagehide", this.onPageHide),
+			...cleanups
+		);
 	}
 }
