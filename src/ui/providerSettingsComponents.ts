@@ -1,159 +1,81 @@
-import { App, ExtraButtonComponent, Plugin, Setting, TFile } from "obsidian";
-import { entityFromTemplateSettings } from "../entities.types";
-import { IconPickerModal, openTemplateDetailsModal } from "../userComponents";
-import { FolderSuggest } from "./file-suggest";
-import { setValidationStatus } from "./validationStatus";
-import { inputSuggestScope } from "./inputSuggestLifecycle";
+import { SettingDefinitionItem, SettingDefinitionRender, TFile } from "obsidian";
+import type { EntityProviderUserSettings } from "../Providers/EntityProvider";
+import type { entityFromTemplateSettings } from "../entities.types";
+import { IconPickerModal } from "../userComponents";
+import { getTemplaterCreationEngine } from "../entityCreation";
+import { FileSuggest, FolderSuggest } from "./file-suggest";
+import type { ProviderSettingsContext } from "./providerSettings";
 
-/**
- * Builds an icon picker setting row.
- */
-export function buildIconPickerSetting(
-	container: HTMLElement,
-	label: string,
-	settings: { icon: string },
-	defaultIcon: string,
-	onShouldSave: () => void,
-	app: App
-): void {
-	const owner = inputSuggestScope(container);
-	new Setting(container)
-		.setName(label)
-		.setDesc("Icon for the entities returned by this provider")
-		.addButton((button) => {
-			const applyIcon = (iconName: string) => {
-				settings.icon = iconName;
-				onShouldSave();
-				button.setIcon(iconName);
-			};
-			const saveIcon = owner ? owner.guard(applyIcon) : applyIcon;
-			const openIcon = () => {
-				const iconPickerModal = new IconPickerModal(app);
-				iconPickerModal.open();
-				void iconPickerModal.getInput().then(saveIcon);
-			};
-			button
-				.setIcon(settings.icon ?? defaultIcon)
-				.setDisabled(false)
-				.onClick(owner ? owner.guard(openIcon) : openIcon);
-		});
+/** All icon entry points share the originating render's opening and settlement lifetime. */
+export function iconSetting<T extends EntityProviderUserSettings>(
+	context: ProviderSettingsContext<T>, key: keyof T, name: string, desc: string, fallback: string
+): SettingDefinitionRender {
+	return context.field(key, name, desc, (setting, field) => {
+		setting.addButton(button => button.setIcon(typeof field.value === "string" ? field.value : fallback)
+			.onClick(field.scope.guard(async () => {
+				if (!field.active) return;
+				const edit = field.beginEdit();
+				const picker = new IconPickerModal(context.plugin.app, field.scope);
+				picker.open();
+				const icon = await picker.getInput();
+				if (!field.active || icon === undefined) { edit.cancel(); return; }
+				edit.apply(icon as T[keyof T]);
+			})));
+	});
 }
 
-/**
- * Returns a human-readable status label for template creation settings.
- */
-export function entityTemplateStatusLabel(
-	entityCreationTemplates: entityFromTemplateSettings[]
-): string {
-	if (entityCreationTemplates.length === 0) {
-		return "Set template";
-	} else if (entityCreationTemplates[0].engine === "core") {
-		return "Core unsupported (recipe preserved)";
-	} else if (
-		entityCreationTemplates.length === 1 &&
-		entityCreationTemplates[0].engine !== "disabled"
-	) {
-		return "1 template";
-	} else if (
-		entityCreationTemplates.length === 1 &&
-		entityCreationTemplates[0].engine === "disabled"
-	) {
-		return "Set template";
-	} else {
-		return `${entityCreationTemplates.length} templates`;
-	}
-}
+const emptyRecipe = (): entityFromTemplateSettings => ({ engine: "disabled", templatePath: "", folderPath: "", entityName: "" });
 
-/**
- * Builds a "New entity from templates" setting row with a button to open the template details modal.
- */
-export function buildTemplateCreationSetting<T extends { entityCreationTemplates?: entityFromTemplateSettings[] }>(
-	container: HTMLElement,
-	settings: T,
-	onShouldSave: (newSettings: T) => void,
-	app: App
-): void {
-	const owner = inputSuggestScope(container);
-	const newEntityFromTemplatesSetting = new Setting(container)
-		.setName("New entity from templates")
-		.setDesc(
-			"Create entity which uses the template for a new file with the query as the file name."
-		);
-	newEntityFromTemplatesSetting.addButton((button) => {
-		const openTemplate = async () => {
-			const initialSettings = settings.entityCreationTemplates ?? [];
-			const templateDetails = await openTemplateDetailsModal(app, initialSettings[0], owner);
-			if (owner && !owner.active) return;
-			if (templateDetails) {
-				settings.entityCreationTemplates = [{ ...initialSettings[0], ...templateDetails }, ...initialSettings.slice(1)];
-				button.setButtonText(entityTemplateStatusLabel(settings.entityCreationTemplates));
-				onShouldSave(settings);
-			}
+/** Every existing recipe is visible; edits retain the captured whole array and unknown properties. */
+export function templateCreationSettings<T extends EntityProviderUserSettings>(context: ProviderSettingsContext<T>): SettingDefinitionItem[] {
+	const configured = context.value("entityCreationTemplates") ?? [];
+	const count = Math.max(1, configured.length);
+	const recipe = (index: number) => context.value("entityCreationTemplates")?.[index] ?? emptyRecipe();
+	return [...Array.from({ length: count }, (_, index) => {
+		const label = `Recipe ${index + 1}`;
+		const update = (list: entityFromTemplateSettings[] | undefined, changes: Partial<entityFromTemplateSettings>) => {
+			const next = [...list ?? []];
+			next[index] = { ...next[index] ?? emptyRecipe(), ...changes };
+			return next;
 		};
-		button
-			.setButtonText(
-				entityTemplateStatusLabel(settings.entityCreationTemplates ?? [])
-			)
-			.onClick(owner ? owner.guard(openTemplate) : openTemplate);
-	});
-}
-
-/**
- * Builds a folder path setting with existence indicator, used by FolderEntityProvider
- * and TemplateEntityProvider summary settings.
- */
-export function buildFolderPathSummarySetting<T extends { path: string }>(
-	settingContainer: Setting,
-	settings: T,
-	onShouldSave: (newSettings: T) => void,
-	plugin: Plugin,
-	options?: { showNoteCount?: boolean }
-): void {
-	const folderExists = (folderPath: string) =>
-		plugin.app.vault.getFolderByPath(folderPath) !== null;
-	let folderExistsIcon: ExtraButtonComponent;
-	const updateFolderExistsIcon = (path: string) => {
-		if (folderExists(path) && folderExistsIcon) {
-			const folder = plugin.app.vault.getFolderByPath(path);
-			const noteCount = folder?.children.filter(
-				(file) => file instanceof TFile
-			).length;
-			const tooltip = options?.showNoteCount
-				? `Folder found (${noteCount} notes)`
-				: "Folder found";
-
-			setValidationStatus(
-				folderExistsIcon,
-				"folder-check",
-				tooltip,
-				"neutral"
-			);
-		} else if (folderExistsIcon) {
-			setValidationStatus(
-				folderExistsIcon,
-				"folder-x",
-				"Folder not found",
-				"error"
-			);
-		}
-	};
-	settingContainer.addExtraButton((button) => {
-		folderExistsIcon = button;
-		updateFolderExistsIcon(settings.path);
-		button.setDisabled(true);
-	});
-
-	settingContainer.addText((text) => {
-		text.setPlaceholder("Folder path").setValue(settings.path);
-		text.onChange((value) => {
-			if (!text.inputEl.isConnected) return;
-			updateFolderExistsIcon(value);
-			if (folderExists(value)) {
-				settings.path = value;
-				onShouldSave(settings);
-			}
-		});
-
-		new FolderSuggest(plugin.app, text.inputEl, { additionalClasses: "entities-settings" });
-	});
+		const status = () => {
+			const value = recipe(index);
+			if (value.engine === "disabled") return "Disabled. Other configured recipes are unaffected.";
+			if (value.engine !== "templater") return "Unsupported engine; this recipe is preserved.";
+			if (!getTemplaterCreationEngine(context.plugin.app)) return "Templater creation unavailable; this recipe is preserved.";
+			if (!(context.plugin.app.vault.getAbstractFileByPath(value.templatePath) instanceof TFile)) return "Template file unavailable; this recipe is preserved.";
+			return "Templater recipe. Creation checks the engine and destination again when used.";
+		};
+		return {
+			type: "group" as const, heading: `Creation recipe ${index + 1}`,
+			items: [
+				context.field("entityCreationTemplates", `${label} engine`, "Choose the creation engine for this recipe.", (setting, field) => {
+					const value = field.value?.[index] ?? emptyRecipe();
+					setting.addDropdown(dropdown => {
+						if (value.engine !== "disabled" && value.engine !== "templater") dropdown.addOption(value.engine, value.engine === "core" ? "Core (unsupported; recipe preserved)" : `${value.engine} (unsupported; preserved)`);
+						dropdown.addOption("disabled", "Disabled").addOption("templater", "Templater").setValue(value.engine)
+							.onChange(engine => field.edit(list => update(list, { engine: engine as entityFromTemplateSettings["engine"] }) as T["entityCreationTemplates"]));
+					});
+					context.watch(field.scope, () => setting.setDesc(`${field.pending ? "Pending" : "Applied"}: ${status()}`));
+				}, { manual: true }),
+				...([
+					["templatePath", "template path", "Path for the template, including extension.", "Template path"],
+					["folderPath", "destination folder", "Folder for the new note. Empty selects the vault root.", "Folder path"],
+					["entityName", "entity type", "How to describe the entity that will be created.", "Entity name"],
+				] as const).map(([key, name, desc, placeholder]) => context.field("entityCreationTemplates", `${label} ${name}`, desc, (setting, field) => {
+					setting.addText(text => {
+						text.setPlaceholder(placeholder).setValue(field.value?.[index]?.[key] ?? "")
+							.onChange(value => field.edit(list => update(list, { [key]: value }) as T["entityCreationTemplates"]));
+						field.captureText(text.inputEl, { read: list => list?.[index]?.[key], write: (list, value) => update(list, { [key]: value }) as T["entityCreationTemplates"] });
+						context.watch(field.scope, () => text.setDisabled(recipe(index).engine === "disabled"));
+						if (key === "templatePath") new FileSuggest(context.plugin.app, text.inputEl);
+						if (key === "folderPath") new FolderSuggest(context.plugin.app, text.inputEl);
+					});
+				}, { manual: true })),
+			],
+		};
+	}), context.field("entityCreationTemplates", "Apply recipe changes", "Apply or discard the pending changes to these recipes.", (setting, field) => {
+		setting.addButton(button => button.setButtonText("Apply recipe changes").onClick(field.scope.guard(() => field.save())))
+			.addButton(button => button.setButtonText("Discard recipe changes").onClick(field.scope.guard(() => field.reload())));
+	}, { manual: true })];
 }

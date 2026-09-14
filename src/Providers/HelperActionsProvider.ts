@@ -4,10 +4,10 @@ import { EntitySuggestionItem } from "src/suggestion.types";
 import { EntityProvider, EntityProviderUserSettings, ProviderSettingsInput, RefreshBehavior } from "./EntityProvider";
 import {
 	Plugin,
-	Setting,
 	moment
 } from "obsidian";
-import { IconPickerModal } from "src/userComponents";
+import { iconSetting } from "../ui/providerSettingsComponents";
+import type { ProviderSettingsContext } from "../ui/providerSettings";
 import { TriggerCharacter } from "src/entities.types";
 
 const helperProviderTypeID = "helper";
@@ -154,68 +154,14 @@ export class HelperEntityProvider extends EntityProvider<HelperProviderUserSetti
 		return [...checkboxSuggestions, ...calloutSuggestions];
 	}
 
-	static buildSummarySetting(
-		settingContainer: Setting,
-		settings: HelperProviderUserSettings,
-		onShouldSave: (newSettings: HelperProviderUserSettings) => void,
-		plugin: Plugin
-	): void {
-		return;
+	static getSettingDefinitions(context: ProviderSettingsContext<HelperProviderUserSettings>) {
+		return [
+			iconSetting(context, "checkboxIcon", "Checkbox icon", "Icon for the checkbox helpers.", "square-asterisk"),
+			iconSetting(context, "calloutIcon", "Callout icon", "Icon for the callout helpers.", "square-chevron-right"),
+			context.field("addCreatedTag", "Add created tag", "Add [created::...] metadata at the end of a line from the checkbox action.", (setting, field) => {
+				setting.addToggle(toggle => toggle.setValue(field.value).onChange(value => field.set(value)));
+			}),
+		];
 	}
 
-	static buildSimpleSettings(
-		settingContainer: HTMLElement,
-		settings: HelperProviderUserSettings,
-		onShouldSave: (newSettings: HelperProviderUserSettings) => void,
-		plugin: Plugin
-	): void {
-		new Setting(settingContainer)
-			.setName("Checkbox icon")
-			.setDesc("Icon for the checkbox helper entities")
-			.addButton((button) =>
-				button
-					.setIcon(settings.checkboxIcon ?? "square-asterisk")
-					.setDisabled(false)
-					.onClick(() => {
-						const iconPickerModal = new IconPickerModal(plugin.app);
-						iconPickerModal.open();
-						iconPickerModal.getInput().then((iconName) => {
-							settings.checkboxIcon = iconName;
-							onShouldSave(settings);
-							button.setIcon(iconName);
-						});
-					})
-			);
-
-		new Setting(settingContainer)
-			.setName("Callout icon")
-			.setDesc("Icon for the callout helper entities")
-			.addButton((button) =>
-				button
-					.setIcon(settings.calloutIcon ?? "square-chevron-right")
-					.setDisabled(false)
-					.onClick(() => {
-						const iconPickerModal = new IconPickerModal(plugin.app);
-						iconPickerModal.open();
-						iconPickerModal.getInput().then((iconName) => {
-							settings.calloutIcon = iconName;
-							onShouldSave(settings);
-							button.setIcon(iconName);
-						});
-					})
-			);
-
-		// New setting for adding the created tag
-		new Setting(settingContainer)
-			.setName("Add created tag")
-			.setDesc("Whether to add the [created::...] tag at the end of a line from the checkbox function")
-			.addToggle((toggle) =>
-				toggle
-					.setValue(settings.addCreatedTag)
-					.onChange((value) => {
-						settings.addCreatedTag = value;
-						onShouldSave(settings);
-					})
-			);
-	}
 }

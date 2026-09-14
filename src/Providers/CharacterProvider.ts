@@ -1,5 +1,6 @@
+import type { ProviderSettingsContext } from "../ui/providerSettings";
 import { cloneSettings } from "../settingsData";
-import { Plugin, Setting } from "obsidian";
+import { Plugin } from "obsidian";
 import { EntitySuggestionItem } from "src/suggestion.types";
 import { EntityProvider, EntityProviderUserSettings, ProviderSettingsInput } from "./EntityProvider";
 import emojilib from "emojilib";
@@ -132,56 +133,15 @@ export class CharacterProvider extends EntityProvider<CharacterProviderUserSetti
 		return [];
 	}
 
-	static buildSummarySetting(
-		settingContainer: Setting,
-		settings: CharacterProviderUserSettings,
-		onShouldSave: (newSettings: CharacterProviderUserSettings) => void,
-		plugin: Plugin
-	): void {
-		// Implement logic to build summary settings UI for CharacterProvider
+	static getSettingDefinitions(context: ProviderSettingsContext<CharacterProviderUserSettings>) {
+		return [
+			context.field("suggestEmoji", "Suggest emoji", "Provide emoji suggestions.", (setting, field) => {
+				setting.addToggle(toggle => toggle.setValue(field.value).onChange(value => field.set(value)));
+			}),
+			context.field("suggestFontAwesome", "Suggest Font Awesome", "Provide Font Awesome glyph suggestions.", (setting, field) => {
+				setting.addToggle(toggle => toggle.setValue(field.value).onChange(value => field.set(value)));
+			}),
+		];
 	}
 
-	static buildSimpleSettings?(
-		settingContainer: HTMLElement,
-		settings: CharacterProviderUserSettings,
-		onShouldSave: (newSettings: CharacterProviderUserSettings) => void,
-		plugin: Plugin
-	): void {
-		new Setting(settingContainer)
-			.setName("Suggest emoji")
-			.setDesc("Provide emoji suggestion")
-			.addToggle((toggle) =>
-				toggle
-					.setValue(settings.suggestEmoji)
-					.onChange(async (value) => {
-						settings.suggestEmoji = value;
-						onShouldSave(settings);
-					})
-			);
-		new Setting(settingContainer)
-			// eslint-disable-next-line obsidianmd/ui/sentence-case -- "Font Awesome" is the icon library brand name.
-			.setName("Suggest Font Awesome")
-			// eslint-disable-next-line obsidianmd/ui/sentence-case -- "Font Awesome" is the icon library brand name.
-			.setDesc("Provide Font Awesome glyph suggestions")
-			.addToggle((toggle) =>
-				toggle
-					.setValue(settings.suggestFontAwesome)
-					.onChange(async (value) => {
-						settings.suggestFontAwesome = value;
-						onShouldSave(settings);
-					})
-			);
-		// Implement logic to build simple settings UI for CharacterProvider
-		// This could include options like character folder path, naming conventions, etc.
-	}
-
-	static buildAdvancedSettings?(
-		settingContainer: HTMLElement,
-		settings: CharacterProviderUserSettings,
-		onShouldSave: (newSettings: CharacterProviderUserSettings) => void,
-		plugin: Plugin
-	): void {
-		// Implement logic to build advanced settings UI for CharacterProvider
-		// This could include more complex options like custom character attributes, relationships, etc.
-	}
 }

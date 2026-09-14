@@ -13,7 +13,8 @@ import {
 } from "src/entities.types";
 import { EntitiesNotice } from "src/userComponents";
 import { RefreshBehavior } from "./EntityProvider";
-import { IconPickerModal } from "src/userComponents";
+import type { ProviderSettingsContext } from "../ui/providerSettings";
+import { inputSuggestScope } from "../ui/inputSuggestLifecycle";
 import { setValidationStatus } from "src/ui/validationStatus";
 import { captureDateRoute, dateLinkpath, DateRoute, DateRouteSnapshot, getDateRouteStatus, lookupDateFile } from "../dateNotes";
 import { classifyExplicitWeek } from "./explicitWeek";
@@ -216,7 +217,9 @@ export class DateEntityProvider extends EntityProvider<DatesProviderUserSettings
 					"NLDates plugin conflicts with autocomplete!",
 					"error"
 				);
+				const owner = inputSuggestScope(settingContainer.settingEl);
 				button.onClick(() => {
+					if (!owner?.active || !button.extraSettingsEl.isConnected) return;
 					new EntitiesNotice(
 						"NLDates plugin conflicts with autocomplete. " +
 							"Disable autocomplete in NLDates settings, or change its trigger phrase.",
@@ -248,52 +251,21 @@ export class DateEntityProvider extends EntityProvider<DatesProviderUserSettings
 		});
 	}
 
-	static buildSimpleSettings(
-		settingContainer: HTMLElement,
-		settings: DatesProviderUserSettings,
-		onShouldSave: (newSettings: DatesProviderUserSettings) => void,
-		plugin: Plugin
-	): void {
-		new Setting(settingContainer)
-			.setName("Icon")
-			.setDesc("Icon for the date entities returned by this provider")
-			.addButton((button) =>
-				button
-					.setIcon(settings.icon ?? "calendar")
-					.setDisabled(false)
-					.onClick(() => {
-						const iconPickerModal = new IconPickerModal(plugin.app);
-						iconPickerModal.open();
-						iconPickerModal.getInput().then((iconName) => {
-							settings.icon = iconName;
-							onShouldSave(settings);
-							button.setIcon(iconName);
-						});
-					})
-			);
-
-		new Setting(settingContainer)
-			.setName("Create non-existent dates")
-			.setDesc("Whether to create date notes that don't exist yet")
-			.addToggle((toggle) => {
-				toggle.setValue(settings.shouldCreateIfNotExists);
-				toggle.onChange((value) => {
-					settings.shouldCreateIfNotExists = value;
-					onShouldSave(settings);
+	static getSettingDefinitions(context: ProviderSettingsContext<DatesProviderUserSettings>) {
+		return [
+			context.row("Date availability", "Natural Language Dates and date note configuration.", (setting, scope) => {
+				context.watch(scope, () => {
+					setting.clear();
+					this.buildSummarySetting(setting, context.settings(), () => {}, context.plugin);
 				});
-			});
-
-		new Setting(settingContainer)
-			.setName("Include week suggestions")
-			// eslint-disable-next-line obsidianmd/ui/sentence-case -- ISO week dates use uppercase W.
-			.setDesc("Whether to include week-based date suggestions (e.g., 2023-W01)")
-			.addToggle((toggle) => {
-				toggle.setValue(settings.includeWeekSuggestions);
-				toggle.onChange((value) => {
-					settings.includeWeekSuggestions = value;
-					onShouldSave(settings);
-				});
-			});
+			}),
+			context.field("shouldCreateIfNotExists", "Create non-existent dates", "Create missing date notes when the active integration supports creation.", (setting, field) => {
+				setting.addToggle(toggle => toggle.setValue(field.value).onChange(value => field.set(value)));
+			}),
+			context.field("includeWeekSuggestions", "Include week suggestions", "Include week-based date suggestions, such as 2023-W01.", (setting, field) => {
+				setting.addToggle(toggle => toggle.setValue(field.value).onChange(value => field.set(value)));
+			}),
+		];
 	}
 
 	getRefreshBehavior(): RefreshBehavior {

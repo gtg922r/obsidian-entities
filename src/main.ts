@@ -30,7 +30,8 @@ export default class Entities extends Plugin {
 	private waitForPreviousSettings: () => Promise<void> = async () => {};
 	private settingsStorage!: SettingsStorage;
 
-	get settings(): EntitiesSettings {
+	/** Detached canonical configuration; native Plugin.settings is not our persistence surface. */
+	get entitySettings(): EntitiesSettings {
 		return this.settingsStore.settings;
 	}
 	suggestor!: EntitiesSuggestor;
@@ -109,7 +110,7 @@ export default class Entities extends Plugin {
 	loadEntityProviders() {
 		if (this.unloaded) return;
 		this.providerRegistry.instantiateProvidersFromSettings(
-			this.settings.providerSettings
+			this.entitySettings.providerSettings
 		);
 	}
 

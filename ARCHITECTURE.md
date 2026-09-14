@@ -69,18 +69,18 @@ This document explains the overall layout and flow of the **Entities** Obsidian 
      using the retrieval source note, or inserts deliberate unresolved links,
      exact literal text, or a typed action outcome through the same guarded transaction.
 
-3. **`EntitiesSettings`** – Settings tab where users add, configure, and remove
-   provider instances. Provider classes supply their own settings UI via static
-   `buildSummarySetting` / `buildSimpleSettings` / `buildAdvancedSettings`
-   methods.
+3. **`EntitiesSettings`** – One native searchable settings tree with stable provider
+   pages and individual field definitions. Provider classes supply
+   `getSettingDefinitions(context)`; public custom-row render callbacks bind to
+   guarded scalar or whole-collection drafts.
 
-   `SettingsStore` owns the canonical configuration. UI builders receive detached
-   drafts; edits and deletions address `providerInstanceId` and update memory
-   immediately. Disk writes start in the next microtask, run one at a time, and
-   coalesce edits arriving during a write into the latest successor snapshot.
-   Provider reconstruction uses the current in-memory settings, independent of
-   disk completion. See [settings recovery](docs/settings-recovery.md) for the
-   migration, backup, retry, and shutdown contract.
+   `SettingsStore` owns canonical configuration. `SettingsFieldDraft` preserves
+   exact pending/rejected values and original baselines across native refresh and
+   navigation. Mutation and deletion address `providerInstanceId`. Canonical
+   acceptance advances a baseline; disk durability remains the serialized R1
+   writer's responsibility. The plugin's detached accessor is `entitySettings`.
+   See [native settings](docs/native-settings.md) and
+   [settings recovery](docs/settings-recovery.md).
 
 4. **Providers** – Each provider:
    - Extends `EntityProvider<T>` with strongly-typed settings.
@@ -121,25 +121,20 @@ source evaluation and ignores malformed/unresolved page neighbors.
 Ordinary-source/filter errors do not disable a provider or change its independent
 creation recipes. See [file provider semantics](docs/file-providers.md).
 
-### Provider Settings Components (`src/ui/providerSettingsComponents.ts`)
+### Provider settings and input lifetime
 
-Shared UI builders eliminating duplication across provider settings:
+`ui/providerSettings.ts` defines the narrow native render binding contract.
+`ui/providerSettingsComponents.ts` shares owned icon selection and searchable
+recipe fields; `ui/fileProviderSettings.ts` shares source diagnostics, aliases,
+and individual filter fields. Recipe edits apply/discard as one collection.
 
-- `buildIconPickerSetting()` – Icon selection button with picker modal.
-- `buildTemplateCreationSetting()` – Template configuration button with status
-  label.
-- `buildFolderPathSummarySetting()` – Folder path input with existence indicator
-  and optional note count.
-- `entityTemplateStatusLabel()` – Human-readable template status string.
-
-### Settings input lifecycle
-
-`ui/inputSuggestLifecycle.ts` owns bounded cleanup for the plugin, each rendered
-settings view/modal, and nested filter editors. Disposing a view closes its owned
-popups and releases input/window listeners and retained save callbacks. Catalogs
-refresh on focus and filter synchronously while typing. The existing navigation
-and Popper positioning remain after verified native `AbstractInputSuggest.close`
-listener-retention defects; see [input suggestions](docs/input-suggestions.md).
+`ui/nativeSettingsLifetime.ts` owns individual public row renders, document
+adoption, composition deferral and limited focus restoration. It works with the
+accepted `ui/inputSuggestLifecycle.ts` scopes and owned popup implementation.
+Every picker opening captures a child draft and is cancelled on opening-render
+teardown. No private native renderer hooks or default persistence bindings are
+used. See [native settings](docs/native-settings.md) and
+[input suggestions](docs/input-suggestions.md).
 
 ### Creation boundaries
 
@@ -189,9 +184,9 @@ recipe preservation, native-method evidence and the temporary Template insertion
     range checks. Created files remain created if later insertion is refused.
 
 - **`RegisterableEntityProvider`** – Type describing provider classes that can be
-  registered. Requires static `providerTypeID`, `getDescription()`,
-  `getDefaultSettings()`, `buildSummarySetting()`, and optionally
-  `buildSimpleSettings()` / `buildAdvancedSettings()`.
+  registered. Requires static `providerTypeID`, `getDescription()`, and
+  `getDefaultSettings()`. Provider configuration uses
+  `getSettingDefinitions(context)` with field-level native definitions.
 
 ## Trigger System
 
@@ -274,10 +269,10 @@ are skipped individually and diagnostics are bounded per provider/stage.
 1. Create a new file in `src/Providers/` extending `EntityProvider<T>`.
 2. Define settings interface extending `EntityProviderUserSettings`.
 3. Implement required static methods: `providerTypeID`, `getDescription()`,
-   `getDefaultSettings()`, `buildSummarySetting()`.
+   `getDefaultSettings()`, `getSettingDefinitions(context)`.
 4. Implement `getEntityList(query, trigger)` returning `EntitySuggestionItem[]`.
-5. Use shared UI components from `src/ui/providerSettingsComponents.ts` for
-   common settings (icon picker, folder path, template creation).
+5. Use the native field binding context and shared definitions for recipes and
+   file settings. Put counts/status in descriptions, keeping names stable.
 6. Use `EntityFilters` for frontmatter-based filtering if needed.
 7. Register the class in `main.ts` → `registerEntityProviders()`.
 8. Add tests in `tests/Providers/`.

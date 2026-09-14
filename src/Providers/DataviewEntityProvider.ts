@@ -1,9 +1,9 @@
+import type { ProviderSettingsContext } from "../ui/providerSettings";
 import { cloneSettings } from "../settingsData";
 import {
 	App,
 	getAllTags,
 	Plugin,
-	Setting,
 	TFile,
 	TFolder,
 } from "obsidian";
@@ -11,10 +11,10 @@ import { EntitySuggestionItem } from "src/suggestion.types";
 import { EntityProvider, EntityProviderUserSettings } from "./EntityProvider";
 import { TextInputSuggest } from "src/ui/suggest";
 import { AppWithPlugins, EntityFilter } from "src/entities.types";
-import { buildIconPickerSetting, buildTemplateCreationSetting } from "src/ui/providerSettingsComponents";
+import { templateCreationSettings } from "src/ui/providerSettingsComponents";
 import { fileAliasSuggestions } from "./fileAliases";
 import { FileSourceResult, filterSourceFiles } from "./fileSources";
-import { buildFileAliasSettings, buildFileFilterSettings, buildFileSourceSetting } from "src/ui/fileProviderSettings";
+import { fileAliasSettings, fileFilterSettings, buildFileSourceSetting } from "src/ui/fileProviderSettings";
 
 const dataviewProviderTypeID = "dataview";
 
@@ -104,35 +104,19 @@ export class DataviewEntityProvider extends EntityProvider<DataviewProviderUserS
 		]);
 	}
 
-	private static buildSourceSetting(
-		row: Setting, settings: DataviewProviderUserSettings, save: (settings: DataviewProviderUserSettings) => void, plugin: Plugin
-	): () => void {
-		return buildFileSourceSetting(row, {
-			label: "Dataview source", placeholder: "Dataview source", value: settings.query,
-			onChange: value => { settings.query = value; save(settings); },
-			evaluate: () => this.evaluateSource(settings, plugin),
-			suggest: input => { new DataviewSourceSuggest(plugin.app, input); },
-		});
-	}
-
-	static buildSummarySetting(
-		settingContainer: Setting, settings: DataviewProviderUserSettings,
-		onShouldSave: (newSettings: DataviewProviderUserSettings) => void, plugin: Plugin
-	): void {
-		this.buildSourceSetting(settingContainer, settings, onShouldSave, plugin);
-	}
-
-	static buildSimpleSettings(
-		settingContainer: HTMLElement, settings: DataviewProviderUserSettings,
-		onShouldSave: (newSettings: DataviewProviderUserSettings) => void, plugin: Plugin
-	): void {
-		buildIconPickerSetting(settingContainer, "Icon", settings, "box-select", () => onShouldSave(settings), plugin.app);
-		const source = new Setting(settingContainer).setName("Dataview source")
-			.setDesc("A source expression such as #person or a quoted folder; leave empty for all indexed pages. Alias and filter controls use the file’s frontmatter.");
-		const updateSource = this.buildSourceSetting(source, settings, onShouldSave, plugin);
-		buildFileAliasSettings(settingContainer, settings, false, onShouldSave, plugin.app);
-		buildTemplateCreationSetting(settingContainer, settings, onShouldSave, plugin.app);
-		buildFileFilterSettings(settingContainer, settings, onShouldSave, plugin.app, updateSource);
+	static getSettingDefinitions(context: ProviderSettingsContext<DataviewProviderUserSettings>) {
+		return [
+			context.field("query", "Dataview source", "A source expression such as #person or a quoted folder; empty selects all indexed pages. Aliases and filters use file frontmatter.", (setting, field) => {
+				const { update, input } = buildFileSourceSetting(setting, {
+					label: "Dataview source", placeholder: "Dataview source", value: field.value,
+					onChange: value => field.set(value), evaluate: () => this.evaluateSource(context.settings(), context.plugin),
+					suggest: input => { new DataviewSourceSuggest(context.plugin.app, input, { additionalClasses: "entities-settings" }); },
+				});
+				field.captureText(input);
+				context.watch(field.scope, update);
+			}),
+			...fileAliasSettings(context, false), ...templateCreationSettings(context), ...fileFilterSettings(context),
+		];
 	}
 
 	private static getDataviewApi(app: App): DataviewApi | undefined {

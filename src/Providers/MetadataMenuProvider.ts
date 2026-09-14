@@ -1,3 +1,4 @@
+import type { ProviderSettingsContext } from "../ui/providerSettings";
 import { cloneSettings } from "../settingsData";
 import { ExtraButtonComponent, Plugin, SearchResult, Setting, TFile } from "obsidian";
 import { EntitySuggestionItem } from "src/suggestion.types";
@@ -196,23 +197,10 @@ export class MetadataMenuProvider extends EntityProvider<MetadataMenuProviderUse
 		// Implement logic to build summary settings UI
 	}
 
-	// static buildSimpleSettings?(
-	// 	settingContainer: HTMLElement,
-	// 	settings: MetadataMenuProviderUserSettings,
-	// 	onShouldSave: (newSettings: MetadataMenuProviderUserSettings) => void,
-	// 	plugin: Plugin
-	// ): void {
-	// 	// Implement logic to build simple settings UI
-	// 	// TODO check for Metadata Menu plugin and Templater plugin
-	// 	// TODO add support for both Template and Templater
-	// }
+	static getSettingDefinitions(context: ProviderSettingsContext<MetadataMenuProviderUserSettings>) {
+		return [context.row("Note creation availability", "Metadata Menu file classes and Templater note creation.", setting => {
+			this.buildSummarySetting(setting, context.settings(), () => {}, context.plugin);
+		})];
+	}
 
-	// static buildAdvancedSettings?(
-	// 	settingContainer: HTMLElement,
-	// 	settings: MetadataMenuProviderUserSettings,
-	// 	onShouldSave: (newSettings: MetadataMenuProviderUserSettings) => void,
-	// 	plugin: Plugin
-	// ): void {
-	// 	// Implement logic to build advanced settings UI
-	// }
 }

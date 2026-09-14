@@ -1,94 +1,56 @@
-import {
-	Plugin,
-	Setting,
-	TFile,
-} from "obsidian";
-import { EntitySuggestionItem } from "src/suggestion.types";
-import { EntityProvider, EntityProviderUserSettings, ProviderSettingsInput } from "./EntityProvider";
+/**
+ * Copy to src/Providers/NewEntityProvider.ts, choose a unique provider type ID,
+ * and register the class in main.ts. The project's src imports work in either location.
+ */
+import type { SettingDefinitionItem } from "obsidian";
+import { EntityProvider, EntityProviderUserSettings } from "src/Providers/EntityProvider";
+import type { EntitySuggestionItem } from "src/suggestion.types";
 import { cloneSettings } from "src/settingsData";
-import { entityFromTemplateSettings } from "src/entities.types";
+import type { ProviderSettingsContext } from "src/ui/providerSettings";
 
 const newProviderTypeID = "newProvider";
 
+/** Configuration for a small provider that suggests one literal text value. */
 export interface NewProviderUserSettings extends EntityProviderUserSettings {
-	providerTypeID: string;
-	// Add any additional settings here
+	text: string;
 }
 
 const defaultNewProviderUserSettings: NewProviderUserSettings = {
 	providerTypeID: newProviderTypeID,
 	enabled: true,
-	icon: "icon-name",
-	entityCreationTemplates: [],
-	// Add default values for additional settings here
+	icon: "text-cursor-input",
+	text: "Hello!",
 };
 
+/** Minimal synchronous provider with a meaningful native scalar setting. */
 export class NewEntityProvider extends EntityProvider<NewProviderUserSettings> {
-	static readonly providerTypeID: string = newProviderTypeID;
+	static readonly providerTypeID = newProviderTypeID;
 
-	static getDescription(settings?: NewProviderUserSettings): string {
-		if (settings) {
-			return `🌐 New Entity Provider (${settings.providerTypeID})`;
-		} else {
-			return `New Entity Provider`;
-		}
-	}
-
-	getDescription(): string {
-		return NewEntityProvider.getDescription(this.settings);
-	}
+	static getDescription(): string { return "Literal text"; }
 
 	static getDefaultSettings(): NewProviderUserSettings {
+		// The settings store supplies each configured instance's ID.
 		return cloneSettings(defaultNewProviderUserSettings);
 	}
 
-	getDefaultSettings(): NewProviderUserSettings {
-		return NewEntityProvider.getDefaultSettings();
+	getDefaultSettings(): NewProviderUserSettings { return NewEntityProvider.getDefaultSettings(); }
+
+	// This ordinary list depends only on settings; creation suggestions stay uncached.
+	get isQueryDependent(): boolean { return false; }
+
+	getEntityList(): EntitySuggestionItem[] {
+		const text = this.settings.text;
+		// File entities use { kind: "file", file: liveFile }, never a link built from the label.
+		// Actions use a typed action target and return ActionResult; providers never edit an Editor.
+		return text ? [{ suggestionText: text, icon: this.settings.icon, target: { kind: "text", text } }] : [];
 	}
 
-	constructor(
-		plugin: Plugin,
-		settings: ProviderSettingsInput<NewProviderUserSettings>
-	) {
-		super(plugin, settings);
-		// Initialize any additional properties or methods here
-	}
-
-	// isQueryDependent defaults to true. Override with false only when this ordinary
-	// list is independent of the typed query for fixed settings and trigger.
-	// Creation suggestions always stay uncached. Resolve optional APIs here,
-	// never by constructor timers. See provider-runtime.md.
-	getEntityList(query: string): EntitySuggestionItem[] {
-		// Return labels paired with required targets, for example:
-		// { suggestionText: file.basename, target: { kind: "file", file } }
-		// Keep the live TFile; never resolve or format links from the label.
-		return [];
-	}
-
-	static buildSummarySetting(
-		settingContainer: Setting,
-		settings: NewProviderUserSettings,
-		onShouldSave: (newSettings: NewProviderUserSettings) => void,
-		plugin: Plugin
-	): void {
-		// Implement logic to build summary settings UI
-	}
-
-	static buildSimpleSettings?(
-		settingContainer: HTMLElement,
-		settings: NewProviderUserSettings,
-		onShouldSave: (newSettings: NewProviderUserSettings) => void,
-		plugin: Plugin
-	): void {
-		// Implement logic to build simple settings UI
-	}
-
-	static buildAdvancedSettings?(
-		settingContainer: HTMLElement,
-		settings: NewProviderUserSettings,
-		onShouldSave: (newSettings: NewProviderUserSettings) => void,
-		plugin: Plugin
-	): void {
-		// Implement logic to build advanced settings UI
+	static getSettingDefinitions(context: ProviderSettingsContext<NewProviderUserSettings>): SettingDefinitionItem[] {
+		return [context.field("text", "Text to insert", "Literal text suggested by this provider.", (setting, field) => {
+			setting.addText(input => {
+				input.setValue(field.value).onChange(value => field.set(value));
+				field.captureText(input.inputEl);
+			});
+		})];
 	}
 }

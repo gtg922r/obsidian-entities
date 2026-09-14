@@ -1,11 +1,13 @@
-import { App, ExtraButtonComponent, Setting } from "obsidian";
+import { ExtraButtonComponent, Setting, SettingDefinitionItem } from "obsidian";
 import { EntityFilter } from "../entities.types";
 import { classifyFilter, compileFilters } from "../Providers/EntityFilters";
 import { aliasSelectorError, FileAliasSettings } from "../Providers/fileAliases";
 import { FileSourceResult } from "../Providers/fileSources";
 import { FrontmatterKeySuggest } from "./FrontmatterKeySuggest";
 import { setValidationStatus } from "./validationStatus";
-import { InputSuggestScope } from "./inputSuggestLifecycle";
+import { inputSuggestScope } from "./inputSuggestLifecycle";
+import type { ProviderSettingsContext } from "./providerSettings";
+import type { EntityProviderUserSettings } from "../Providers/EntityProvider";
 
 /** Build synchronous source feedback; persistence feedback remains owned by SettingsStore. */
 export function buildFileSourceSetting(
@@ -18,7 +20,8 @@ export function buildFileSourceSetting(
 		evaluate: () => FileSourceResult;
 		suggest: (input: HTMLInputElement) => void;
 	}
-): () => void {
+): { update: () => void; input: HTMLInputElement } {
+	let input!: HTMLInputElement;
 	let status: ExtraButtonComponent;
 	const update = () => {
 		const result = options.evaluate();
@@ -32,114 +35,73 @@ export function buildFileSourceSetting(
 	};
 	setting.addExtraButton(button => { status = button; button.setDisabled(true); });
 	setting.addText(text => {
-		text.setPlaceholder(options.placeholder).setValue(options.value).onChange(value => {
+		input = text.inputEl;
+		text.setPlaceholder(options.placeholder).setValue(options.value).onChange(inputSuggestScope(setting.settingEl)!.guard(value => {
 			if (!text.inputEl.isConnected) return;
 			options.onChange(value);
-			if (text.inputEl.isConnected) update();
-		});
+		}));
 		options.suggest(text.inputEl);
 	});
-	update();
-	return update;
+	return { update, input };
 }
 
-/** Native aliases and one exact frontmatter key are independent of each other. */
-export function buildFileAliasSettings<T extends FileAliasSettings>(
-	container: HTMLElement, settings: T, nativeDefault: boolean, save: (settings: T) => void, app: App
-): void {
-	const nativeAliases = new Setting(container);
-	nativeAliases.setName("Suggest native aliases")
-		.setDesc("Also find and link existing files by their Obsidian aliases.")
-		.addToggle(toggle => toggle.setValue(settings.shouldCreateEntitiesForAliases ?? nativeDefault).onChange(value => {
-			if (!nativeAliases.settingEl.isConnected) return;
-			settings.shouldCreateEntitiesForAliases = value;
-			save(settings);
-		}));
-	const property = new Setting(container).setName("Frontmatter alias property");
-	const describe = () => property.setDesc(aliasSelectorError(settings.propertyToCreateEntitiesFor)
-		?? "Optional exact frontmatter key, such as ldap. Its text or list of text values adds aliases linking to the same file. Empty turns this off.");
-	describe();
-	property.addText(text => {
-		text.setPlaceholder("Property name").setValue(typeof settings.propertyToCreateEntitiesFor === "string" ? settings.propertyToCreateEntitiesFor : "");
-		text.onChange(value => {
-			if (!text.inputEl.isConnected) return;
-			settings.propertyToCreateEntitiesFor = value;
-			save(settings);
-			if (text.inputEl.isConnected) describe();
-		});
-		new FrontmatterKeySuggest(app, text.inputEl);
-	});
+/** Native aliases and an optional exact frontmatter key remain independent scalar fields. */
+export function fileAliasSettings<T extends EntityProviderUserSettings & FileAliasSettings>(context: ProviderSettingsContext<T>, nativeDefault: boolean): SettingDefinitionItem[] {
+	return [
+		context.field("shouldCreateEntitiesForAliases", "Suggest native aliases", "Also find and link existing files by their Obsidian aliases.", (setting, field) => {
+			setting.addToggle(toggle => toggle.setValue(field.value ?? nativeDefault).onChange(value => field.set(value as T["shouldCreateEntitiesForAliases"])));
+		}),
+		context.field("propertyToCreateEntitiesFor", "Frontmatter alias property", "Optional exact frontmatter key. Empty turns off custom aliases.", (setting, field) => {
+			setting.addText(text => {
+				text.setPlaceholder("Property name").setValue(typeof field.value === "string" ? field.value : "").onChange(value => field.set(value as T["propertyToCreateEntitiesFor"]));
+				new FrontmatterKeySuggest(context.plugin.app, text.inputEl);
+				field.captureText(text.inputEl);
+			});
+			context.watch(field.scope, () => setting.setDesc(aliasSelectorError(context.value("propertyToCreateEntitiesFor")) ?? "Optional exact frontmatter key, such as ldap. Its text or list of text values adds aliases linking to the same file. Empty turns this off."));
+		}),
+	];
 }
 
-/** Edit the whole filter array through the existing R1 draft callback; detached controls cannot resubmit it. */
-export function buildFileFilterSettings<T extends { entityFilters?: EntityFilter[] }>(
-	container: HTMLElement, settings: T, save: (settings: T) => void, app: App, onUpdated: () => void
-): void {
-	let generation = 0;
-	const heading = new Setting(container).setName("Entity filters").setHeading()
-		.setDesc("All active filters must pass. Include matches any supported frontmatter value; exclude matches none. Matching is case-insensitive.");
-	const rows = container.createDiv();
-	let rowScope: InputSuggestScope | undefined;
-	const commit = (structural: boolean) => {
-		save(settings);
-		// R1 closes a conflicted modal. Never rebuild its rejected draft or update its status.
-		if (!rows.isConnected) return;
-		if (structural) rebuild();
-		onUpdated();
-	};
-	const rebuild = () => {
-		generation++;
-		rowScope?.dispose();
-		rowScope = new InputSuggestScope(rows);
-		rows.empty();
-		const filters = settings.entityFilters;
-		if (filters !== undefined && (!Array.isArray(filters) || filters.some(filter => {
-			const result = classifyFilter(filter);
-			return result.status === "invalid" && result.malformed;
-		}))) {
-			new Setting(rows).setDesc(compileFilters(filters).error ?? "Invalid filter configuration");
-			return;
-		}
-		filters?.forEach((filter, index) => {
-			const rowGeneration = generation;
-			const row = new Setting(rows);
-			const current = () => rowGeneration === generation && row.settingEl.isConnected;
-			let status: ExtraButtonComponent;
-			const describe = () => {
-				const result = classifyFilter(filter);
-				const message = result.status === "active" ? "Active filter — case-insensitive regex" : result.message;
-				row.setDesc(message);
-				setValidationStatus(status, result.status === "active" ? "checkmark" : "alert-triangle", message,
-					result.status === "invalid" ? "error" : result.status === "inactive" ? "muted" : "neutral");
-			};
-			const edit = (change: () => void) => {
-				if (!current()) return;
-				change();
-				commit(false);
-				if (current()) describe();
-			};
-			row.addExtraButton(button => { status = button; button.setDisabled(true); });
-			row.addDropdown(dropdown => {
-				dropdown.addOption("include", "Include if").addOption("exclude", "Exclude if").setValue(filter.type)
-					.onChange(value => edit(() => { if (value === "include" || value === "exclude") filter.type = value; }));
-			});
-			row.addText(text => {
-				text.setPlaceholder("Property name").setValue(filter.property).onChange(value => edit(() => { filter.property = value; }));
-				new FrontmatterKeySuggest(app, text.inputEl);
-			});
-			row.addText(text => text.setPlaceholder("Property value/regex").setValue(filter.value).onChange(value => edit(() => { filter.value = value; })));
-			row.addButton(button => button.setIcon("trash").onClick(() => {
-				if (!current()) return;
-				settings.entityFilters = settings.entityFilters!.filter((_, i) => i !== index);
-				commit(true);
-			}));
-			describe();
-		});
-	};
-	heading.addButton(button => button.setButtonText("Add filter").onClick(() => {
-		if (!rows.isConnected || (settings.entityFilters !== undefined && !Array.isArray(settings.entityFilters))) return;
-		settings.entityFilters = [...settings.entityFilters ?? [], { type: "include", property: "", value: "" }];
-		commit(true);
-	}));
-	rebuild();
+/** Each searchable filter field edits the same captured whole-collection session. */
+export function fileFilterSettings<T extends EntityProviderUserSettings & { entityFilters?: EntityFilter[] }>(context: ProviderSettingsContext<T>): SettingDefinitionItem[] {
+	const filters = context.value("entityFilters");
+	if (filters !== undefined && (!Array.isArray(filters) || filters.some(filter => {
+		const result = classifyFilter(filter);
+		return result.status === "invalid" && result.malformed;
+	}))) return [{ name: "Entity filters unavailable", desc: compileFilters(filters).error ?? "Invalid filter configuration" }];
+	return [
+		{ type: "group", heading: "Entity filters", items: [context.field("entityFilters", "Add filter", "All active filters must pass. Include matches any supported value; exclude matches none.", (setting, field) => {
+			setting.addButton(button => button.setButtonText("Add filter").onClick(() => field.edit(list => [...list ?? [], { type: "include", property: "", value: "" }] as T["entityFilters"], true)));
+		})] },
+		...filters?.map((_, index) => {
+			const label = `Filter ${index + 1}`;
+			const update = (list: EntityFilter[] | undefined, changes: Partial<EntityFilter>) => list?.map((filter, position) => position === index ? { ...filter, ...changes } : filter) as T["entityFilters"];
+			return { type: "group" as const, heading: label, items: [
+				context.field("entityFilters", `${label} matching`, "Include or exclude matching frontmatter values.", (setting, field) => {
+					setting.addDropdown(dropdown => dropdown.addOption("include", "Include if").addOption("exclude", "Exclude if").setValue(field.value![index].type)
+						.onChange(value => { if (value === "include" || value === "exclude") field.edit(list => update(list, { type: value })); }));
+				}),
+				context.field("entityFilters", `${label} property`, "Exact frontmatter property name.", (setting, field) => {
+					setting.addText(text => {
+						text.setPlaceholder("Property name").setValue(field.value![index].property).onChange(value => field.edit(list => update(list, { property: value })));
+						new FrontmatterKeySuggest(context.plugin.app, text.inputEl);
+						field.captureText(text.inputEl, { read: list => list?.[index].property, write: (list, value) => update(list, { property: value as string }) });
+					});
+				}),
+				context.field("entityFilters", `${label} pattern`, "Case-insensitive regular expression. Empty filters are inactive.", (setting, field) => {
+					setting.addText(text => {
+						text.setPlaceholder("Property value/regex").setValue(field.value![index].value).onChange(value => field.edit(list => update(list, { value })));
+						field.captureText(text.inputEl, { read: list => list?.[index].value, write: (list, value) => update(list, { value: value as string }) });
+					});
+					context.watch(field.scope, () => {
+						const result = classifyFilter(context.value("entityFilters")?.[index]);
+						setting.setDesc(result.status === "active" ? "Active filter — case-insensitive regex" : result.message);
+					});
+				}),
+				context.field("entityFilters", `Remove filter ${index + 1}`, "Remove this filter.", (setting, field) => {
+					setting.addButton(button => button.setButtonText("Remove filter").onClick(() => field.edit(list => list?.filter((_, position) => position !== index) as T["entityFilters"], true)));
+				}),
+			] };
+		}) ?? [],
+	];
 }
