@@ -37,12 +37,17 @@ const context = (query = "@", path = "Writing/Drafts/Source.md"): EditorSuggestC
 function harness() {
 	const files = new Map<string, TFile | TFolder>();
 	const folders = new Map<string, TFile[]>();
+	const root = Object.assign(new TFolder(), { path: "/", children: [] });
 	const metadata = new Map<string, Record<string, unknown>>();
 	const integrations: Record<string, unknown> = {};
 	const generate = jest.fn(() => "native link");
 	const app = {
 		workspace: new TestEvents(),
-		vault: { getAbstractFileByPath: (path: string) => files.get(path) ?? null, getFolderByPath: (path: string) => ({ children: folders.get(path) ?? [] }) },
+		vault: {
+			getAbstractFileByPath: (path: string) => files.get(path) ?? null,
+			getFolderByPath: (path: string) => ({ children: folders.get(path) ?? [] }),
+			getRoot: () => root,
+		},
 		metadataCache: { getFileCache: (file: TFile) => ({ frontmatter: metadata.get(file.path) }), getCache: (path: string) => ({ frontmatter: metadata.get(path) }), getFirstLinkpathDest: jest.fn((path: string) => files.get(path)) },
 		plugins: { getPlugin: (id: string) => integrations[id] },
 		fileManager: { generateMarkdownLink: generate },
@@ -270,6 +275,7 @@ test("base template IDs use operative recipe fields and query, not label or pers
 	const targets = provider.getTemplateCreationSuggestions("New").map(r => r.target);
 	expect(targets[0].kind === "action" && targets[0].id).toBe(targets[1].kind === "action" && targets[1].id);
 	expect(new Set(targets.map(t => t.kind === "action" && t.id)).size).toBe(3);
+	expect(provider.getEntityList("New")).toEqual([]);
 	h.use(provider); expect(h.suggestor.getSuggestions(context("@New"))).toHaveLength(3);
 	expect(provider.getTemplateCreationSuggestions("Other")[0].target).not.toEqual(targets[0]);
 });
