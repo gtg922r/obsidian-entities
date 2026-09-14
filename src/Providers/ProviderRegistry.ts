@@ -1,4 +1,5 @@
-import { Plugin, Setting } from "obsidian";
+import type { ProviderSettingsContext } from "../ui/providerSettings";
+import { Plugin, SettingDefinitionItem } from "obsidian";
 import { EntityProvider, EntityProviderID, EntityProviderUserSettings, ConfiguredProviderSettings, ProviderInstanceIdentity } from "./EntityProvider";
 import { DerivedClassWithConstructorArgs } from "src/entities.types";
 import { TriggerCharacter } from "src/entities.types";
@@ -6,24 +7,8 @@ import { TriggerCharacter } from "src/entities.types";
 interface ProviderRegistryClassMethods<T extends EntityProviderUserSettings> {
 	getDescription(settings?: T): string;
 	getDefaultSettings(): T;
-	buildSummarySetting(
-		settingContainer: Setting,
-		settings: T,
-		onShouldSave: (newSettings: T) => void,
-		plugin: Plugin
-	): void;
-	buildSimpleSettings?(
-		containerElement: HTMLElement,
-		settings: T,
-		onShouldSave: (newSettings: T) => void,
-		plugin: Plugin
-	): void;
-	buildAdvancedSettings?(
-		containerElement: HTMLElement,
-		settings: T,
-		onShouldSave: (newSettings: T) => void,
-		plugin: Plugin
-	): void;
+	getSettingDefinitions?(context: ProviderSettingsContext<T>): SettingDefinitionItem[];
+
 }
 
 export type RegisterableEntityProvider = DerivedClassWithConstructorArgs<

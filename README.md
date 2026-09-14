@@ -20,7 +20,7 @@
 - ✨ Autocomplete triggered by `@`, `:` or `/`
 - 📦 Multiple pluggable providers
 - 🤝 Works with popular Obsidian plugins
-- 🎛 Customizable provider settings
+- 🎛 Searchable native provider settings
 - 📱 Desktop and mobile support
 
 ## Entity Providers
@@ -150,6 +150,9 @@ did not affect our watch-only script; esbuild is nevertheless pinned to patched
 0.25.12. Jest 29 / jsdom 20 still emit transitive deprecation warnings (including
 `inflight` and `glob`); a framework migration is deferred. Audit results are a
 dated advisory snapshot, not a runtime security guarantee.
+
+Native settings behavior and the pending minimum-runtime acceptance gate are
+documented in [native settings](docs/native-settings.md).
 
 ## Releases
 

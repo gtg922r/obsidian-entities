@@ -1,8 +1,7 @@
 import { App, PluginManifest, Notice } from "obsidian";
 import Entities from "../src/main";
-import { EntitiesSettingTab, ProviderSettingsModal } from "../src/EntitiesSettings";
 import { EntityProvider, EntityProviderUserSettings } from "../src/Providers/EntityProvider";
-import { EntitiesNotice, IconPickerModal } from "../src/userComponents";
+import { EntitiesNotice } from "../src/userComponents";
 
 type Control = { text: string; click: () => void | Promise<void> };
 const mockRows: { name: string; description: string; controls: Control[] }[] = [];
@@ -122,93 +121,6 @@ const currentData = { schemaVersion: 1, providerSettings: [config("a"), config("
 
 beforeEach(() => { mockRows.length = 0; edits.clear(); filterEdits.clear(); jest.clearAllMocks(); });
 
-test("real settings callbacks edit both providers, survive reorder and ignore deleted rows", async () => {
-	const { plugin, app } = createPlugin(currentData);
-	await plugin.onload();
-	const tab = new EntitiesSettingTab(app, plugin);
-	const reconstruction = jest.spyOn(plugin, "loadEntityProviders");
-	tab.display();
-	const lateA = edits.get("a")!;
-	const lateB = edits.get("b")!;
-	const deleteA = mockRows.find(row => row.name === "Provider #1")!.controls.find(control => control.text === "trash")!;
-	lateA("edited A");
-	lateB("edited B");
-	expect(plugin.settings.providerSettings).toMatchObject([{ label: "edited A" }, { label: "edited B" }]);
-	plugin.settingsStore.reorderProviders(["b", "a"]);
-	lateB("B after reorder");
-	deleteA.click();
-	lateA("must not return");
-	tab.hide();
-	await plugin.saveSettings();
-	expect(plugin.settings.providerSettings).toMatchObject([{ providerInstanceId: "b", label: "B after reorder" }]);
-	expect(dataWrites(plugin).at(-1).providerSettings).toEqual(plugin.settings.providerSettings);
-	expect(reconstruction).toHaveBeenCalledTimes(4);
-});
-
-test("modal close flushes pending edits and invokes its close callback", async () => {
-	const { plugin, app } = createPlugin(currentData);
-	await plugin.onload();
-	const close = jest.fn();
-	const modal = new ProviderSettingsModal(app, TestProvider, config("a"), plugin, () => {}, close);
-	plugin.settingsStore.updateProvider("a", { icon: "star" });
-	modal.onClose();
-	await plugin.saveSettings();
-	expect(close).toHaveBeenCalledTimes(1);
-	expect(plugin.settingsStore.hasPendingSave).toBe(false);
-});
-
-test("a late draft callback changes only its fields, keeping newer same-provider edits", async () => {
-	const { plugin, app } = createPlugin(currentData);
-	await plugin.onload();
-	const tab = new EntitiesSettingTab(app, plugin);
-	tab.display();
-	const lateEdit = edits.get("a")!;
-	plugin.settingsStore.updateProvider("a", { icon: "new icon" });
-	new EntitiesSettingTab(app, plugin).display();
-	lateEdit("new label");
-	await plugin.saveSettings();
-	expect(plugin.settings.providerSettings[0]).toMatchObject({ label: "new label", icon: "new icon" });
-});
-
-test("successive icon pickers cannot make another live view revert the latest icon", async () => {
-	const { plugin, app } = createPlugin(currentData);
-	await plugin.onload();
-	const tab = new EntitiesSettingTab(app, plugin);
-	tab.display();
-	const lateEdit = edits.get("a")!;
-	new EntitiesSettingTab(app, plugin).display();
-	for (const icon of ["first icon", "last icon"]) {
-		jest.mocked(IconPickerModal).mockImplementationOnce(() => ({
-			open() {}, getInput: async () => icon,
-		}) as unknown as IconPickerModal);
-		mockRows.find(row => row.name === "Provider #1")!.controls[0].click();
-		await Promise.resolve();
-	}
-	lateEdit("new label");
-	await plugin.saveSettings();
-	expect(plugin.settings.providerSettings[0]).toMatchObject({ label: "new label", icon: "last icon" });
-});
-
-test("a delayed icon picker rejects a conflict with a newer choice", async () => {
-	const { plugin, app } = createPlugin(currentData);
-	await plugin.onload();
-	const tab = new EntitiesSettingTab(app, plugin);
-	tab.display();
-	let resolve!: (icon: string) => void;
-	const oldChoice = new Promise<string>(done => { resolve = done; });
-	jest.mocked(IconPickerModal).mockImplementationOnce(() => ({ open() {}, getInput: () => oldChoice }) as unknown as IconPickerModal);
-	mockRows.find(row => row.name === "Provider #1")!.controls[0].click();
-	new EntitiesSettingTab(app, plugin).display();
-	jest.mocked(IconPickerModal).mockImplementationOnce(() => ({ open() {}, getInput: async () => "newest" }) as unknown as IconPickerModal);
-	mockRows.find(row => row.name === "Provider #1")!.controls[0].click();
-	await Promise.resolve();
-	resolve("stale choice");
-	await tick();
-	expect(plugin.settings.providerSettings[0].icon).toBe("newest");
-	expect(EntitiesNotice).toHaveBeenCalledWith(expect.stringContaining("Your last edit was not applied"), "alert-triangle", 10000);
-	await plugin.saveSettings();
-});
-
 test("unload starts a final flush without returning a promise or reconstructing providers", async () => {
 	const { plugin } = createPlugin(currentData);
 	const reconstruction = jest.spyOn(plugin, "loadEntityProviders");
@@ -291,126 +203,6 @@ test("first install needs no backup and can save new providers", async () => {
 	expect(dataWrites(plugin)).toHaveLength(1);
 });
 
-test("load errors expose only recovery controls and retry reloads repaired settings", async () => {
-	const { plugin, app, adapter } = createPlugin({ schemaVersion: 99, providerSettings: [] });
-	await plugin.onload();
-	const tab = new EntitiesSettingTab(app, plugin);
-	tab.display();
-	expect(mockRows.map(row => row.name)).toEqual(["Settings could not be loaded"]);
-	expect(Notice).toHaveBeenCalled();
-	await plugin.saveSettings();
-	expect(adapter.write).not.toHaveBeenCalled();
-	expect(dataWrites(plugin)).toHaveLength(0);
-	jest.mocked(plugin.app.vault.adapter.read).mockResolvedValue(JSON.stringify(currentData));
-	await mockRows[0].controls[0].click();
-	expect(plugin.providerRegistry.getProviders().map(item => item.providerInstanceId)).toEqual(["a", "b"]);
-	expect(mockRows.some(row => row.name === "Add new provider")).toBe(true);
-});
-
-test("save errors expose retry without discarding the visible edit", async () => {
-	const { plugin, app } = createPlugin(currentData);
-	await plugin.onload();
-	jest.mocked(plugin.app.vault.adapter.write).mockRejectedValueOnce(new Error("disk full"));
-	plugin.settingsStore.updateProvider("a", { icon: "star" });
-	await plugin.saveSettings();
-	const tab = new EntitiesSettingTab(app, plugin);
-	tab.display();
-	expect(mockRows[0].name).toBe("Settings have not been saved");
-	expect(plugin.settings.providerSettings[0].icon).toBe("star");
-	await mockRows[0].controls[0].click();
-	expect(plugin.settingsStore.saveError).toBeUndefined();
-	expect(mockRows.some(row => row.name === "Settings have not been saved")).toBe(false);
-});
-
-test("recipe collection conflicts remain rejected by provider ID", async () => {
-	const recipes = [
-		{ engine: "core" as const, templatePath: "Core.md", entityName: "Person" },
-		{ engine: "templater" as const, templatePath: "Project.md", entityName: "Project" },
-	];
-	const { plugin, app } = createPlugin({ schemaVersion: 1, providerSettings: [
-		{ ...config("a"), entityCreationTemplates: recipes }, config("b"),
-	] });
-	await plugin.onload();
-	const tab = new EntitiesSettingTab(app, plugin);
-	tab.display(); const first = filterEdits.get("a")!;
-	new EntitiesSettingTab(app, plugin).display(); const stale = filterEdits.get("a")!;
-	plugin.settingsStore.reorderProviders(["b", "a"]);
-	first(draft => { draft.entityCreationTemplates![1].entityName = "Updated project"; });
-	const canonical = plugin.settings;
-	stale(draft => { draft.entityCreationTemplates![0].entityName = "Stale person"; });
-	expect(plugin.settings).toEqual(canonical);
-	expect(plugin.settings.providerSettings[1].entityCreationTemplates![1].entityName).toBe("Updated project");
-	expect(EntitiesNotice).toHaveBeenCalledWith(expect.stringContaining("Your last edit was not applied"), "alert-triangle", 10000);
-});
-
-test.each(["edit another filter", "delete a filter"])("concurrent collection change is rejected and reopening recovers: %s", async action => {
-	const entityFilters = [
-		{ type: "include", property: "first", value: "old first" },
-		{ type: "include", property: "second", value: "old second" },
-	];
-	const { plugin, app } = createPlugin({ schemaVersion: 1, providerSettings: [{ ...config("a"), entityFilters }] });
-	await plugin.onload();
-	const tab = new EntitiesSettingTab(app, plugin);
-	tab.display();
-	const firstDraft = filterEdits.get("a")!;
-	new EntitiesSettingTab(app, plugin).display();
-	const secondDraft = filterEdits.get("a")!;
-	firstDraft(draft => {
-		if (action === "delete a filter") draft.entityFilters!.splice(0, 1);
-		else draft.entityFilters![0].value = "first edit";
-	});
-	const firstState = plugin.settings;
-	secondDraft(draft => { draft.entityFilters![1].value = "second edit"; });
-	expect(plugin.settings).toEqual(firstState);
-	expect(EntitiesNotice).toHaveBeenCalledWith(expect.stringContaining("Your last edit was not applied"), "alert-triangle", 10000);
-	// The rejected view cannot silently retry its stale collection.
-	secondDraft(draft => { draft.label = "stale retry"; });
-	expect(plugin.settings).toEqual(firstState);
-	// Reopening reads canonical data and permits a deliberate new edit.
-	tab.display();
-	filterEdits.get("a")!(draft => { draft.entityFilters!.find(filter => filter.property === "second")!.value = "second edit"; });
-	await plugin.saveSettings();
-	const expected = action === "delete a filter" ? [{ property: "second", value: "second edit" }] : [
-		{ property: "first", value: "first edit" }, { property: "second", value: "second edit" },
-	];
-	expect(dataWrites(plugin).at(-1).providerSettings[0].entityFilters).toMatchObject(expected);
-});
-
-test("same-field scalar conflicts are visible; a fresh view can deliberately replace the value", async () => {
-	const { plugin, app } = createPlugin(currentData);
-	await plugin.onload();
-	const tab = new EntitiesSettingTab(app, plugin);
-	tab.display();
-	const stale = edits.get("a")!;
-	new EntitiesSettingTab(app, plugin).display();
-	edits.get("a")!("newest");
-	stale("older draft");
-	expect(plugin.settings.providerSettings[0]).toMatchObject({ label: "newest" });
-	expect(EntitiesNotice).toHaveBeenCalled();
-	tab.display();
-	edits.get("newest")!("deliberate replacement");
-	await plugin.saveSettings();
-	expect(plugin.settings.providerSettings[0]).toMatchObject({ label: "deliberate replacement" });
-});
-
-test("automatic retry removes only the failed-save warning, retaining focused input rows", async () => {
-	const { plugin, adapter } = createPlugin(currentData);
-	await plugin.onload();
-	const tab = jest.mocked(plugin.addSettingTab).mock.calls[0][0] as EntitiesSettingTab;
-	tab.display();
-	adapter.write.mockRejectedValueOnce(new Error("disk full"));
-	edits.get("a")!("first edit");
-	expect(await plugin.saveSettings()).toBe(false);
-	expect(mockRows.some(row => row.name === "Settings have not been saved")).toBe(true);
-	const focusedRow = mockRows.find(row => row.name === "Provider #1");
-	const display = jest.spyOn(tab, "display");
-	edits.get("first edit")!("retry via ordinary edit");
-	expect(await plugin.saveSettings()).toBe(true);
-	expect(mockRows.some(row => row.name === "Settings have not been saved")).toBe(false);
-	expect(mockRows).toContain(focusedRow);
-	expect(display).not.toHaveBeenCalled();
-});
-
 test.each(["{private broken JSON", "null", "undefined"])("raw invalid saved content stays protected: %s", async raw => {
 	const { plugin, adapter, files } = createPlugin(currentData);
 	files.set("config/plugins/entities/data.json", raw);
@@ -457,7 +249,7 @@ test("distinct plugin instances wait for old disk writes before reading and keep
 	expect(next.settingsStore.isReadOnly).toBe(true);
 	finish();
 	await loading;
-	expect(next.settings.providerSettings[0].icon).toBe("old edit");
+	expect(next.entitySettings.providerSettings[0].icon).toBe("old edit");
 	next.settingsStore.updateProvider("a", { icon: "newest edit" });
 	await next.saveSettings();
 	expect(JSON.parse(files.get("config/plugins/entities/data.json")!).providerSettings[0].icon).toBe("newest edit");
@@ -478,7 +270,7 @@ test("dirty predecessor failure blocks new reads and writes until explicit retry
 	expect(next.settingsStore.updateProvider("a", { icon: "must not replace" })).toBe(false);
 	adapter.write.mockImplementation(async (path, raw) => { files.set(path, raw); });
 	expect(await next.loadSettings()).toBe(true);
-	expect(next.settings.providerSettings[0].icon).toBe("unsaved previous edit");
+	expect(next.entitySettings.providerSettings[0].icon).toBe("unsaved previous edit");
 	next.settingsStore.updateProvider("a", { icon: "new edit" });
 	await next.saveSettings();
 	expect(JSON.parse(files.get("config/plugins/entities/data.json")!).providerSettings[0].icon).toBe("new edit");
@@ -507,7 +299,7 @@ test.each([true, false])("A→B→C preserves the entire barrier when B unloads 
 	expect(b.addSettingTab).not.toHaveBeenCalled();
 	expect(b.registerEditorSuggest).not.toHaveBeenCalled();
 	expect(adapter.read).toHaveBeenCalledTimes(2);
-	expect(c.settings.providerSettings[0].icon).toBe("A pending");
+	expect(c.entitySettings.providerSettings[0].icon).toBe("A pending");
 	c.settingsStore.updateProvider("a", { icon: "C newest" });
 	await c.saveSettings();
 	expect(JSON.parse(files.get("config/plugins/entities/data.json")!).providerSettings[0].icon).toBe("C newest");
@@ -551,36 +343,6 @@ test("unrelated apps and plugin IDs are not blocked by a pending settings drain"
 	expect(separateId.addSettingTab).toHaveBeenCalled();
 	finish();
 	await old.saveSettings();
-});
-
-
-test("a conflicted provider modal closes and reopening reloads canonical filters", async () => {
-	const entityFilters = [
-		{ type: "include", property: "first", value: "old first" },
-		{ type: "include", property: "second", value: "old second" },
-	];
-	const { plugin, app } = createPlugin({ schemaVersion: 1, providerSettings: [{ ...config("a"), entityFilters }] });
-	await plugin.onload();
-	const tab = new EntitiesSettingTab(app, plugin);
-	const open = jest.spyOn(ProviderSettingsModal.prototype, "open").mockImplementation(function (this: ProviderSettingsModal) { this.onOpen(); });
-	const close = jest.spyOn(ProviderSettingsModal.prototype, "close").mockImplementation(function (this: ProviderSettingsModal) { this.onClose(); });
-	try {
-		tab.display();
-		const rowEdit = filterEdits.get("a")!;
-		mockRows.find(row => row.name === "Provider #1")!.controls.find(control => control.text === "settings")!.click();
-		const modalEdit = filterEdits.get("a")!;
-		rowEdit(draft => { draft.entityFilters![0].value = "row edit"; });
-		modalEdit(draft => { draft.entityFilters![1].value = "stale modal edit"; });
-		expect(close).toHaveBeenCalledTimes(1);
-		expect(plugin.settings.providerSettings[0]).toMatchObject({ entityFilters: [{ value: "row edit" }, { value: "old second" }] });
-		mockRows.find(row => row.name === "Provider #1")!.controls.find(control => control.text === "settings")!.click();
-		filterEdits.get("a")!(draft => { draft.entityFilters![1].value = "recovered edit"; });
-		await plugin.saveSettings();
-		expect(plugin.settings.providerSettings[0]).toMatchObject({ entityFilters: [{ value: "row edit" }, { value: "recovered edit" }] });
-	} finally {
-		open.mockRestore();
-		close.mockRestore();
-	}
 });
 
 test.each(["EACCES", "EIO"])("stat failure protects existing data even when host exists silently returns false: %s", async code => {
@@ -634,35 +396,6 @@ test("only a literal null stat result permits first-install behavior", async () 
 	expect(plugin.settingsStore.isReadOnly).toBe(true);
 	expect(adapter.read).not.toHaveBeenCalled();
 	expect(adapter.write).not.toHaveBeenCalled();
-});
-
-
-test.each(["hide", "rebuild", "unload"])("a retained settings draft cannot save after its own view %s", async reason => {
-	const { plugin, app } = createPlugin(currentData);
-	await plugin.onload();
-	const tab = new EntitiesSettingTab(app, plugin);
-	tab.display();
-	const retained = edits.get("a")!;
-	if (reason === "hide") tab.hide();
-	if (reason === "rebuild") tab.display();
-	if (reason === "unload") plugin.onunload();
-	retained("detached edit");
-	await plugin.saveSettings();
-	expect(plugin.settings.providerSettings[0].label).toBe("a");
-});
-
-
-test("a retained settings button cannot rebuild or mutate a hidden view", async () => {
-	const { plugin, app } = createPlugin(currentData);
-	await plugin.onload();
-	const tab = new EntitiesSettingTab(app, plugin); tab.display();
-	const buttons = mockRows.flatMap(row => row.controls);
-	const display = jest.spyOn(tab, "display");
-	tab.hide();
-	buttons.forEach(button => { void button.click(); });
-	await tick();
-	expect(display).not.toHaveBeenCalled();
-	expect(plugin.settings.providerSettings.map(p => p.providerInstanceId)).toEqual(["a", "b"]);
 });
 
 

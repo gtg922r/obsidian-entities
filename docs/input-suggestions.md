@@ -8,8 +8,7 @@ selection includes `/`. Paths retain their exact vault-relative text. Dataview
 completion replaces only the trailing tag or incomplete quoted folder, including
 folders containing spaces. Selection emits one input event from the input's window.
 
-One rendered settings view, provider modal, template modal or nested filter editor
-owns its suggestion cleanup. Hide, replacement, close and plugin unload dispose
+Each native settings row and owned icon modal owns its suggestion cleanup. Hide, replacement, close and plugin unload dispose
 those resources. An open popup has one keymap scope and one Popper instance;
 repeated typing updates that instance. Close is safe before opening, and teardown
 removes the input, popup and window listeners, clears catalogs, and unregisters
@@ -19,12 +18,12 @@ removed from the window where they were attached. Popup DOM belongs to the input
 original document; observing adoption into another document retires that input's
 suggestions instead of rebinding its popup.
 
-Each provider modal render receives a detached settings draft. Icon and template
-buttons capture that render's owner before they can open a child or accept its
-result. Retained controls and delayed results therefore cannot contaminate the
-current draft's next valid save. R1 still owns canonical settings and
-field/collection conflicts, including other live views. No settings schema,
-provider retrieval, or editor autocomplete changes.
+Native field renders receive an individually guarded scalar or collection session.
+Icon pickers capture independent child drafts and retain their opening render's
+owner through settlement. Settings-window adoption retires the old controls and
+requests a fresh guarded native render while preserving exact pending drafts and
+baselines. R1 retains canonical conflict/storage ownership. See
+[native settings](native-settings.md) for composition and detached-draft behavior.
 
 ## Public API migration deferred
 
@@ -44,8 +43,8 @@ not Components. Removing the callback requires its unavailable native identity;
 clearing a selection callback does not release the input graph. No host prototype,
 private field, listener interception, stable-input pooling or parallel native
 implementation is shipped. The narrow lint exception and Popper dependency remain
-intentional until a corrected public host lifecycle is verified. The manifest
-remains version 0.4.4 with minimum Obsidian 1.7.2.
+intentional until a corrected public host lifecycle is verified. The native settings draft proposes a 1.13.4 floor, whose actual runtime
+acceptance remains a separate gate.
 
 Repository tests cover the actual owned list with simulated DOM and positioning
 collaborators. Separate extracted-host and real-Popper probes are method evidence,

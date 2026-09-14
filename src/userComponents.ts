@@ -1,14 +1,9 @@
 import {
 	App,
-	DropdownComponent,
 	Modal,
-	Setting,
-	TextComponent,
 	getIconIds,
 	getIcon,
 } from "obsidian";
-import { entityFromTemplateSettings } from "./entities.types";
-import { FileSuggest, FolderSuggest } from "./ui/file-suggest";
 import { InputSuggestScope } from "./ui/inputSuggestLifecycle";
 
 
@@ -131,166 +126,29 @@ export class EntitiesModalInput extends Modal {
 	}
 }
 
-export async function openTemplateDetailsModal(
-	app: App,
-	initialSettings: entityFromTemplateSettings,
-	owner?: InputSuggestScope
-): Promise<entityFromTemplateSettings | null> {
-	const modal = new TemplateDetailsModal(app, initialSettings, owner);
-	return await modal.openAndGetValue();
-}
-
-export class TemplateDetailsModal extends Modal {
-	private resolve!: (value: entityFromTemplateSettings | null) => void;
-	private initialSettings?: entityFromTemplateSettings;
+export class IconPickerModal extends Modal {
+	private resolve!: (value: string | undefined) => void;
 	private settled = false;
 	private renderScope?: InputSuggestScope;
-	private releaseOwner?: () => void;
-
-	constructor(app: App, initialSettings?: entityFromTemplateSettings, private owner?: InputSuggestScope) {
-		super(app);
-		this.initialSettings = initialSettings;
-	}
-
-	onOpen() {
-		this.renderScope?.dispose();
-		if (this.owner && !this.owner.active) { this.close(); return; }
-		this.releaseOwner?.();
-		this.releaseOwner = this.owner?.own(() => this.close());
-		const view = this.renderScope = new InputSuggestScope(this.contentEl, this.owner);
-		view.own(() => { this.releaseOwner?.(); this.releaseOwner = undefined; this.settle(null); });
-		const { contentEl } = this;
-		contentEl.empty(); // Clear previous content
-
-		contentEl.createEl("h2", { text: "New entity from template" });
-
-		let engineDropdown: DropdownComponent;
-		let templatePathInput: TextComponent;
-		let entityNameInput: TextComponent;
-		let folderPathInput: TextComponent; // New input for folder path
-
-		// Engine Dropdown Setting
-		new Setting(contentEl)
-			.setName("Engine")
-			.setDesc("Choose the template engine for the new entity")
-			.addDropdown((dropdown) => {
-				if (this.initialSettings?.engine === "core") dropdown.addOption("core", "Core (unsupported; recipe preserved)");
-				dropdown
-					.addOptions({
-						disabled: "Disabled",
-						// core: "Core", // Needs to be implemented
-						templater: "Templater",
-					})
-					.setValue(this.initialSettings?.engine || "disabled")
-					.onChange((value) => {
-						templatePathInput.setDisabled(value === "disabled");
-						entityNameInput.setDisabled(value === "disabled");
-						folderPathInput?.setDisabled(value === "disabled");
-					});
-				engineDropdown = dropdown;
-			});
-
-		// Template Path Input Setting
-		new Setting(contentEl)
-			.setName("Template path")
-			.setDesc("Path for the template (include extension)")
-			.addText((text) => {
-				text.setPlaceholder("Template path").setValue(
-					this.initialSettings?.templatePath || ""
-				);
-				templatePathInput = text;
-				text.setDisabled(engineDropdown.getValue() === "disabled");
-				new FileSuggest(this.app, text.inputEl);
-			});
-
-		// Folder Path Input Setting (optional)
-		new Setting(contentEl)
-			.setName("Folder path (optional)")
-			.setDesc("Folder where the new note will be created. Leave empty for vault root.")
-			.addText((text) => {
-				text.setPlaceholder("Folder path").setValue(
-					this.initialSettings?.folderPath || ""
-				);
-				folderPathInput = text;
-				text.setDisabled(engineDropdown.getValue() === "disabled");
-				new FolderSuggest(this.app, text.inputEl);
-			});
-
-		// Entity Name Input Setting
-		new Setting(contentEl)
-			.setName("Entity type")
-			.setDesc("How to describe the entity that will be created")
-			.addText((text) => {
-				text.setPlaceholder("Entity name").setValue(
-					this.initialSettings?.entityName || ""
-				);
-				entityNameInput = text;
-				text.setDisabled(engineDropdown.getValue() === "disabled");
-			});
-
-		// Save Button
-		new Setting(contentEl)
-			.addButton((button) =>
-				button.setButtonText("Save").onClick(view.guard(() => {
-					const templateDetails: entityFromTemplateSettings = {
-						...this.initialSettings,
-						engine: engineDropdown.getValue() as
-							| "disabled"
-							| "core"
-							| "templater",
-						templatePath: templatePathInput.getValue(),
-						entityName: entityNameInput.getValue(),
-						folderPath: folderPathInput.getValue(),
-					};
-					this.settle(templateDetails);
-					this.close();
-				}))
-			)
-			.addButton((button) =>
-				button.setButtonText("Cancel").onClick(() => {
-					this.close();
-				})
-			);
-	}
-
-	onClose(): void {
-		this.releaseOwner?.();
-		this.releaseOwner = undefined;
-		this.renderScope?.dispose();
-		this.settle(null);
-		this.contentEl.empty();
-	}
-
-	private settle(value: entityFromTemplateSettings | null): void {
-		if (this.settled) return;
-		this.settled = true;
-		this.resolve?.(value);
-	}
-
-	async openAndGetValue(): Promise<entityFromTemplateSettings | null> {
-		return new Promise((resolve) => {
-			this.resolve = resolve;
-			this.open();
-		});
-	}
-}
-
-export class IconPickerModal extends Modal {
-	private resolve!: (value: string | PromiseLike<string>) => void;
+	private releaseClose?: () => void;
 	private icons: string[];
 	private filteredIcons: string[];
 	private gridContainer!: HTMLElement; // Add a property to hold the reference
-	private promise?: Promise<string>; // Make the promise property optional
+	private readonly promise: Promise<string | undefined>;
 
-	constructor(app: App) {
+	constructor(app: App, private owner?: InputSuggestScope) {
 		super(app);
 		this.icons = getIconIds().map((iconId) =>
 			iconId.replace(/^lucide-/, "")
 		);
 		this.filteredIcons = this.icons;
+		this.promise = new Promise(resolve => { this.resolve = resolve; });
 	}
 
 	onOpen() {
+		if (this.settled || (this.owner && !this.owner.active)) { this.close(); return; }
+		const view = this.renderScope = new InputSuggestScope(this.modalEl, this.owner);
+		this.releaseClose = view.own(() => this.close());
 		const { modalEl } = this;
 		modalEl.empty();
 		modalEl.removeClass("modal-content");
@@ -309,9 +167,7 @@ export class IconPickerModal extends Modal {
 				placeholder: "Search icons...",
 			},
 		});
-		searchBox.addEventListener("input", () =>
-			this.filterIcons(searchBox.value)
-		);
+		searchBox.addEventListener("input", view.guard(() => this.filterIcons(searchBox.value)));
 
 		// Display results in a grid
 		const promptResults = modalEl.createDiv({ cls: "prompt-results" });
@@ -341,10 +197,6 @@ export class IconPickerModal extends Modal {
 		});
 		dismissInstruction.appendText("to dismiss");
 
-		// Promise to return selected icon
-		this.promise = new Promise<string>((resolve) => {
-			this.resolve = resolve;
-		});
 	}
 
 	private filterIcons(query: string) {
@@ -363,21 +215,32 @@ export class IconPickerModal extends Modal {
 		this.filteredIcons.forEach((iconName) => {
 			const iconEl = container.createEl("div", { cls: "icon-item" });
 			const iconSVG = getIcon(iconName); // Get the SVG element for the icon
-			if (iconSVG instanceof SVGSVGElement) {
-				iconSVG.addClass("icon-svg"); // Add a class for styling if needed
+			if (iconSVG) {
+				iconSVG.classList.add("icon-svg"); // Add a class for styling if needed
 				iconEl.appendChild(iconSVG); // Append the SVG to the icon element
 			}
 			iconEl.setAttribute("title", iconName); // Set the title attribute for tooltip
 			// const iconLabel = iconEl.createEl("span", { cls: "icon-name" });
 			// iconLabel.setText(iconName); // Set the text label for the icon (optional, uncomment if you want labels)
-			iconEl.addEventListener("click", () => {
-				this.resolve(iconName);
+			iconEl.addEventListener("click", this.renderScope!.guard(() => {
+				this.settle(iconName);
 				this.close();
-			});
+			}));
 		});
 	}
 
-	getInput(): Promise<string> {
-		return this.promise ?? Promise.resolve("");
+	onClose(): void {
+		this.settle(undefined);
+		this.releaseClose?.();
+		this.releaseClose = undefined;
+		this.renderScope?.dispose();
 	}
+
+	private settle(value: string | undefined): void {
+		if (this.settled) return;
+		this.settled = true;
+		this.resolve(value);
+	}
+
+	getInput(): Promise<string | undefined> { return this.promise; }
 }

@@ -1,12 +1,13 @@
+import type { ProviderSettingsContext } from "../ui/providerSettings";
 import { cloneSettings } from "../settingsData";
-import { Plugin, Setting } from "obsidian";
+import { Plugin } from "obsidian";
 import { EntitySuggestionItem } from "src/suggestion.types";
 import { EntityProvider, EntityProviderUserSettings } from "./EntityProvider";
 import { EntityFilter } from "src/entities.types";
 import { fileAliasSuggestions } from "./fileAliases";
 import { collectFolderFiles, FileSourceResult, filterSourceFiles } from "./fileSources";
-import { buildIconPickerSetting, buildTemplateCreationSetting } from "src/ui/providerSettingsComponents";
-import { buildFileAliasSettings, buildFileFilterSettings, buildFileSourceSetting } from "src/ui/fileProviderSettings";
+import { templateCreationSettings } from "src/ui/providerSettingsComponents";
+import { fileAliasSettings, fileFilterSettings, buildFileSourceSetting } from "src/ui/fileProviderSettings";
 import { FolderSuggest } from "src/ui/file-suggest";
 
 const folderProviderTypeID = "folder";
@@ -77,42 +78,23 @@ export class FolderEntityProvider extends EntityProvider<FolderProviderUserSetti
 		];
 	}
 
-	private static buildSourceSetting(
-		row: Setting, settings: FolderProviderUserSettings, save: (settings: FolderProviderUserSettings) => void, plugin: Plugin
-	): () => void {
-		return buildFileSourceSetting(row, {
-			label: "Folder", placeholder: "Folder path", value: settings.path,
-			onChange: value => { settings.path = value; save(settings); },
-			evaluate: () => this.evaluateSource(settings, plugin),
-			suggest: input => { new FolderSuggest(plugin.app, input, { additionalClasses: "entities-settings" }); },
-		});
+	static getSettingDefinitions(context: ProviderSettingsContext<FolderProviderUserSettings>) {
+		return [
+			context.field("path", "Folder path", "Use files in this folder. Empty selects the vault root; spaces in paths are literal.", (setting, field) => {
+				const { update, input } = buildFileSourceSetting(setting, {
+					label: "Folder", placeholder: "Folder path", value: field.value,
+					onChange: value => field.set(value), evaluate: () => this.evaluateSource(context.settings(), context.plugin),
+					suggest: input => { new FolderSuggest(context.plugin.app, input, { additionalClasses: "entities-settings" }); },
+				});
+				field.captureText(input);
+				context.watch(field.scope, update);
+			}),
+			...fileAliasSettings(context, true),
+			context.field("shouldLoadSubFolders", "Load entities from sub-folders", "Include all descendants. Off includes immediate child files; attachments remain eligible.", (setting, field) => {
+				setting.addToggle(toggle => toggle.setValue(field.value ?? false).onChange(value => field.set(value)));
+			}),
+			...templateCreationSettings(context), ...fileFilterSettings(context),
+		];
 	}
 
-	static buildSummarySetting(
-		settingContainer: Setting, settings: FolderProviderUserSettings,
-		onShouldSave: (newSettings: FolderProviderUserSettings) => void, plugin: Plugin
-	): void {
-		this.buildSourceSetting(settingContainer, settings, onShouldSave, plugin);
-	}
-
-	static buildSimpleSettings(
-		settingContainer: HTMLElement, settings: FolderProviderUserSettings,
-		onShouldSave: (newSettings: FolderProviderUserSettings) => void, plugin: Plugin
-	): void {
-		buildIconPickerSetting(settingContainer, "Icon", settings, "box-select", () => onShouldSave(settings), plugin.app);
-		const path = new Setting(settingContainer).setName("Folder path")
-			.setDesc("Use files in this folder. Empty selects the vault root; spaces in paths are literal.");
-		const updateSource = this.buildSourceSetting(path, settings, onShouldSave, plugin);
-		buildFileAliasSettings(settingContainer, settings, true, onShouldSave, plugin.app);
-		new Setting(settingContainer)
-			.setName("Load entities from sub-folders")
-			.setDesc("Include all descendant files. Off includes only immediate child files; attachments remain eligible.")
-			.addToggle(toggle => toggle.setValue(settings.shouldLoadSubFolders ?? false).onChange(value => {
-				settings.shouldLoadSubFolders = value;
-				onShouldSave(settings);
-				updateSource();
-			}));
-		buildTemplateCreationSetting(settingContainer, settings, onShouldSave, plugin.app);
-		buildFileFilterSettings(settingContainer, settings, onShouldSave, plugin.app, updateSource);
-	}
 }

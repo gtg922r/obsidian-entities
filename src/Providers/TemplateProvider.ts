@@ -1,10 +1,11 @@
 import { cloneSettings } from "../settingsData";
 import { ActionContext, ActionResult, EntitySuggestionItem } from "src/suggestion.types";
 import { EntityProvider, EntityProviderUserSettings } from "./EntityProvider";
-import { Plugin, Setting, TFile, TFolder } from "obsidian";
+import { TFile, TFolder } from "obsidian";
 import { createNewNoteFromTemplate, creationFailure, resolveDefaultCreationDestination } from "../entityCreation";
 import { promptForCreationName } from "../creationPrompt";
-import { buildIconPickerSetting, buildFolderPathSummarySetting } from "src/ui/providerSettingsComponents";
+import type { ProviderSettingsContext } from "../ui/providerSettings";
+import { FolderSuggest } from "../ui/file-suggest";
 import { TriggerCharacter } from "src/entities.types";
 
 const templateProviderTypeID = "template";
@@ -83,62 +84,28 @@ export class TemplateEntityProvider extends EntityProvider<TemplateProviderUserS
         }));
     }
 
-	static buildSummarySetting(
-		settingContainer: Setting,
-		settings: TemplateProviderUserSettings,
-		onShouldSave: (newSettings: TemplateProviderUserSettings) => void,
-		plugin: Plugin
-	): void {
-		buildFolderPathSummarySetting(settingContainer, settings, onShouldSave, plugin);
-	}
-
-	static buildSimpleSettings(
-		settingContainer: HTMLElement,
-		settings: TemplateProviderUserSettings,
-		onShouldSave: (newSettings: TemplateProviderUserSettings) => void,
-		plugin: Plugin
-	): void {
-
-		buildIconPickerSetting(settingContainer, "Icon", settings, "box-select", () => onShouldSave(settings), plugin.app);
-			
-		new Setting(settingContainer)
-			.setName("Action type")
-			// eslint-disable-next-line obsidianmd/ui/sentence-case -- Product names and the exact native command title.
-			.setDesc("Template insertion is temporarily unavailable in Entities. Use Templater: Open insert template modal or your existing template hotkey manually. Note creation remains available.")
-			.addDropdown((dropdown) => {
-				dropdown.addOption("create", "Create a new note from template")
+	static getSettingDefinitions(context: ProviderSettingsContext<TemplateProviderUserSettings>) {
+		return [
+			context.field("actionType", "Action type", "Template insertion is temporarily unavailable in Entities. Use Templater: Open insert template modal or your existing template hotkey manually. Note creation remains available.", (setting, field) => {
 				// eslint-disable-next-line obsidianmd/ui/sentence-case -- Entities is the plugin name.
-				dropdown.addOption("insert", "Insertion unavailable in Entities")
-				dropdown.onChange((value) => {
-					settings.actionType = value as "create" | "insert";
-					onShouldSave(settings);
+				setting.addDropdown(dropdown => dropdown.addOption("create", "Create a new note from template").addOption("insert", "Insertion unavailable in Entities")
+					.setValue(field.value).onChange(value => { if (value === "create" || value === "insert") field.set(value); }));
+			}),
+			context.field("trigger", "Trigger character", "Character to trigger the template suggestions.", (setting, field) => {
+				setting.addDropdown(dropdown => {
+					for (const trigger of Object.values(TriggerCharacter)) dropdown.addOption(trigger, trigger);
+					dropdown.setValue(field.value).onChange(value => { if (Object.values(TriggerCharacter).includes(value as TriggerCharacter)) field.set(value as TriggerCharacter); });
 				});
-				dropdown.setValue(settings.actionType);
-			});
-
-		new Setting(settingContainer)
-			.setName("Trigger character")
-			.setDesc("Character to trigger the template suggestions")
-			.addDropdown((dropdown) => {
-				Object.values(TriggerCharacter).forEach((trigger) => {
-					dropdown.addOption(trigger, trigger);
+			}),
+			context.field("path", "Folder path", "Folder containing the source templates.", (setting, field) => {
+				setting.addText(text => {
+					text.setPlaceholder("Folder path").setValue(field.value).onChange(value => field.set(value));
+					new FolderSuggest(context.plugin.app, text.inputEl, { additionalClasses: "entities-settings" });
+					field.captureText(text.inputEl);
 				});
-				dropdown.onChange((value) => {
-					settings.trigger = value as TriggerCharacter;
-					onShouldSave(settings);
-				});
-				dropdown.setValue(settings.trigger);
-			});
-
-		const folderPathSetting = new Setting(settingContainer)
-			.setName("Folder path")
-			.setDesc("The path of the folder where templates are located");
-		this.buildSummarySetting(
-			folderPathSetting,
-			settings,
-			onShouldSave,
-			plugin
-		);			
+				context.watch(field.scope, () => setting.setDesc(context.plugin.app.vault.getFolderByPath(context.value("path")) ? "Folder found" : "Folder not found. This text remains pending until it names an existing folder."));
+			}, { validate: value => context.plugin.app.vault.getFolderByPath(value) ? undefined : "Invalid folder. This text is pending; the applied folder is unchanged." }),
+		];
 	}
 
 	private async createFileFromTemplate(file: TFile, context: ActionContext): Promise<ActionResult> {
