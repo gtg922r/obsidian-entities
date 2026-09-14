@@ -76,3 +76,16 @@ export class Scope {
 export function pressScopeKey(scope: unknown, key: string, isComposing = false): unknown {
 	return (scope as Scope).handleKey(new KeyboardEvent("keydown", { key, isComposing }));
 }
+
+/** Public parser contract, checked separately against extracted native host methods. */
+export function parseFrontMatterStringArray(frontmatter: Record<string, unknown>, key: string): string[] | null {
+	const value = frontmatter[key];
+	if (typeof value === "string") return value.trim() ? [value.trim()] : null;
+	if (!Array.isArray(value)) return null;
+	return value.filter((item): item is string => typeof item === "string" && item.trim() !== "").map(item => item.trim());
+}
+
+export function parseFrontMatterAliases(frontmatter: Record<string, unknown>): string[] | null {
+	const key = Object.keys(frontmatter).find(key => key.toLowerCase() === "aliases");
+	return key === undefined ? null : parseFrontMatterStringArray(frontmatter, key);
+}

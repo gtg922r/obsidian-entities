@@ -1,7 +1,6 @@
 import { cloneSettings } from "../settingsData";
 import {
 	App,
-	ExtraButtonComponent,
 	getAllTags,
 	Plugin,
 	Setting,
@@ -14,22 +13,14 @@ import { EntityProvider, EntityProviderUserSettings } from "./EntityProvider";
 import { TextInputSuggest, TextInputSuggestOptions } from "src/ui/suggest";
 import { AppWithPlugins, EntityFilter } from "src/entities.types";
 import { buildIconPickerSetting, buildTemplateCreationSetting } from "src/ui/providerSettingsComponents";
-import { applyFiltersToQueryResults } from "./EntityFilters";
-import { FrontmatterKeySuggest } from "src/ui/FrontmatterKeySuggest";
-import { setValidationStatus } from "src/ui/validationStatus";
+import { fileAliasSuggestions } from "./fileAliases";
+import { FileSourceResult, filterSourceFiles } from "./fileSources";
+import { buildFileAliasSettings, buildFileFilterSettings, buildFileSourceSetting } from "src/ui/fileProviderSettings";
 
 const dataviewProviderTypeID = "dataview";
 
-interface DataviewPage {
-	file: {
-		path: string;
-		name: string;
-		aliases: Iterable<string>;
-	};
-}
-
 interface DataviewApi {
-	pages(query: string): Iterable<DataviewPage> & { readonly length: number };
+	pages(query: string): Iterable<unknown>;
 }
 
 interface DataviewPlugin {
@@ -40,6 +31,7 @@ export interface DataviewProviderUserSettings
 	extends EntityProviderUserSettings {
 	providerTypeID: string;
 	query: string;
+	propertyToCreateEntitiesFor?: string;
 	shouldCreateEntitiesForAliases?: boolean | undefined;
 	entityFilters?: EntityFilter[];
 }
@@ -51,6 +43,7 @@ const defaultDataviewProviderUserSettings: DataviewProviderUserSettings = {
 	query: "",
 	entityCreationTemplates: [],
 	shouldCreateEntitiesForAliases: false,
+	propertyToCreateEntitiesFor: undefined,
 	entityFilters: [],
 };
 
@@ -80,308 +73,68 @@ export class DataviewEntityProvider extends EntityProvider<DataviewProviderUserS
 		return DataviewEntityProvider.getDefaultSettings();
 	}
 
-	getEntityList(query: string): EntitySuggestionItem[] {
-		const dv = DataviewEntityProvider.getDataviewApi(this.plugin.app);
-		const dvQueryReults = dv?.pages(this.settings.query);
-		if (!dvQueryReults) {
-			return [];
-		}
-
-		const filteredQueryResults = applyFiltersToQueryResults(Array.from(dvQueryReults), this.settings.entityFilters, this.plugin.app);
-
-		const entitiesWithAliases = filteredQueryResults.flatMap(
-			(project) => {
-				if (typeof project?.file?.path !== "string") return [];
-				const file = this.plugin.app.vault.getAbstractFileByPath(project.file.path);
-				if (!(file instanceof TFile)) return [];
-				const baseEntity: EntitySuggestionItem = {
-					suggestionText: project.file.name,
-					target: { kind: "file", file },
-					icon: this.settings.icon ?? "box",
-				};
-
-				const projectEntities: EntitySuggestionItem[] = [
-					baseEntity,
-					...Array.from(project.file.aliases, (alias: string): EntitySuggestionItem => ({
-						suggestionText: alias,
-						icon: this.settings.icon ?? "box",
-						target: { kind: "file", file, alias },
-					})),
-				];
-
-				return projectEntities;
+	private static evaluateSource(settings: DataviewProviderUserSettings, plugin: Plugin): FileSourceResult {
+		try {
+			const dv = this.getDataviewApi(plugin.app);
+			if (!dv) return { status: "unavailable", message: "Dataview unavailable — no file suggestions" };
+			const pages = dv.pages(settings.query);
+			if (!pages || typeof pages[Symbol.iterator] !== "function") {
+				return { status: "error", message: "Invalid Dataview page collection — no file suggestions" };
 			}
-		);
+			const files = new Set<TFile>();
+			for (const page of Array.from(pages)) {
+				if (!page || typeof page !== "object") continue;
+				const path = (page as { file?: { path?: unknown } }).file?.path;
+				if (typeof path !== "string") continue;
+				const file = plugin.app.vault.getAbstractFileByPath(path);
+				if (file instanceof TFile) files.add(file);
+			}
+			return filterSourceFiles(Array.from(files), settings.entityFilters, plugin.app);
+		} catch {
+			return { status: "error", message: "Invalid Dataview source — no file suggestions" };
+		}
+	}
 
-		return entitiesWithAliases || [];
+	getEntityList(query: string): EntitySuggestionItem[] {
+		const result = DataviewEntityProvider.evaluateSource(this.settings, this.plugin);
+		if (result.status !== "ready") return [];
+		const icon = this.settings.icon ?? "box";
+		return result.files.flatMap(file => [
+			{ suggestionText: file.basename, target: { kind: "file" as const, file }, icon },
+			...fileAliasSuggestions(file, this.plugin.app, this.settings, icon),
+		]);
+	}
+
+	private static buildSourceSetting(
+		row: Setting, settings: DataviewProviderUserSettings, save: (settings: DataviewProviderUserSettings) => void, plugin: Plugin
+	): () => void {
+		return buildFileSourceSetting(row, {
+			label: "Dataview source", placeholder: "Dataview source", value: settings.query,
+			onChange: value => { settings.query = value; save(settings); },
+			evaluate: () => this.evaluateSource(settings, plugin),
+			suggest: input => { new DataviewSourceSuggest(plugin.app, input, { shouldCloseIfNoSuggestions: true }); },
+		});
 	}
 
 	static buildSummarySetting(
-		settingContainer: Setting,
-		settings: DataviewProviderUserSettings,
-		onShouldSave: (newSettings: DataviewProviderUserSettings) => void,
-		plugin: Plugin
+		settingContainer: Setting, settings: DataviewProviderUserSettings,
+		onShouldSave: (newSettings: DataviewProviderUserSettings) => void, plugin: Plugin
 	): void {
-		const queryIsOK = (
-			query: string
-		): "ok" | "error" | "empty" | "dv not found" => {
-			const dv = DataviewEntityProvider.getDataviewApi(plugin.app);
-			if (!dv) {
-				return "dv not found";
-			}
-			let pages;
-			try {
-				pages = dv.pages(query);
-			} catch {
-				return "error";
-			}
-			return pages.length > 0 ? "ok" : "empty";
-		};
-
-		let queryOKIcon: ExtraButtonComponent;
-		settingContainer.addExtraButton((button) => {
-			queryOKIcon = button;
-			button.setDisabled(true);
-		});
-
-		const updateQueryIcon = async (query: string) => {
-			if (queryIsOK(query) === "ok") {
-					const dv = await DataviewEntityProvider.getDataviewApiWithRetry(
-						500,
-						2,
-						plugin.app
-					);
-					const numberNotesFromQuery = dv?.pages(query).length;
-					setValidationStatus(
-						queryOKIcon,
-						"search-check",
-						`Dataview source OK (${numberNotesFromQuery} notes)`,
-						"neutral"
-					);
-				} else if (queryIsOK(query) === "empty") {
-				setValidationStatus(
-					queryOKIcon,
-					"search-x",
-					"Dataview source valid but empty",
-					"warning"
-				);
-			} else if (queryIsOK(query) === "error") {
-				setValidationStatus(
-					queryOKIcon,
-					"alert-triangle",
-					"Dataview source error",
-					"error"
-				);
-			} else if (queryIsOK(query) === "dv not found") {
-				setValidationStatus(
-					queryOKIcon,
-					"package-x",
-					"Dataview plugin not found!",
-					"error"
-				);
-			}
-		};
-
-		updateQueryIcon(settings.query);
-
-		settingContainer.addText((text) => {
-			text.setPlaceholder("Dataview source").setValue(settings.query);
-			text.onChange((value) => {
-				updateQueryIcon(value);
-				if (["ok", "empty"].includes(queryIsOK(value))) {
-					settings.query = value;
-					onShouldSave(settings);
-				}
-			});
-
-			new DataviewSourceSuggest(plugin.app, text.inputEl, {
-				shouldCloseIfNoSuggestions: true,
-			});
-		});
+		this.buildSourceSetting(settingContainer, settings, onShouldSave, plugin);
 	}
 
 	static buildSimpleSettings(
-		settingContainer: HTMLElement,
-		settings: DataviewProviderUserSettings,
-		onShouldSave: (newSettings: DataviewProviderUserSettings) => void,
-		plugin: Plugin
+		settingContainer: HTMLElement, settings: DataviewProviderUserSettings,
+		onShouldSave: (newSettings: DataviewProviderUserSettings) => void, plugin: Plugin
 	): void {
 		buildIconPickerSetting(settingContainer, "Icon", settings, "box-select", () => onShouldSave(settings), plugin.app);
-
-		const dvQuerySetting = new Setting(settingContainer)
-			.setName("Dataview source")
-			.setDesc("The dataview source query to use as a provider");
-		this.buildSummarySetting(
-			dvQuerySetting,
-			settings,
-			onShouldSave,
-			plugin
-		);
-
-		new Setting(settingContainer)
-			.setName("Create entities for aliases")
-			.setDesc(
-				"Whether to also create entities for each alias specified for a note in the folder"
-			)
-			.addToggle((toggle) => {
-				toggle.setValue(
-					settings.shouldCreateEntitiesForAliases ?? false
-				);
-				toggle.onChange((value) => {
-					settings.shouldCreateEntitiesForAliases = value;
-					onShouldSave(settings);
-				});
-			});
-
+		const source = new Setting(settingContainer).setName("Dataview source")
+			.setDesc("A source expression such as #person or a quoted folder; leave empty for all indexed pages. Alias and filter controls use the file’s frontmatter.");
+		const updateSource = this.buildSourceSetting(source, settings, onShouldSave, plugin);
+		buildFileAliasSettings(settingContainer, settings, false, onShouldSave, plugin.app);
 		buildTemplateCreationSetting(settingContainer, settings, onShouldSave, plugin.app);
-
-		new Setting(settingContainer)
-			.setName("Entity filters")
-			.setDesc(
-				"Include or exclude entities based on whether property matches the following criteria."
-			)
-			.addButton((button) => {
-				button.setButtonText("Add filter").onClick(() => {
-					settings.entityFilters = settings.entityFilters || [];
-					settings.entityFilters.push({
-						type: "include",
-						property: "",
-						value: "",
-					});
-					onShouldSave(settings);
-					rebuildFilters();
-				});
-			});
-
-		const filtersContainer = settingContainer.createDiv();
-
-		const validateRegex = (
-			regex: string
-		): "valid" | "invalid" | "empty" => {
-			if (!regex) return "empty";
-			try {
-				new RegExp(regex);
-				return "valid";
-			} catch {
-				return "invalid";
-			}
-		};
-
-		const rebuildFilters = () => {
-			filtersContainer.empty();
-			settings.entityFilters?.forEach((filter, index) => {
-				const filterSetting = new Setting(filtersContainer);
-
-				let regexStatusIcon: ExtraButtonComponent;
-				const updateRegexStatusIcon = (regex: string) => {
-					const status = validateRegex(regex);
-					if (status === "valid") {
-						setValidationStatus(
-							regexStatusIcon,
-							"checkmark",
-							"Valid regex",
-							"neutral"
-						);
-					} else if (status === "invalid") {
-						setValidationStatus(
-							regexStatusIcon,
-							"cross",
-							"Invalid regex",
-							"error"
-						);
-					} else {
-							setValidationStatus(
-								regexStatusIcon,
-								"help",
-								"Empty regex",
-								"muted"
-							);
-						}
-					};
-
-				filterSetting.addExtraButton((button) => {
-					regexStatusIcon = button;
-					button.setDisabled(true);
-					updateRegexStatusIcon(filter.value);
-				});
-
-				filterSetting.addDropdown((dropdown) => {
-					dropdown.addOption("include", "Include if");
-					dropdown.addOption("exclude", "Exclude if");
-					dropdown.setValue(filter.type);
-					dropdown.onChange((value) => {
-						filter.type = value as "include" | "exclude";
-						onShouldSave(settings);
-					});
-				});
-
-				filterSetting.addText((text) => {
-					text.setPlaceholder("Property name");
-					text.setValue(filter.property);
-					text.onChange((value) => {
-						filter.property = value;
-						onShouldSave(settings);
-					});
-
-					new FrontmatterKeySuggest(plugin.app, text.inputEl, {
-						shouldCloseIfNoSuggestions: true,
-					});
-				});
-
-				filterSetting.addText((text) => {
-					text.setPlaceholder("Property value/regex");
-					text.setValue(filter.value);
-					text.onChange((value) => {
-						filter.value = value;
-						onShouldSave(settings);
-						updateRegexStatusIcon(value);
-					});	
-				});
-
-				filterSetting.addButton((button) => {
-					button.setIcon("trash");
-					button.onClick(() => {
-						settings.entityFilters?.splice(index, 1);
-						onShouldSave(settings);
-						rebuildFilters();
-					});
-				});
-			});
-		};
-
-		rebuildFilters();
+		buildFileFilterSettings(settingContainer, settings, onShouldSave, plugin.app, updateSource);
 	}
-
-	// static buildAdvancedSettings(
-	// 	settingContainer: HTMLElement,
-	// 	settings: DataviewProviderUserSettings,
-	// 	onShouldSave: (newSettings: DataviewProviderUserSettings) => void,
-	// 	plugin: Plugin
-	// ): void {
-	// // TO IMPLEMENT AS NEEDEd
-	// }
-
-	static getDataviewApiWithRetry = (
-		retryDelay: number,
-		maxAttempts: number,
-		app: App
-	): Promise<DataviewApi | undefined> => {
-		return new Promise((resolve) => {
-			let attempts = 0;
-
-			const attemptFetching = () => {
-				attempts++;
-				const dv = DataviewEntityProvider.getDataviewApi(app);
-				if (dv || attempts >= maxAttempts) {
-					resolve(dv);
-				} else {
-					window.setTimeout(attemptFetching, retryDelay);
-				}
-			};
-
-			attemptFetching();
-		});
-	};
 
 	private static getDataviewApi(app: App): DataviewApi | undefined {
 		const appWithPlugins = app as AppWithPlugins;
@@ -406,7 +159,7 @@ export class DataviewSourceSuggest extends TextInputSuggest<string> {
 		this.initialize();
 	}
 
-	private async initialize() {
+	private initialize() {
 		const abstractFiles = this.app.vault.getAllLoadedFiles();
 
 		abstractFiles.forEach((fileOrFolder: TAbstractFile) => {

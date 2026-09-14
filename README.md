@@ -42,6 +42,11 @@ modal** or your existing template hotkey. That separate native operation is outs
 Entities' editor guard. Template-based note creation remains available.
 See [creation and action limits](docs/creation-recovery.md).
 
+Folder and Dataview can find existing files by native aliases or one frontmatter
+property (for example, `ldap: hopeb@`). Both apply the same explicit file filters.
+See [file sources, aliases and filters](docs/file-providers.md) for scope, defaults
+and invalid-configuration behavior.
+
 See [ARCHITECTURE.md](ARCHITECTURE.md) for implementation details.
 
 ## Installation

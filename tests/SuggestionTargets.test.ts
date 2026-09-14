@@ -370,15 +370,70 @@ test("same-label Metadata Menu file classes from distinct paths remain selectabl
 });
 
 
-test("Dataview iterable pages and aliases become synchronous array targets without dropping aliases", () => {
+test("Dataview iterable pages resolve real files and use native cached aliases when enabled", () => {
 	const h = harness(), f = file("People/Atlas.md"); h.files.set(f.path, f);
 	// DataArray is iterable and has length, but is not a JavaScript Array.
 	const iterable = <T>(values: T[]) => ({ length: values.length, *[Symbol.iterator]() { yield* values; } });
 	const aliases = iterable(["Navigator", "Zoë 東京"]);
 	const pages = iterable([{ file: { path: f.path, name: f.basename, aliases } }]);
 	h.integrations.dataview = { api: { pages: () => pages } };
-	h.use(new DataviewEntityProvider(h.plugin, { providerInstanceId: "dv" }));
+	h.metadata.set(f.path, { aliases: ["Navigator", "Zoë 東京"] });
+	h.use(new DataviewEntityProvider(h.plugin, { providerInstanceId: "dv", shouldCreateEntitiesForAliases: true }));
 	const rows = h.suggestor.getSuggestions(context());
 	expect(rows.map(row => row.suggestionText)).toEqual(["Atlas", "Navigator", "Zoë 東京"]);
 	expect(rows[2].target).toEqual({ kind: "file", file: f, alias: "Zoë 東京" });
+});
+
+test.each([FolderEntityProvider, DataviewEntityProvider].map(Provider => [Provider.providerTypeID, Provider] as const))("%s finds Issue 9 property aliases and selects one native link transaction", (_name, Provider) => {
+	const h = harness(), bob = file("People/Bob Hope.md");
+	const create = jest.fn(), rename = jest.fn(), engine = jest.fn();
+	Object.assign(h.app.vault, { create, rename });
+	h.integrations.templater = { create_new_note_from_template: engine };
+	h.files.set(bob.path, bob); h.folders.set("People", [bob]);
+	h.metadata.set(bob.path, { ldap: "hopeb@" });
+	h.integrations.dataview = { api: { pages: () => [{ file: { path: bob.path } }] } };
+	h.use(new Provider(h.plugin, { providerInstanceId: "people", path: "People", shouldCreateEntitiesForAliases: false, propertyToCreateEntitiesFor: "ldap" }));
+	const ctx = context("@hop");
+	const alias = h.suggestor.getSuggestions(ctx).find(row => row.suggestionText === "hopeb@")!;
+	expect(alias.suggestionText).toBe("hopeb@");
+	expect(alias.target).toEqual({ kind: "file", file: bob, alias: "hopeb@" });
+	h.suggestor.selectSuggestion(alias, {} as MouseEvent);
+	expect(h.generate).toHaveBeenCalledWith(bob, ctx.file.path, undefined, "hopeb@");
+	expect(ctx.editor.transaction).toHaveBeenCalledTimes(1);
+	expect(ctx.editor.getValue()).toBe("native link");
+	expect(create).not.toHaveBeenCalled(); expect(rename).not.toHaveBeenCalled(); expect(engine).not.toHaveBeenCalled();
+});
+
+test.each([FolderEntityProvider, DataviewEntityProvider].map(Provider => [Provider.providerTypeID, Provider] as const))("%s preserves equal custom aliases across files while collapsing native/custom duplicates", (_name, Provider) => {
+	const h = harness(), a = file("People/Bob Hope.md"), b = file("Archive/Bob Hope.md");
+	for (const target of [a, b]) { h.files.set(target.path, target); h.metadata.set(target.path, { aliases: ["hopeb@"], ldap: ["hopeb@", "hopeb@"] }); }
+	h.folders.set("People", [a, b]);
+	h.integrations.dataview = { api: { pages: () => [a, b].map(file => ({ file: { path: file.path } })) } };
+	h.use(new Provider(h.plugin, { providerInstanceId: "people", path: "People", shouldCreateEntitiesForAliases: true, propertyToCreateEntitiesFor: "ldap" }));
+	const rows = h.suggestor.getSuggestions(context("@hop")).filter(row => row.suggestionText === "hopeb@");
+	expect(rows).toHaveLength(2);
+	expect(rows.map(row => row.target)).toEqual([a, b].map(file => ({ kind: "file", file, alias: "hopeb@" })));
+});
+
+test.each([
+	[FolderEntityProvider, "filter"], [FolderEntityProvider, "source"],
+	[DataviewEntityProvider, "filter"], [DataviewEntityProvider, "source"],
+] as const)("%s invalid ordinary %s retains valid peers and independent creation recipes", (Provider, invalid) => {
+	const h = harness(), bob = file("People/Bob Hope.md"), engine = jest.fn();
+	h.files.set(bob.path, bob); h.folders.set("People", [bob]);
+	h.metadata.set(bob.path, { aliases: ["Leaked alias"] });
+	h.integrations.templater = { templater: { create_new_note_from_template: engine } };
+	h.integrations.dataview = { api: { pages: () => { if (invalid === "source") throw new Error("invalid source"); return [{ file: { path: bob.path } }]; } } };
+	const provider = new Provider(h.plugin, {
+		providerInstanceId: "broken", path: invalid === "source" ? "Missing" : "People", query: "[",
+		entityFilters: invalid === "filter" ? [{ type: "exclude", property: "status", value: "[" }] : [],
+		entityCreationTemplates: [{ engine: "templater", templatePath: "Templates/Person.md", entityName: "Person" }],
+	});
+	// The harness's default folder lookup is an empty folder for missing paths; it still yields no ordinary rows.
+	h.use(provider, h.source("peer", [item({ kind: "text", text: "peer" }, "Peer")]));
+	const results = h.suggestor.getSuggestions(context());
+	expect(results.map(row => row.suggestionText)).toEqual(["Peer", "New Person: "]);
+	expect(results[1].target.kind).toBe("action");
+	expect(provider.isEnabled).toBe(true);
+	expect(engine).not.toHaveBeenCalled();
 });

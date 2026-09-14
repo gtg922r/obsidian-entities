@@ -19,6 +19,7 @@ jest.mock("obsidian", () => {
 	}
 
 	return {
+		...jest.requireActual("../__mocks__/obsidian"),
 		Plugin: class {
 			app: unknown;
 			constructor(app: unknown) {
@@ -334,7 +335,7 @@ describe("FolderEntityProvider", () => {
 				expect(results.map(r => r.suggestionText)).toEqual(["Alice", "Charlie"]);
 			});
 
-			test("invalid regex is ignored", () => {
+			test("invalid regex blocks ordinary results", () => {
 				const files = [
 					createMockFile("People/Alice.md", "Alice"),
 				];
@@ -352,8 +353,8 @@ describe("FolderEntityProvider", () => {
 					],
 				});
 				const results = provider.getEntityList("test");
-				// Invalid filter is skipped, so all pass
-				expect(results).toHaveLength(1);
+				// A broken active constraint cannot broaden the source.
+				expect(results).toHaveLength(0);
 				consoleSpy.mockRestore();
 			});
 

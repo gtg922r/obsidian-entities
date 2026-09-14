@@ -49,25 +49,25 @@ describe("compileFilters", () => {
 			{ type: "exclude", property: "status", value: "^archived$" },
 		];
 		const compiled = compileFilters(filters);
-		expect(compiled).toHaveLength(2);
-		expect(compiled[0].regex).toBeInstanceOf(RegExp);
-		expect(compiled[1].regex.test("archived")).toBe(true);
+		expect(compiled.filters).toHaveLength(2);
+		expect(compiled.filters[0].regex).toBeInstanceOf(RegExp);
+		expect(compiled.filters[1].regex.test("archived")).toBe(true);
 	});
 
-	test("discards invalid regex filters", () => {
+	test("reports invalid regex without silently broadening results", () => {
 		const consoleSpy = jest.spyOn(console, "error").mockImplementation();
 		const filters: EntityFilter[] = [
 			{ type: "include", property: "type", value: "[invalid" },
 			{ type: "include", property: "status", value: "valid" },
 		];
 		const compiled = compileFilters(filters);
-		expect(compiled).toHaveLength(1);
-		expect(compiled[0].property).toBe("status");
+		expect(compiled.filters).toEqual([]);
+		expect(compiled.error).toContain("Invalid regex");
 		consoleSpy.mockRestore();
 	});
 
 	test("returns empty array for empty input", () => {
-		expect(compileFilters([])).toEqual([]);
+		expect(compileFilters([])).toEqual({ filters: [] });
 	});
 });
 
