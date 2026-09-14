@@ -1,6 +1,7 @@
 import { SettingsStore } from "../src/SettingsStore";
 import type { EntityProviderUserSettings } from "../src/Providers/EntityProvider";
 import type { SettingsDiskSnapshot, SettingsPersistence } from "../src/SettingsStorage";
+import { setImmediate } from "timers";
 
 const defaults = { providerTypeID: "folder", enabled: true, icon: "folder", path: "", entityFilters: [] };
 const saved = (path: string) => ({
@@ -17,6 +18,9 @@ function deferred<T>() {
 	const promise = new Promise<T>((yes, no) => { resolve = yes; reject = no; });
 	return { promise, resolve, reject };
 }
+
+// End the current microtask turn without relying on a wall-clock delay.
+const nextTurn = () => new Promise<void>(resolve => setImmediate(resolve));
 
 function draftParticipant(pending = false) {
 	const state = { generation: 0, pending, value: "exact pending text", baseline: "original baseline" };
@@ -388,6 +392,35 @@ describe("strict external settings observations", () => {
 		expect(h.store.hasPendingSave).toBe(false);
 		expect(h.store.recovery).toBeUndefined();
 	});
+
+	test.each(["draft becomes pending", "store closes", "backup fails"])("retains first and latest external data when %s during an older migration backup", async transition => {
+		const h = await loaded();
+		const older = JSON.stringify({ providerSettings: [{ ...defaults, path: "older external" }] });
+		const entered = deferred<void>();
+		const finish = deferred<void>();
+		h.backupSnapshot.mockImplementationOnce(() => { entered.resolve(); return finish.promise; });
+		h.setDisk({ kind: "file", raw: older });
+		const firstObservation = h.store.observeExternal();
+		await entered.promise;
+		h.external("newer external");
+		const latestObservation = h.store.observeExternal();
+		await nextTurn();
+		let closing: Promise<boolean> | undefined;
+		if (transition === "store closes") closing = h.store.close();
+		else if (transition === "draft becomes pending") {
+			h.drafts.state.pending = true;
+			h.drafts.state.generation++;
+		}
+		if (transition === "backup fails") finish.reject(new Error("migration backup failed"));
+		else finish.resolve();
+		await Promise.all([firstObservation, latestObservation, closing]);
+		expect(h.store.recovery?.first?.raw).toBe(older);
+		expect(h.store.recovery?.latest?.raw).toBe(raw("newer external"));
+		expect(h.store.settings).toEqual(saved("baseline"));
+		expect(h.changed).not.toHaveBeenCalled();
+		expect(h.writeSnapshot).not.toHaveBeenCalled();
+		if (transition === "backup fails") expect(h.store.recovery?.error).toBeDefined();
+	});
 });
 
 describe("explicit external settings recovery choices", () => {
@@ -477,6 +510,60 @@ describe("explicit external settings recovery choices", () => {
 		expect(h.store.recovery?.latest?.raw).toBe(raw("third"));
 		expect(h.store.settings).toEqual(saved("baseline"));
 		expect(h.drafts.state.pending).toBe(true);
+	});
+
+	test.each(["keep", "reload"].flatMap(action => [2, 3, 4].map(depth => ({ action, depth }))))(
+		"recovery $action respects a third capture admitted at microtask depth $depth", async ({ action, depth }) => {
+		const h = await loaded(draftParticipant(true));
+		h.external("external");
+		await h.store.observeExternal();
+		const third = deferred<Snapshot>();
+		let pending = false;
+		let wroteDuringCapture = false;
+		let publishedDuringCapture = false;
+		let discardedDuringCapture = false;
+		h.changed.mockImplementation(() => { publishedDuringCapture ||= pending; });
+		const commit = h.drafts.commit.getMockImplementation()!;
+		h.drafts.commit.mockImplementation(() => { discardedDuringCapture ||= pending; commit(); });
+		let observation: ReturnType<SettingsStore["observeExternal"]> | undefined;
+		let choiceReads = 0;
+		h.readSnapshot.mockImplementation(async () => {
+			choiceReads++;
+			if (choiceReads === 2) {
+				const captured = h.getDisk();
+				let admission = Promise.resolve();
+				for (let index = 0; index < depth; index++) admission = admission.then(() => {});
+				void admission.then(() => {
+					h.external("third");
+					pending = true;
+					observation = h.store.observeExternal();
+				});
+				return captured;
+			}
+			return pending ? third.promise : h.getDisk();
+		});
+		h.writeSnapshot.mockImplementation(async value => {
+			wroteDuringCapture ||= pending;
+			h.setDisk({ kind: "file", raw: value });
+		});
+		const choice = h.store.getRecoveryChoice()!;
+		const recovery = action === "keep" ? h.store.keepLocalAndRetry(choice) : h.store.reloadExternal(choice);
+		await nextTurn();
+		expect(observation).toBeDefined();
+		pending = false;
+		third.resolve({ kind: "file", raw: raw("third") });
+		const [result] = await Promise.all([recovery, observation]);
+		expect(wroteDuringCapture).toBe(false);
+		expect(publishedDuringCapture).toBe(false);
+		expect(discardedDuringCapture).toBe(false);
+		if (depth < 4) {
+			expect(result).toMatchObject({ kind: "stale" });
+			expect(h.writeSnapshot).not.toHaveBeenCalled();
+			expect(h.drafts.commit).not.toHaveBeenCalled();
+			expect(h.changed).not.toHaveBeenCalled();
+			expect(h.store.recovery?.latest?.raw).toBe(raw("third"));
+			expect(h.store.settings).toEqual(saved("baseline"));
+		}
 	});
 
 	test("draft changes during backup invalidate discard without applying or losing the new draft", async () => {
@@ -670,6 +757,27 @@ describe("explicit external settings recovery choices", () => {
 });
 
 describe("reconciliation close barrier", () => {
+	test("close waits for an admitted initial strict read without accepting its canonical state", async () => {
+		const h = setup();
+		const read = deferred<Snapshot>();
+		h.readSnapshot.mockReturnValueOnce(read.promise);
+		const loading = h.store.load();
+		let settled = false;
+		const closing = h.store.close().then(result => { settled = true; return result; });
+		await nextTurn();
+		const settledBeforeRead = settled;
+		read.resolve({ kind: "file", raw: raw("initial external") });
+		expect(await loading).toBe(false);
+		expect(await closing).toBe(false);
+		expect(settledBeforeRead).toBe(false);
+		expect(h.store.isClosed).toBe(true);
+		expect(h.store.canonicalVersion).toBe(0);
+		expect(h.store.settings).toEqual({ schemaVersion: 1, providerSettings: [] });
+		expect(h.changed).not.toHaveBeenCalled();
+		expect(h.writeSnapshot).not.toHaveBeenCalled();
+		expect(h.backupSnapshot).not.toHaveBeenCalled();
+	});
+
 	test("closing settles an admitted external capture and dispatched write without a later overwrite", async () => {
 		const h = await loaded();
 		const writeEntered = deferred<void>();

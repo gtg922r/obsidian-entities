@@ -298,9 +298,10 @@ describe("recovery and lifecycle", () => {
 		backup.mockReturnValueOnce(pending.promise);
 		const load = store.load(async () => ({ providerSettings: [defaults] }));
 		await Promise.resolve();
-		await store.close();
+		const close = store.close();
 		pending.resolve();
 		expect(await load).toBe(false);
+		expect(await close).toBe(false);
 		expect(store.isReadOnly).toBe(true);
 		expect(write).not.toHaveBeenCalled();
 	});

@@ -276,15 +276,17 @@ export class SettingsStore {
 			let original: unknown;
 			let candidate: Candidate | undefined;
 			if (this.persistence) {
-				this.disk = await this.persistence.readSnapshot();
+				const snapshot = await this.persistence.readSnapshot();
+				if (this.closed) return false;
+				this.disk = snapshot;
 				if (this.disk.kind === "file") this.established = true;
 				else if (this.established) throw new Error("The established settings file is missing. Restore it, then check again.");
 				original = parseSettingsSnapshot(this.disk);
 				if (this.disk.kind === "file") candidate = this.candidate(this.disk.raw);
 			} else original = await read!();
+			if (this.closed) return false;
 			const normalized = candidate ? { ok: true as const, settings: candidate.settings, changed: candidate.migration }
 				: normalizeSettings(original, this.options.defaultsForType, this.createId);
-			if (this.closed) return false;
 			if (!normalized.ok) throw normalized.error;
 			if (normalized.changed) {
 				if (candidate) await this.exclusive(() => this.backupCandidate(candidate!));
@@ -503,6 +505,13 @@ export class SettingsStore {
 		}
 	}
 
+	private retainAdoption(candidate: Candidate): void {
+		// Existing protection already retained captures in order; do not replace its latest with older work.
+		if (this.first) return;
+		this.retain(candidate);
+		if (this.adopting) this.retain(this.adopting);
+	}
+
 	private async adoptClean(candidate: Candidate, revision: number, draftGeneration: number): Promise<SettingsObservationResult> {
 		try {
 			while (true) {
@@ -514,13 +523,13 @@ export class SettingsStore {
 				await this.capturesSettled();
 				const draft = this.draft();
 				if (this.closed || this.persistenceBlocked || this.revision !== revision || draft.generation !== draftGeneration || draft.pending) {
-					this.retain(candidate);
+					this.retainAdoption(candidate);
 					return this.result("protected");
 				}
 				if (this.adopting !== candidate) continue;
 				return this.accept(candidate);
 			}
-		} catch (error) { this.retain(candidate); this.protect(error); return this.result("protected"); }
+		} catch (error) { this.retainAdoption(candidate); this.protect(error); return this.result("protected"); }
 		finally { this.adopting = undefined; }
 	}
 
@@ -655,19 +664,20 @@ export class SettingsStore {
 				await this.persistence!.backupSnapshot(encodeSettings({ recoveryFormat: 1, localCanonical: this.state,
 					firstExternal: this.first?.raw, latestExternal: this.latest?.raw, selectedExternal: candidate.raw, currentDisk: this.disk }), "external-recovery");
 				await this.requestCapture(false);
+				const admission = this.admission;
 				await this.capturesSettled();
 				if (!this.matches(choice) || this.disk.kind !== "file" || this.disk.raw !== choice.expectedRaw) return this.result("stale");
 				const prepared = action === "keep" ? undefined : this.options.drafts?.prepareDiscard(choice.draftGeneration);
 				if (action !== "keep" && this.options.drafts && !prepared) return this.result("stale");
 				const replacement = action === "keep" ? undefined : this.prepareAcceptance(candidate);
-				if (!this.matches(choice)) return this.result("stale");
+				if (!this.matches(choice) || admission !== this.admission || this.activeCapture) return this.result("stale");
 				if (action !== "reload") {
 					this.chosen = candidate;
 					this.choiceWrite = { raw: action === "keep" ? encodeSettings(this.state) : candidate.raw,
 						revision: this.revision, kind: action === "keep" ? "local" : "restore", status: "pending" };
 					this.choiceExpectedRaw = choice.expectedRaw;
 					await this.dispatch(this.choiceWrite);
-					await this.capturesSettled();
+					do { await this.capturesSettled(); } while (this.activeCapture);
 					// Own echoes do not change the episode token; different evidence still invalidates it.
 					if (!this.matches(choice)) return this.result("protected");
 				}
@@ -676,7 +686,7 @@ export class SettingsStore {
 					this.protectionVersion++;
 					return this.result("accepted");
 				}
-				if (!this.matches(choice)) return this.result("stale");
+				if (!this.matches(choice) || this.activeCapture || (action === "reload" && admission !== this.admission)) return this.result("stale");
 				try { prepared?.commit(); }
 				catch (error) { prepared?.rollback(); throw error; }
 				// Prepared assignments cannot invoke UI/IO; publication follows both owners' swaps.
@@ -691,6 +701,7 @@ export class SettingsStore {
 	/** Stop mutations and settle admitted evidence; rich handoff transfer is a separate integration gate. */
 	async close(): Promise<boolean> {
 		this.closed = true;
+		if (this.loading) await this.loading;
 		const saved = await this.flush();
 		await this.capturesSettled();
 		if (this.effect) await this.effect;
