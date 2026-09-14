@@ -14,11 +14,11 @@ function harness(frontmatter: unknown) {
 	const people = folder("People", [bob, attachment, folder("People/Sub", [folder("People/Sub/Deep", [nested])])]);
 	const root = folder("/", [rootFile, people, folder("People Archive", [peer])]);
 	const files = new Map([bob, nested, attachment, peer, rootFile].map(f => [f.path, f]));
-	const folders = new Map([["People", people], ["", root], ["/", root]]);
+	const folders = new Map([["People", people], ["/", root]]);
 	const pages = jest.fn(() => ({ *[Symbol.iterator]() { yield { file: { path: bob.path, name: "Computed name", aliases: ["Computed alias"] } }; } }));
 	const integrations: Record<string, unknown> = { dataview: { api: { pages } } };
 	const plugin = { app: {
-		vault: { getFolderByPath: (path: string) => folders.get(path) ?? null, getAbstractFileByPath: (path: string) => files.get(path) ?? null },
+		vault: { getRoot: () => root, getFolderByPath: (path: string) => folders.get(path) ?? null, getAbstractFileByPath: (path: string) => files.get(path) ?? null },
 		metadataCache: { getFileCache: (f: TFile) => f === bob ? { frontmatter } : null },
 		plugins: { getPlugin: (id: string) => integrations[id] },
 	} } as unknown as Plugin;
@@ -26,7 +26,7 @@ function harness(frontmatter: unknown) {
 }
 const types = [FolderEntityProvider, DataviewEntityProvider];
 
-describe.each(types)("%s file semantics", Provider => {
+describe.each(types.map(Provider => [Provider.providerTypeID, Provider] as const))("%s file semantics", (_name, Provider) => {
 	const source = (frontmatter: unknown, settings: Record<string, unknown> = {}) => {
 		const h = harness(frontmatter);
 		if (Provider === FolderEntityProvider) h.folders.set("People", folder("People", [bob]));
@@ -109,6 +109,8 @@ test("Folder traverses real descendants, root and all TFiles without prefix sibl
 	expect(paths("People", false)).toEqual([bob.path, attachment.path]);
 	expect(paths("People", true)).toEqual([bob.path, attachment.path, nested.path]);
 	expect(paths("", false)).toEqual([rootFile.path]);
+	expect(paths("/", false)).toEqual([rootFile.path]);
+	expect(paths(" ", false)).toEqual([]);
 	expect(paths("", true)).toEqual([rootFile.path, bob.path, attachment.path, nested.path, peer.path]);
 	expect(paths("Missing", true)).toEqual([]);
 	h.folders.get("People")!.children = [peer];

@@ -62,7 +62,7 @@ export class FolderEntityProvider extends EntityProvider<FolderProviderUserSetti
 	}
 
 	private static evaluateSource(settings: FolderProviderUserSettings, plugin: Plugin): FileSourceResult {
-		const folder = plugin.app.vault.getFolderByPath(settings.path);
+		const folder = settings.path === "" ? plugin.app.vault.getRoot() : plugin.app.vault.getFolderByPath(settings.path);
 		if (!folder) return { status: "error", message: "Folder not found — no file suggestions" };
 		return filterSourceFiles(collectFolderFiles(folder, settings.shouldLoadSubFolders ?? false), settings.entityFilters, plugin.app);
 	}

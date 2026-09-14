@@ -6,8 +6,9 @@ import { DataviewEntityProvider } from "../src/Providers/DataviewEntityProvider"
 import { TemplateEntityProvider } from "../src/Providers/TemplateProvider";
 import { SettingsStore } from "../src/SettingsStore";
 import { EntitiesNotice } from "../src/userComponents";
+import { FrontmatterKeySuggest } from "../src/ui/FrontmatterKeySuggest";
 
-type Control = { text: string; tooltip: string; value: string; placeholder: string; change: (value: string) => void; click: () => void };
+type Control = { inputEl: HTMLInputElement; text: string; tooltip: string; value: string; placeholder: string; change: (value: string) => void; click: () => void };
 type Row = { name: string; description: string; controls: Control[]; settingEl: HTMLElement };
 const mockRows: Row[] = [];
 const mockModals: ProviderSettingsModal[] = [];
@@ -27,14 +28,14 @@ jest.mock("obsidian", () => {
 		text = ""; tooltip = ""; value = ""; placeholder = "";
 		inputEl = document.createElement("input"); extraSettingsEl = element();
 		change: (value: string) => void = () => {}; click: () => void = () => {};
-		constructor(parent?: HTMLElement) { parent?.append(this.inputEl); }
+		constructor(parent?: HTMLElement) { parent?.append(this.inputEl); Object.assign(this.inputEl, { trigger: (type: string) => this.inputEl.dispatchEvent(new Event(type)) }); }
 		setButtonText(value: string) { this.text = value; return this; }
 		setIcon(value: string) { this.text = value; return this; }
 		setTooltip(value: string) { this.tooltip = value; return this; }
 		setValue(value: string) { this.value = value; this.inputEl.value = value; return this; }
 		setPlaceholder(value: string) { this.placeholder = value; return this; }
 		getValue() { return this.value; }
-		onChange(callback: (value: string) => void) { this.change = callback; return this; }
+		onChange(callback: (value: string) => void) { this.change = callback; this.inputEl.addEventListener("input", () => callback(this.inputEl.value)); return this; }
 		onClick(callback: () => void) { this.click = callback; return this; }
 		setDisabled() { return this; } setCta() { return this; } addOption() { return this; }
 	}
@@ -63,8 +64,7 @@ jest.mock("obsidian", () => {
 	};
 });
 jest.mock("../src/ui/file-suggest", () => ({ FolderSuggest: class {} }));
-jest.mock("../src/ui/FrontmatterKeySuggest", () => ({ FrontmatterKeySuggest: class {} }));
-jest.mock("../src/ui/suggest", () => ({ TextInputSuggest: class { constructor(public app: App) {} } }));
+jest.mock("../src/ui/suggest", () => ({ TextInputSuggest: class { constructor(public app: App, public inputEl: HTMLInputElement) {} close() {} } }));
 jest.mock("../src/userComponents", () => ({ EntitiesNotice: jest.fn(), IconPickerModal: class {} }));
 
 const types = [FolderEntityProvider, DataviewEntityProvider];
@@ -72,6 +72,7 @@ const file = Object.assign(new TFile(), { path: "People/Bob Hope.md", basename: 
 const child = Object.assign(new TFile(), { path: "People/Sub/Child.png", basename: "Child" });
 const sub = Object.assign(new TFolder(), { children: [child], path: "People/Sub" });
 const folder = Object.assign(new TFolder(), { children: [file, sub], path: "People" });
+const rootFolder = Object.assign(new TFolder(), { path: "/", children: [folder] });
 const filter = (property: string, value = "yes") => ({ type: "include" as const, property, value });
 const controls = (root: HTMLElement) => mockRows.filter(r => root.contains(r.settingEl)).flatMap(r => r.controls);
 const patterns = (root: HTMLElement) => controls(root).filter(c => c.placeholder === "Property value/regex");
@@ -81,7 +82,7 @@ const status = (root: HTMLElement) => controls(root).filter(c => c.tooltip).map(
 async function harness(Provider: typeof FolderEntityProvider | typeof DataviewEntityProvider, overrides: Record<string, unknown> = {}) {
 	const pages = jest.fn((query: string) => { if (query === "[") throw new Error("bad source"); return query === "empty" ? [] : [{ file: { path: file.path } }, { file: { path: file.path } }, { file: { path: "Missing.md" } }]; });
 	const integrations: Record<string, unknown> = { dataview: { api: { pages } } };
-	const app = { vault: { getFolderByPath: (path: string) => path === "People" || path === "" ? folder : null, getAbstractFileByPath: (path: string) => path === file.path ? file : null, getAllLoadedFiles: () => [] }, metadataCache: { getFileCache: () => ({ frontmatter: { yes: "yes", ldap: "hopeb@" } }) }, plugins: { getPlugin: (id: string) => integrations[id] } } as unknown as App;
+	const app = { vault: { getRoot: () => rootFolder, getFolderByPath: (path: string) => path === "People" ? folder : path === "/" ? rootFolder : null, getAbstractFileByPath: (path: string) => path === file.path ? file : null, getMarkdownFiles: () => [], getAllLoadedFiles: () => [] }, metadataCache: { getFileCache: () => ({ frontmatter: { yes: "yes", ldap: "hopeb@" } }) }, plugins: { getPlugin: (id: string) => integrations[id] } } as unknown as App;
 	const write = jest.fn(async (_settings: unknown) => {});
 	const store = new SettingsStore(write, async () => {}, () => Provider.getDefaultSettings());
 	const loaded = await store.load(async () => JSON.parse(JSON.stringify({ schemaVersion: 1, providerSettings: [{ ...Provider.getDefaultSettings(), providerInstanceId: "a", path: "People", ...overrides }, { ...Provider.getDefaultSettings(), providerInstanceId: "b", path: "People" }] })));
@@ -96,7 +97,7 @@ beforeEach(() => { document.body.replaceChildren(); mockRows.length = 0; mockMod
 
 afterEach(() => { document.body.replaceChildren(); });
 
-describe.each(types)("%s settings", Provider => {
+describe.each(types.map(Provider => [Provider.providerTypeID, Provider] as const))("%s settings", (_name, Provider) => {
 	test("shared filter editor saves invalid then repaired exact text through R1 and reload", async () => {
 		const h = await harness(Provider, { entityFilters: [filter("yes")] });
 		const modal = h.open();
@@ -244,4 +245,39 @@ test("a detached Dataview source handler cannot overwrite newer source text or e
 	expect(h.pages).toHaveBeenCalledTimes(calls);
 	expect(h.store.settings.providerSettings[0]).toMatchObject({ query: "[" });
 	expect(status(h.tab.containerEl)).toContain("Invalid Dataview source");
+});
+
+
+test("Folder empty path resolves the native vault root and remains exact in settings", async () => {
+	const h = await harness(FolderEntityProvider);
+	h.tab.display();
+	const source = controls(h.tab.containerEl).find(c => c.placeholder === "Folder path")!;
+	expect(h.app.vault.getFolderByPath("")).toBeNull();
+	source.change("");
+	expect(status(h.tab.containerEl)).toContain("Folder valid (0 qualifying files of 0 source files)");
+	expect(h.store.settings.providerSettings[0]).toMatchObject({ path: "" });
+});
+
+
+describe.each(types.map(Provider => [Provider.providerTypeID, Provider] as const))("%s retained alias controls", (_name, Provider) => {
+	test.each(["close", "rebuild"])("actual key selection after modal %s cannot save", async mode => {
+		const h = await harness(Provider, { propertyToCreateEntitiesFor: "before" });
+		const modal = h.open();
+		const row = mockRows.find(r => modal.contentEl.contains(r.settingEl) && r.name === "Frontmatter alias property")!;
+		const control = row.controls.find(c => c.placeholder === "Property name")!;
+		const retained = new FrontmatterKeySuggest(h.app, control.inputEl);
+		if (mode === "close") modal.close(); else modal.display();
+		expect(control.inputEl.isConnected).toBe(false);
+		retained.selectSuggestion("after-removal");
+		expect(h.store.settings.providerSettings[0]).toMatchObject({ propertyToCreateEntitiesFor: "before" });
+	});
+	test.each(["close", "rebuild"])("native alias toggle after modal %s cannot save", async mode => {
+		const h = await harness(Provider, { shouldCreateEntitiesForAliases: false });
+		const modal = h.open();
+		const old = mockRows.find(r => modal.contentEl.contains(r.settingEl) && r.name === "Suggest native aliases")!.controls[0];
+		if (mode === "close") modal.close(); else modal.display();
+		expect(old.inputEl.isConnected).toBe(false);
+		old.change(true as unknown as string);
+		expect(h.store.settings.providerSettings[0]).toMatchObject({ shouldCreateEntitiesForAliases: false });
+	});
 });

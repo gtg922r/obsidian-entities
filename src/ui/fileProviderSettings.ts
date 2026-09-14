@@ -46,10 +46,11 @@ export function buildFileSourceSetting(
 export function buildFileAliasSettings<T extends FileAliasSettings>(
 	container: HTMLElement, settings: T, nativeDefault: boolean, save: (settings: T) => void, app: App
 ): void {
-	new Setting(container)
-		.setName("Suggest native aliases")
+	const nativeAliases = new Setting(container);
+	nativeAliases.setName("Suggest native aliases")
 		.setDesc("Also find and link existing files by their Obsidian aliases.")
 		.addToggle(toggle => toggle.setValue(settings.shouldCreateEntitiesForAliases ?? nativeDefault).onChange(value => {
+			if (!nativeAliases.settingEl.isConnected) return;
 			settings.shouldCreateEntitiesForAliases = value;
 			save(settings);
 		}));
@@ -59,7 +60,12 @@ export function buildFileAliasSettings<T extends FileAliasSettings>(
 	describe();
 	property.addText(text => {
 		text.setPlaceholder("Property name").setValue(typeof settings.propertyToCreateEntitiesFor === "string" ? settings.propertyToCreateEntitiesFor : "");
-		text.onChange(value => { settings.propertyToCreateEntitiesFor = value; save(settings); describe(); });
+		text.onChange(value => {
+			if (!text.inputEl.isConnected) return;
+			settings.propertyToCreateEntitiesFor = value;
+			save(settings);
+			if (text.inputEl.isConnected) describe();
+		});
 		new FrontmatterKeySuggest(app, text.inputEl, { shouldCloseIfNoSuggestions: true });
 	});
 }

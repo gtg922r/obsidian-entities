@@ -388,7 +388,7 @@ test.each([FolderEntityProvider, DataviewEntityProvider].map(Provider => [Provid
 	const h = harness(), bob = file("People/Bob Hope.md");
 	const create = jest.fn(), rename = jest.fn(), engine = jest.fn();
 	Object.assign(h.app.vault, { create, rename });
-	h.integrations.templater = { create_new_note_from_template: engine };
+	h.integrations["templater-obsidian"] = { templater: { create_new_note_from_template: engine } };
 	h.files.set(bob.path, bob); h.folders.set("People", [bob]);
 	h.metadata.set(bob.path, { ldap: "hopeb@" });
 	h.integrations.dataview = { api: { pages: () => [{ file: { path: bob.path } }] } };
@@ -422,7 +422,7 @@ test.each([
 	const h = harness(), bob = file("People/Bob Hope.md"), engine = jest.fn();
 	h.files.set(bob.path, bob); h.folders.set("People", [bob]);
 	h.metadata.set(bob.path, { aliases: ["Leaked alias"] });
-	h.integrations.templater = { templater: { create_new_note_from_template: engine } };
+	h.integrations["templater-obsidian"] = { templater: { create_new_note_from_template: engine } };
 	h.integrations.dataview = { api: { pages: () => { if (invalid === "source") throw new Error("invalid source"); return [{ file: { path: bob.path } }]; } } };
 	const provider = new Provider(h.plugin, {
 		providerInstanceId: "broken", path: invalid === "source" ? "Missing" : "People", query: "[",

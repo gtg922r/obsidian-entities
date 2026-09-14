@@ -70,8 +70,8 @@ suggestions and shows an error, while other configured providers remain usable.
 
 Edits retain exact source/path/pattern text even when it is invalid or Dataview is
 unavailable. Validation describes current behavior; the existing settings save
-status reports pending or failed disk writes and provides retry. Conflicting
-settings views retain R1's whole-array conflict protection; reopen the provider
-to edit the latest configuration. Structurally malformed imports retain R1's
-protected read-only recovery behavior. The unimplemented current-note-property
-matching control has been removed; its stored legacy values remain untouched.
+status reports failed disk writes and provides retry. If settings views edit
+the same filter list, a conflict preserves the newer configuration. Reopen the
+provider to edit it. Malformed imported filter data opens protected recovery
+mode until repaired. The unimplemented current-note-property matching control
+has been removed; its stored legacy values remain untouched.
