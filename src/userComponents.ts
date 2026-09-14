@@ -105,6 +105,8 @@ export class EntitiesModalInput extends Modal {
 		// Handle enter key press to resolve the promise and close the modal
 		inputEl.addEventListener("keydown", (e) => {
 			if (e.key === "Enter" && !e.isComposing) {
+				e.preventDefault();
+				e.stopPropagation();
 				this.settle(inputEl.value);
 				this.close();
 			}

@@ -103,18 +103,59 @@ test("IME confirmation keeps the prompt open; subsequent ordinary Enter submits 
 	const settled = jest.fn();
 	void modal.getInput().then(settled);
 	const input = modal.modalEl.querySelector("input")!;
+	const bubbled = jest.fn();
+	modal.modalEl.addEventListener("keydown", bubbled);
 	input.value = "東京";
-	input.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", isComposing: true }));
+	const composing = new KeyboardEvent("keydown", { key: "Enter", isComposing: true, bubbles: true, cancelable: true });
+	expect(input.dispatchEvent(composing)).toBe(true);
+	expect(composing.defaultPrevented).toBe(false);
+	expect(bubbled).toHaveBeenCalledTimes(1);
 	await Promise.resolve(); await Promise.resolve(); await Promise.resolve();
 	expect(settled).not.toHaveBeenCalled();
 	expect(close).not.toHaveBeenCalled();
 	expect(h.create).not.toHaveBeenCalled();
-	input.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter" }));
-	input.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter" }));
+	expect(input.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true, cancelable: true }))).toBe(false);
+	expect(input.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true, cancelable: true }))).toBe(false);
+	expect(bubbled).toHaveBeenCalledTimes(1);
 	expect(await pending).toMatchObject({ status: "created", file: { path: "Default/東京.md" } });
 	expect(settled).toHaveBeenCalledTimes(1);
 	expect(settled).toHaveBeenCalledWith("東京");
 	expect(h.create).toHaveBeenCalledTimes(1);
+});
+
+test("ordinary Enter is consumed before prompt close restores focus, even when creation is unavailable", async () => {
+	const h = fixture(); delete h.integrations["templater-obsidian"];
+	const pending = runTemplate(h), modal = mockModals.at(-1)!;
+	const input = modal.modalEl.querySelector("input")!;
+	const container = document.createElement("div"), editor = document.createElement("textarea");
+	container.appendChild(modal.modalEl);
+	document.body.append(container, editor);
+	const bubbled = jest.fn();
+	container.addEventListener("keydown", bubbled);
+	const enter = new KeyboardEvent("keydown", { key: "Enter", bubbles: true, cancelable: true });
+	const beforeClose: { prevented: boolean; stopped: boolean; inputFocused: boolean }[] = [];
+	jest.spyOn(modal, "close").mockImplementation(() => {
+		beforeClose.push({ prevented: enter.defaultPrevented, stopped: enter.cancelBubble, inputFocused: document.activeElement === input });
+		modal.onClose();
+		modal.modalEl.remove();
+		editor.focus();
+	});
+	try {
+		input.value = "Missing Integration Probe";
+		input.focus();
+		const propagated = input.dispatchEvent(enter);
+		expect(await pending).toMatchObject({ status: "failed" });
+		// This checks DOM cancellation/propagation, not jsdom's emulation of native editor defaults.
+		expect(beforeClose[0]).toEqual({ prevented: true, stopped: true, inputFocused: true });
+		expect(propagated).toBe(false);
+		expect(enter.defaultPrevented).toBe(true);
+		expect(bubbled).not.toHaveBeenCalled();
+		expect(document.activeElement).toBe(editor);
+		expect(h.create).not.toHaveBeenCalled();
+	} finally {
+		container.remove();
+		editor.remove();
+	}
 });
 
 test("an undefined engine result must not produce a guessed success link", async () => {
