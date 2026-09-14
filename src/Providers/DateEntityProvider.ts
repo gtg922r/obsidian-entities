@@ -5,7 +5,7 @@ import {
 	moment,
 } from "obsidian";
 import { ActionContext, ActionResult, EntitySuggestionItem } from "src/suggestion.types";
-import { createOrReusePeriodicNote, requireLiveFile } from "../entityCreation";
+import { createOrReusePeriodicNote } from "../entityCreation";
 import { EntityProvider, EntityProviderUserSettings } from "./EntityProvider";
 import {
 	AppWithPlugins,
@@ -15,7 +15,7 @@ import { EntitiesNotice } from "src/userComponents";
 import { RefreshBehavior } from "./EntityProvider";
 import { IconPickerModal } from "src/userComponents";
 import { setValidationStatus } from "src/ui/validationStatus";
-import { capturePeriodicRoute, PeriodicRoute, PeriodicRouteSnapshot, periodicLinkpath } from "../periodicNotes";
+import { capturePeriodicRoute, lookupPeriodicFile, PeriodicRoute, PeriodicRouteSnapshot, periodicLinkpath } from "../periodicNotes";
 import { classifyExplicitWeek } from "./explicitWeek";
 
 const dateProviderTypeID = "nlDates";
@@ -153,9 +153,9 @@ export class DateEntityProvider extends EntityProvider<DatesProviderUserSettings
 			const title = candidate.date.format(snapshot.format);
 			const linkpath = periodicLinkpath(snapshot, candidate.date);
 			suggestion.noteText = candidate.alias ? `${title} (Wk of ${candidate.date.format("M/D")})` : title;
-			const existing = snapshot.lookup.call(snapshot.plugin, candidate.granularity, candidate.date.clone());
+			const existing = lookupPeriodicFile(this.plugin.app, snapshot, candidate.date);
 			if (existing != null) {
-				suggestion.target = { kind: "file", file: requireLiveFile(this.plugin.app, existing), alias: candidate.suggestionText };
+				suggestion.target = { kind: "file", file: existing, alias: candidate.suggestionText };
 			} else if (this.settings.shouldCreateIfNotExists && snapshot.create) {
 				suggestion.target = {
 					kind: "action",

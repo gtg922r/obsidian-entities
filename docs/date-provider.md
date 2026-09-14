@@ -15,13 +15,24 @@ year when the requested week is more than four weeks earlier than the current
 ISO week. The result must be a valid ISO Monday: `2020-W53` is valid;
 `2021-W53`, `W00`, incomplete forms and trailing fragments are not reinterpreted
 by Natural Language Dates. Disabling week suggestions also suppresses explicit
-week input.
+week input. Relative phrases such as `in 1 week`, `1 week ago` and
+`next week 2pm` remain Natural Language Dates queries with either week setting.
 
 Natural phrases keep their interpreted dates. In particular, “this week” keeps
 the selected day for a configured locale-week format; it is not forced to ISO
 Monday. On Sunday May 17, 2026, an English locale-week format identifies W21
 while the ISO week is W20. Explicit ISO input always starts on ISO Monday, then
 uses the configured format for its destination.
+
+Lookup first checks the exact configured `.md` path, including while the native
+cache is loading. If that file is missing, it checks native mappings using a date
+parsed back from the configured name. This keeps ISO and locale weeks aligned
+with the native filename resolver and preserves frontmatter mappings to names
+such as `Log20.md`. Creation still receives the original semantic date for its
+template. A folder or other nonfile occupying the configured file path is a
+conflict. If the formatted name cannot be parsed back without changing it, only
+an exact existing file can be used; missing-note suggestions and creation are
+unavailable for that format.
 
 Without Periodic Notes, or with a recognized inactive granularity, the provider
 keeps its Natural Language Dates daily / ISO weekly unresolved-link fallback.

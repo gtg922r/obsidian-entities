@@ -1,6 +1,6 @@
 import { App, TFile, TFolder, normalizePath, moment } from "obsidian";
 import { AppWithPlugins, entityFromTemplateSettings, PeriodicNotesGranularity, TemplaterPlugin } from "./entities.types";
-import { capturePeriodicRoute, matchesPeriodicRoute, PeriodicRouteSnapshot } from "./periodicNotes";
+import { capturePeriodicRoute, lookupPeriodicFile, matchesPeriodicRoute, PeriodicRouteSnapshot } from "./periodicNotes";
 
 /** Confirmed vault outcomes, independent of prompts, editors and link formatting. */
 export type CreationResult =
@@ -118,12 +118,7 @@ export async function createOrReusePeriodicNote(
 			throw new Error("Periodic Notes calendar changed or is unavailable. Refresh the suggestions and retry.");
 		}
 		const route = current.snapshot;
-		let existing: TFile | null;
-		try {
-			existing = route.lookup.call(route.plugin, granularity, date.clone());
-		} catch {
-			throw new Error("Periodic Notes lookup failed. Refresh the suggestions and retry.");
-		}
+		const existing = lookupPeriodicFile(app, route, date);
 		if (!matchesPeriodicRoute(route, capturePeriodicRoute(app, granularity))) {
 			throw new Error("Periodic Notes calendar changed during lookup. Refresh the suggestions and retry.");
 		}

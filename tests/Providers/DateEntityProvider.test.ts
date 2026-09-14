@@ -1,6 +1,6 @@
 import { actionContext, getAction } from "../suggestionTestHelpers";
 import moment = require("moment");
-import { Plugin, TFile } from "obsidian";
+import { Plugin, TFile, TFolder } from "obsidian";
 import { DateEntityProvider } from "../../src/Providers/DateEntityProvider";
 import { EntitiesNotice } from "../../src/userComponents";
 
@@ -13,6 +13,7 @@ jest.mock("obsidian", () => ({
 	},
 	Setting: class {},
 	TFile: class {},
+	TFolder: class {},
 	normalizePath: (path: string) => path.replace(/\\/g, "/").replace(/\/+/g, "/").replace(/^\/|\/$/g, ""),
 	moment,
 }));
@@ -157,12 +158,12 @@ describe("DateEntityProvider", () => {
 		);
 		const periodicNoteDate = periodicNotes.getPeriodicNote.mock.calls[0][1];
 		expect(periodicNoteDate.isoWeekYear()).toBe(2026);
-		expect(periodicNoteDate.isoWeek()).toBe(21);
+		expect(periodicNoteDate.format("gggg-[W]ww")).toBe("2026-W21");
 		expect(periodicNotes.createPeriodicNote).not.toHaveBeenCalled();
 		expect(generateMarkdownLink).not.toHaveBeenCalled();
 	});
 
-	test("passes the semantic week date to Periodic Notes on locale week boundaries", () => {
+	test("looks up the configured representative on locale week boundaries", () => {
 		freezeMomentNow("2026-05-17");
 		const weeklyFile = Object.assign(new TFile(), { path: "Periodic/Weeks/2026-W21.md" });
 		const generateMarkdownLink = jest
@@ -278,7 +279,7 @@ describe("DateEntityProvider", () => {
 			expect.objectContaining({})
 		);
 		const getPeriodicNoteDate = periodicNotes.getPeriodicNote.mock.calls[periodicNotes.getPeriodicNote.mock.calls.length - 1][1];
-		expect(getPeriodicNoteDate.format("YYYY-MM-DD")).toBe("2026-05-18");
+		expect(getPeriodicNoteDate.format("YYYY-MM-DD")).toBe("2026-05-17");
 		expect(periodicNotes.createPeriodicNote).toHaveBeenCalledWith(
 			"week",
 			expect.objectContaining({})
@@ -529,12 +530,12 @@ test("re-resolves NLP and Periodic Notes capabilities on each evaluation", () =>
 		calendarSetManager: createCalendarManager(["week"], format),
 		getPeriodicNote: jest.fn(), createPeriodicNote: jest.fn(),
 	});
-	integrations["periodic-notes"] = periodic("[First week]");
+	integrations["periodic-notes"] = periodic("[First week ]GGGG-[W]WW");
 	let week = provider.getEntityList("today").find(item => item.suggestionText === "this week")!;
-	expect(week.noteText).toBe("First week"); expect(getAction(week)).toBeDefined();
-	integrations["periodic-notes"] = periodic("[Replacement week]");
+	expect(week.noteText).toBe(moment().format("[First week ]GGGG-[W]WW")); expect(getAction(week)).toBeDefined();
+	integrations["periodic-notes"] = periodic("[Replacement week ]GGGG-[W]WW");
 	week = provider.getEntityList("today").find(item => item.suggestionText === "this week")!;
-	expect(week.noteText).toBe("Replacement week");
+	expect(week.noteText).toBe(moment().format("[Replacement week ]GGGG-[W]WW"));
 	integrations["periodic-notes"] = {}; // Partial API is unavailable.
 	expect(provider.getEntityList("today").find(item => item.suggestionText === "this week")).toBeUndefined();
 	const replacementNlp = createNlDatesPlugin();
@@ -634,15 +635,38 @@ describe("current periodic date route regressions", () => {
 		}
 	);
 
-	test.each(["2024-02-29T12:34:56-08:00", "2024-03-10T12:34:56-07:00"])("preserves the NLP leap-day/DST Moment %s", iso => {
+	test.each(["2024-02-29T12:34:56-08:00", "2024-03-10T12:34:56-07:00"])("preserves the NLP leap-day/DST creation Moment %s with representative lookup", async iso => {
 		const h = routeFixture(["day"]);
 		const parsed = moment.parseZone(iso);
 		h.nlp.parseDate.mockReturnValue({ date: parsed.toDate(), moment: parsed, formattedString: "NLP display" });
-		h.provider.getEntityList("a natural date");
+		const row = h.provider.getEntityList("a natural date").find(row => row.suggestionText === "a natural date");
+		await getAction(row)!(actionContext());
 		expect(h.periodicNotes.getPeriodicNote).toHaveBeenCalled();
-		expect(h.periodicNotes.getPeriodicNote.mock.calls.every(([, date]) => date.valueOf() === parsed.valueOf())).toBe(true);
+		expect(h.periodicNotes.getPeriodicNote.mock.calls.every(([, date]) => date.format("YYYY-MM-DD") === parsed.format("YYYY-MM-DD"))).toBe(true);
+		expect(h.periodicNotes.getPeriodicNote.mock.calls.every(([, date]) => date.hour() === 0)).toBe(true);
+		expect(h.periodicNotes.createPeriodicNote.mock.calls[0][1].format()).toBe(iso);
 		expect(parsed.format()).toBe(iso);
 	});
+
+	test.each([false, true].flatMap(includeWeekSuggestions => [
+		["in 1 week", "2026-05-24"], ["1 week ago", "2026-05-10"], ["1 week from now", "2026-05-24"],
+		["next week 2pm", "2026-05-24"], ["this week at 2pm", "2026-05-17"],
+		["in 2 weeks", "2026-05-31"], ["2 weeks ago", "2026-05-03"],
+	].map(([query, expected]) => [includeWeekSuggestions, query, expected] as const)))(
+		"preserves NLP meaning with week suggestions=%s for %s as %s", (includeWeekSuggestions, query, expected) => {
+			freezeMomentNow("2026-05-17");
+			const h = routeFixture(["day"]);
+			// Actual NLDates 0.6.4 outputs from both native host Moments in the review probe.
+			const date = moment(`${expected}T12:00:00`);
+			h.nlp.parseDate.mockReturnValue({ date: date.toDate(), moment: date, formattedString: expected });
+			const provider = new DateEntityProvider(h.plugin, { providerInstanceId: "relative-week", includeWeekSuggestions,
+				shouldCreateIfNotExists: false });
+			const rows = provider.getEntityList(query).filter(row => row.suggestionText === query);
+			expect(h.nlp.parseDate).toHaveBeenCalledWith(query);
+			expect(rows).toHaveLength(1);
+			expect(rows[0].target).toEqual({ kind: "unresolved-link", linkpath: `Periodic/Days/${expected}`, alias: query });
+		}
+	);
 
 	test("rejects an invalid parsed Moment before lookup", () => {
 		const h = routeFixture();
@@ -766,5 +790,136 @@ describe("current periodic date route regressions", () => {
 		const row = h.provider.getEntityList("2026-W21").find(row => row.suggestionText === "2026-W21");
 		await expect(getAction(row)!(actionContext())).resolves.toMatchObject({ status: "created", file: h.createdFile, alias: "2026-W21" });
 		expect(h.periodicNotes.createPeriodicNote.mock.calls[0][1].format("YYYY-MM-DD")).toBe("2026-05-18");
+	});
+});
+
+describe("configured date identity and native cache lookup", () => {
+	const originalMomentNow = moment.now;
+	const originalLocale = moment.locale();
+
+	beforeEach(() => {
+		freezeMomentNow("2026-05-17");
+		moment.locale("en");
+	});
+	afterEach(() => {
+		moment.now = originalMomentNow;
+		moment.locale(originalLocale);
+		jest.restoreAllMocks();
+		jest.clearAllMocks();
+	});
+
+	function fixture(format = "GGGG-[W]WW", shouldCreateIfNotExists = false) {
+		const files = new Map<string, TFile | TFolder>();
+		const entries: { file: TFile; date: moment.Moment }[] = [];
+		const periodicNotes = {
+			calendarSetManager: createCalendarManager(["week"], format),
+			// Beta cache matches in the Moment's locale week, even for ISO filename formats.
+			getPeriodicNote: jest.fn((_granularity: Granularity, date: moment.Moment) => entries.find(entry => entry.date.isSame(date, "week"))?.file ?? null),
+			createPeriodicNote: jest.fn(async (_granularity: Granularity, date: moment.Moment) => {
+				const file = Object.assign(new TFile(), { path: `Periodic/Weeks/${date.format(format)}.md` });
+				files.set(file.path, file);
+				return file;
+			}),
+		};
+		const plugin = createPluginWithPlugins({ "nldates-obsidian": createNlDatesPlugin(), "periodic-notes": periodicNotes });
+		Object.assign(plugin.app.vault, { getAbstractFileByPath: (path: string) => files.get(path) });
+		const provider = new DateEntityProvider(plugin, { providerInstanceId: "cache-identity", shouldCreateIfNotExists });
+		const addFile = (path: string, indexedDate?: string) => {
+			const file = Object.assign(new TFile(), { path });
+			files.set(path, file);
+			if (indexedDate) entries.push({ file, date: moment(indexedDate) });
+			return file;
+		};
+		const weekRow = () => provider.getEntityList("this week").find(row => row.suggestionText === "this week" && row.icon === "calendar-range");
+		return { files, entries, periodicNotes, provider, addFile, weekRow };
+	}
+
+	test.each([false, true])("exact configured file wins over a wrong-week native cache match with creation=%s", shouldCreateIfNotExists => {
+		const h = fixture("GGGG-[W]WW", shouldCreateIfNotExists);
+		const expected = h.addFile("Periodic/Weeks/2026-W20.md", "2026-05-11");
+		h.addFile("Periodic/Weeks/2026-W21.md", "2026-05-18");
+		expect(h.weekRow()?.target).toEqual({ kind: "file", file: expected, alias: "this week" });
+		expect(h.periodicNotes.getPeriodicNote.mock.calls.filter(([, date]) => date.format("GGGG-[W]WW") === "2026-W20")).toHaveLength(0);
+		expect(h.periodicNotes.createPeriodicNote).not.toHaveBeenCalled();
+	});
+
+	test.each([false, true])("uncached exact configured file remains a real file with creation=%s", shouldCreateIfNotExists => {
+		const h = fixture("GGGG-[W]WW", shouldCreateIfNotExists);
+		const expected = h.addFile("Periodic/Weeks/2026-W20.md");
+		expect(h.entries).toHaveLength(0);
+		expect(h.weekRow()?.target).toEqual({ kind: "file", file: expected, alias: "this week" });
+		expect(h.periodicNotes.createPeriodicNote).not.toHaveBeenCalled();
+	});
+
+	test.each(["folder", "plain object"])("exact configured %s conflict cannot redirect to native cache", kind => {
+		const h = fixture("GGGG-[W]WW", true);
+		const path = "Periodic/Weeks/2026-W20.md";
+		h.files.set(path, kind === "folder" ? Object.assign(new TFolder(), { path }) : { path } as TFile);
+		h.addFile("Archive/Current week.md", "2026-05-17");
+		expect(h.weekRow()).toBeUndefined();
+		expect(h.periodicNotes.createPeriodicNote).not.toHaveBeenCalled();
+	});
+
+	test("retained missing-note action reuses a newly appeared uncached canonical file", async () => {
+		const h = fixture("GGGG-[W]WW", true);
+		const action = getAction(h.weekRow());
+		expect(action).toBeDefined();
+		const expected = h.addFile("Periodic/Weeks/2026-W20.md");
+		await expect(action!(actionContext())).resolves.toEqual({ status: "existing", file: expected, alias: "this week" });
+		expect(h.periodicNotes.createPeriodicNote).not.toHaveBeenCalled();
+	});
+
+	test("retained missing-note action refuses a newly appeared canonical folder", async () => {
+		const h = fixture("GGGG-[W]WW", true);
+		const action = getAction(h.weekRow());
+		expect(action).toBeDefined();
+		const path = "Periodic/Weeks/2026-W20.md";
+		h.files.set(path, Object.assign(new TFolder(), { path }));
+		await expect(action!(actionContext())).resolves.toMatchObject({ status: "failed" });
+		expect(h.periodicNotes.createPeriodicNote).not.toHaveBeenCalled();
+	});
+
+	test.each([
+		["en", "GGGG-[W]WW", "2026-05-11", "2026-05-10", "2026-05-17", "20"],
+		["en", "gggg-[W]ww", "2026-05-17", "2026-05-10", "2026-05-17", "21"],
+		["en-gb", "GGGG-[W]WW", "2026-05-11", "2026-05-11", "2026-05-18", "20"],
+		["en-gb", "gggg-[W]ww", "2026-05-11", "2026-05-11", "2026-05-18", "20"],
+	])("%s %s representative %s preserves native frontmatter mapping", (locale, format, representative, week20, week21, selected) => {
+		moment.locale(locale);
+		const h = fixture(format);
+		const files = [h.addFile("Archive/Log 20.md", week20), h.addFile("Archive/Log 21.md", week21)];
+		expect(h.weekRow()?.target).toEqual({ kind: "file", file: files[selected === "20" ? 0 : 1], alias: "this week" });
+		expect(h.periodicNotes.getPeriodicNote.mock.calls[0][1].format("YYYY-MM-DD")).toBe(representative);
+		expect(h.periodicNotes.getPeriodicNote.mock.calls[0][1].locale()).toBe(locale);
+	});
+
+	test("representative ISO lookup keeps original Sunday for native creation and templates", async () => {
+		const h = fixture("GGGG-[W]WW", true);
+		const action = getAction(h.weekRow());
+		await expect(action!(actionContext())).resolves.toMatchObject({ status: "created", alias: "this week" });
+		const lookupDate = h.periodicNotes.getPeriodicNote.mock.calls[h.periodicNotes.getPeriodicNote.mock.calls.length - 1][1];
+		expect(lookupDate.format("YYYY-MM-DD")).toBe("2026-05-11");
+		expect(h.periodicNotes.createPeriodicNote.mock.calls[0][1].format("YYYY-MM-DD")).toBe("2026-05-17");
+	});
+
+	test.each([
+		["[constant]", "2026-05-17", "constant"],
+		["YYYY-[W]ww", "2021-01-01", "2021-W01"],
+	])("unrepresentable format %s still resolves an exact real file", (format, now, title) => {
+		freezeMomentNow(now);
+		const h = fixture(format, true);
+		const expected = h.addFile(`Periodic/Weeks/${title}.md`);
+		expect(h.weekRow()?.target).toEqual({ kind: "file", file: expected, alias: "this week" });
+		expect(h.periodicNotes.createPeriodicNote).not.toHaveBeenCalled();
+	});
+
+	test.each([
+		["[constant]", "2026-05-17"],
+		["YYYY-[W]ww", "2021-01-01"],
+	])("missing unrepresentable format %s is unavailable before creation", (format, now) => {
+		freezeMomentNow(now);
+		const h = fixture(format, true);
+		expect(h.weekRow()).toBeUndefined();
+		expect(h.periodicNotes.createPeriodicNote).not.toHaveBeenCalled();
 	});
 });

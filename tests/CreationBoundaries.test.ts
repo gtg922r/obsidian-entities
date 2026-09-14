@@ -395,6 +395,56 @@ test("periodic lookup rejects a deleted or fabricated existing result without cr
 	expect(createPeriodicNote).not.toHaveBeenCalled();
 });
 
+test.each(["empty", "adjacent"])("periodic service prefers the canonical file over an %s native cache", async cache => {
+	const h = fixture(), target = file("Calendar/2026-W20.md"), adjacent = file("Calendar/2026-W21.md");
+	h.files.set(target.path, target); h.files.set(adjacent.path, adjacent);
+	const manager = periodicManager(); manager.getActiveConfig().format = "GGGG-[W]WW";
+	const getPeriodicNote = jest.fn(() => cache === "empty" ? null : adjacent), createPeriodicNote = jest.fn();
+	h.integrations["periodic-notes"] = { calendarSetManager: manager, getPeriodicNote, createPeriodicNote };
+	expect(await createOrReusePeriodicNote(h.app, "week", moment("2026-05-17"))).toEqual({ status: "existing", file: target });
+	expect(getPeriodicNote).not.toHaveBeenCalled(); expect(createPeriodicNote).not.toHaveBeenCalled();
+});
+
+test("periodic canonical path occupied by a folder fails without native lookup or creation", async () => {
+	const h = fixture(), folder = Object.assign(new TFolder(), { path: "Calendar/2026-05-20.md" });
+	h.files.set(folder.path, folder);
+	const getPeriodicNote = jest.fn(() => null), createPeriodicNote = jest.fn();
+	h.integrations["periodic-notes"] = { calendarSetManager: periodicManager(), getPeriodicNote, createPeriodicNote };
+	expect(await createOrReusePeriodicNote(h.app, "day", moment("2026-05-20"))).toMatchObject({ status: "failed" });
+	expect(getPeriodicNote).not.toHaveBeenCalled(); expect(createPeriodicNote).not.toHaveBeenCalled();
+});
+
+test.each([false, true])("periodic strict lookup representative preserves the original creation date; existing=%s", async existing => {
+	const h = fixture(), target = file("Calendar/Log20.md"), requested = moment("2026-05-17").locale("en");
+	const manager = periodicManager(); manager.getActiveConfig().format = "GGGG-[W]WW";
+	const getPeriodicNote = jest.fn((_granularity, date: moment.Moment) => {
+		expect(date.format("YYYY-MM-DD")).toBe("2026-05-11");
+		date.add(2, "week");
+		return existing ? target : null;
+	});
+	const createPeriodicNote = jest.fn(async (_granularity, date: moment.Moment) => {
+		expect(date.format("YYYY-MM-DD")).toBe("2026-05-17");
+		date.weekday(0); h.files.set(target.path, target); return target;
+	});
+	if (existing) h.files.set(target.path, target);
+	h.integrations["periodic-notes"] = { calendarSetManager: manager, getPeriodicNote, createPeriodicNote };
+	expect(await createOrReusePeriodicNote(h.app, "week", requested)).toEqual({ status: existing ? "existing" : "created", file: target });
+	expect(requested.format("YYYY-MM-DD")).toBe("2026-05-17");
+	expect(createPeriodicNote).toHaveBeenCalledTimes(existing ? 0 : 1);
+});
+
+test.each([false, true])("periodic unparseable format only permits its canonical existing file; existing=%s", async existing => {
+	const h = fixture(), target = file("Calendar/Constant.md");
+	const manager = periodicManager(); manager.getActiveConfig().format = "[Constant]";
+	const getPeriodicNote = jest.fn(() => null), createPeriodicNote = jest.fn();
+	if (existing) h.files.set(target.path, target);
+	h.integrations["periodic-notes"] = { calendarSetManager: manager, getPeriodicNote, createPeriodicNote };
+	const result = await createOrReusePeriodicNote(h.app, "week", moment("2026-05-17"));
+	if (existing) expect(result).toEqual({ status: "existing", file: target });
+	else expect(result).toMatchObject({ status: "failed" });
+	expect(getPeriodicNote).not.toHaveBeenCalled(); expect(createPeriodicNote).not.toHaveBeenCalled();
+});
+
 test.each(["entry", "after lookup"])("periodic coordinator cancellation at %s prevents native creation", async when => {
 	const h = fixture(), createPeriodicNote = jest.fn();
 	let valid = when !== "entry";

@@ -330,7 +330,7 @@ test.each([false, true])("Date existing files retain distinct source-relative ph
 		h.suggestor.selectSuggestion(selected, {} as MouseEvent);
 		expect(h.generate).toHaveBeenLastCalledWith(f, ctx.file.path, undefined, alias);
 	}
-	expect(getPeriodicNote).toHaveBeenCalled();
+	expect(getPeriodicNote).not.toHaveBeenCalled();
 	expect(createPeriodicNote).not.toHaveBeenCalled();
 });
 

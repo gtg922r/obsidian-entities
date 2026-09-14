@@ -8,9 +8,10 @@ export function classifyExplicitWeek(query: string, now: moment.Moment): Explici
 	const text = query.trim();
 	const match = /^(?:(\d{4}|\d{2})[-\s]?)?(?:w|wk|week)\s?(\d{1,2})$/i.exec(text);
 	if (!match) {
-		// Numeric markers anywhere catch stray prefixes/suffixes; bare markers must be the whole phrase.
-		const numericFragment = /\b(?:week|wk|w)\s*[-+]?\s*\d|\d[-\s]*(?:week|wk|w)(?![a-z])/i.test(text);
-		const bareMarker = /^(?:\d+[-\s]*)?(?:week|wk|w)[-\s]*$/i.test(text);
+		// Explicit-looking starts and embedded compact years retain malformed fragments.
+		// Surrounding relative phrases such as "in 1 week" and "next week 2pm" belong to NLP.
+		const numericFragment = /^(?:\d+)?[-\s]*(?:week|wk|w)\s*[-+]?\s*\d|\d-?(?:week|wk|w)\s*[-+]?\s*\d/i.test(text);
+		const bareMarker = /^(?:\d{4}|\d{2})?[-\s]*(?:week|wk|w)[-\s]*$/i.test(text);
 		return { kind: numericFragment || bareMarker ? "invalid" : "ordinary" };
 	}
 	const week = Number(match[2]);
