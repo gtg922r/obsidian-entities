@@ -1,18 +1,13 @@
 import { cloneSettings } from "../settingsData";
-import {
-	ExtraButtonComponent,
-	Plugin,
-	sanitizeHTMLToDom,
-	Setting,
-	TFile,
-} from "obsidian";
+import { Plugin, Setting } from "obsidian";
 import { EntitySuggestionItem } from "src/suggestion.types";
 import { EntityProvider, EntityProviderUserSettings } from "./EntityProvider";
 import { EntityFilter } from "src/entities.types";
-import { applyFiltersToFiles } from "./EntityFilters";
-import { FrontmatterKeySuggest } from "src/ui/FrontmatterKeySuggest";
-import { buildIconPickerSetting, buildTemplateCreationSetting, buildFolderPathSummarySetting } from "src/ui/providerSettingsComponents";
-import { setValidationStatus } from "src/ui/validationStatus";
+import { fileAliasSuggestions } from "./fileAliases";
+import { collectFolderFiles, FileSourceResult, filterSourceFiles } from "./fileSources";
+import { buildIconPickerSetting, buildTemplateCreationSetting } from "src/ui/providerSettingsComponents";
+import { buildFileAliasSettings, buildFileFilterSettings, buildFileSourceSetting } from "src/ui/fileProviderSettings";
+import { FolderSuggest } from "src/ui/file-suggest";
 
 const folderProviderTypeID = "folder";
 
@@ -31,9 +26,9 @@ const defaultFolderProviderUserSettings: FolderProviderUserSettings = {
 	enabled: true,
 	icon: "folder-open-dot",
 	path: "",
-	shouldLoadSubFolders: false, // Not yet implemented
+	shouldLoadSubFolders: false,
 	shouldCreateEntitiesForAliases: true,
-	propertyToCreateEntitiesFor: undefined, // Not yet implemented
+	propertyToCreateEntitiesFor: undefined,
 	propertyToFilterEntitiesBy: undefined, // Not yet implemented
 	entityCreationTemplates: [],
 	entityFilters: [],
@@ -66,249 +61,58 @@ export class FolderEntityProvider extends EntityProvider<FolderProviderUserSetti
 		return FolderEntityProvider.getDescription(this.settings);
 	}
 
+	private static evaluateSource(settings: FolderProviderUserSettings, plugin: Plugin): FileSourceResult {
+		const folder = settings.path === "" ? plugin.app.vault.getRoot() : plugin.app.vault.getFolderByPath(settings.path);
+		if (!folder) return { status: "error", message: "Folder not found — no file suggestions" };
+		return filterSourceFiles(collectFolderFiles(folder, settings.shouldLoadSubFolders ?? false), settings.entityFilters, plugin.app);
+	}
+
 	getEntityList(query: string): EntitySuggestionItem[] {
-		const entityFolder = this.plugin.app.vault.getFolderByPath(
-			this.settings.path
-		);
-		const entities: TFile[] | undefined = entityFolder?.children.filter(
-			(file: unknown) => file instanceof TFile
-		) as TFile[] | undefined;
+		const result = FolderEntityProvider.evaluateSource(this.settings, this.plugin);
+		if (result.status !== "ready") return [];
+		const icon = this.settings.icon ?? "folder-open-dot";
+		return [
+			...result.files.map((file): EntitySuggestionItem => ({ suggestionText: file.basename, target: { kind: "file", file }, icon })),
+			...result.files.flatMap(file => fileAliasSuggestions(file, this.plugin.app, this.settings, icon)),
+		];
+	}
 
-		if (!entities) {
-			return [];
-		}
-
-		const filteredEntities = applyFiltersToFiles(entities, this.settings.entityFilters, this.plugin.app);
-
-		const entitySuggestions: EntitySuggestionItem[] =
-			filteredEntities?.map((file) => ({
-				suggestionText: file.basename,
-				target: { kind: "file", file },
-				icon: this.settings.icon ?? "folder-open-dot",
-			})) ?? [];
-
-		const suggestionFromAlias: (
-			alias: string,
-			file: TFile
-		) => EntitySuggestionItem = (alias: string, file: TFile) => ({
-			suggestionText: alias,
-			icon: this.settings.icon ?? "folder-open-dot",
-			target: { kind: "file", file, alias },
+	private static buildSourceSetting(
+		row: Setting, settings: FolderProviderUserSettings, save: (settings: FolderProviderUserSettings) => void, plugin: Plugin
+	): () => void {
+		return buildFileSourceSetting(row, {
+			label: "Folder", placeholder: "Folder path", value: settings.path,
+			onChange: value => { settings.path = value; save(settings); },
+			evaluate: () => this.evaluateSource(settings, plugin),
+			suggest: input => { new FolderSuggest(plugin.app, input, { additionalClasses: "entities-settings" }); },
 		});
-
-		const aliasEntitiesSuggestions = filteredEntities?.flatMap((file) => {
-			const aliases = this.plugin.app.metadataCache.getFileCache(file)
-				?.frontmatter?.aliases as string | string[] | undefined;
-			if (typeof aliases === "string")
-				return [suggestionFromAlias(aliases, file)];
-			return aliases
-				? aliases.map((alias) => suggestionFromAlias(alias, file))
-				: [];
-		});
-
-		return aliasEntitiesSuggestions
-			? [...entitySuggestions, ...aliasEntitiesSuggestions]
-			: entitySuggestions;
 	}
 
 	static buildSummarySetting(
-		settingContainer: Setting,
-		settings: FolderProviderUserSettings,
-		onShouldSave: (newSettings: FolderProviderUserSettings) => void,
-		plugin: Plugin
+		settingContainer: Setting, settings: FolderProviderUserSettings,
+		onShouldSave: (newSettings: FolderProviderUserSettings) => void, plugin: Plugin
 	): void {
-		buildFolderPathSummarySetting(settingContainer, settings, onShouldSave, plugin, { showNoteCount: true });
+		this.buildSourceSetting(settingContainer, settings, onShouldSave, plugin);
 	}
 
 	static buildSimpleSettings(
-		settingContainer: HTMLElement,
-		settings: FolderProviderUserSettings,
-		onShouldSave: (newSettings: FolderProviderUserSettings) => void,
-		plugin: Plugin
+		settingContainer: HTMLElement, settings: FolderProviderUserSettings,
+		onShouldSave: (newSettings: FolderProviderUserSettings) => void, plugin: Plugin
 	): void {
 		buildIconPickerSetting(settingContainer, "Icon", settings, "box-select", () => onShouldSave(settings), plugin.app);
-
-		const folderPathSetting = new Setting(settingContainer)
-			.setName("Folder path")
-			.setDesc("The path of the folder to use as a provider");
-		this.buildSummarySetting(
-			folderPathSetting,
-			settings,
-			onShouldSave,
-			plugin
-		);
-
-		new Setting(settingContainer)
-			.setName("Create entities for aliases")
-			.setDesc(
-				"Whether to also create entities for each alias specified for a note in the folder"
-			)
-			.addToggle((toggle) => {
-				toggle.setValue(
-					settings.shouldCreateEntitiesForAliases ?? false
-				);
-				toggle.onChange((value) => {
-					settings.shouldCreateEntitiesForAliases = value;
-					onShouldSave(settings);
-				});
-			});
+		const path = new Setting(settingContainer).setName("Folder path")
+			.setDesc("Use files in this folder. Empty selects the vault root; spaces in paths are literal.");
+		const updateSource = this.buildSourceSetting(path, settings, onShouldSave, plugin);
+		buildFileAliasSettings(settingContainer, settings, true, onShouldSave, plugin.app);
 		new Setting(settingContainer)
 			.setName("Load entities from sub-folders")
-			.setDesc(
-				"Whether to also load entities from sub-folders or just the top-level folder"
-			)
-			.addToggle((toggle) => {
-				toggle.setValue(settings.shouldLoadSubFolders ?? false);
-				toggle.onChange((value) => {
-					settings.shouldLoadSubFolders = value;
-					onShouldSave(settings);
-				});
-			});
+			.setDesc("Include all descendant files. Off includes only immediate child files; attachments remain eligible.")
+			.addToggle(toggle => toggle.setValue(settings.shouldLoadSubFolders ?? false).onChange(value => {
+				settings.shouldLoadSubFolders = value;
+				onShouldSave(settings);
+				updateSource();
+			}));
 		buildTemplateCreationSetting(settingContainer, settings, onShouldSave, plugin.app);
-
-		new Setting(settingContainer)
-			.setHeading()
-			.setName("Entity filter")
-			.setDesc(
-				"Include or exclude entities based on whether property matches the following criteria."
-			)
-			.addButton((button) => {
-				button.setButtonText("Add filter").onClick(() => {
-					settings.entityFilters = settings.entityFilters || [];
-					settings.entityFilters.push({
-						type: "include",
-						property: "",
-						value: "",
-					});
-					onShouldSave(settings);
-					rebuildFilters();
-				});
-			});
-
-		const filtersContainer = settingContainer.createDiv();
-
-		const validateRegex = (
-			regex: string
-		): "valid" | "invalid" | "empty" => {
-			if (!regex) return "empty";
-			try {
-				new RegExp(regex);
-				return "valid";
-			} catch {
-				return "invalid";
-			}
-		};
-
-		const rebuildFilters = () => {
-			filtersContainer.empty();
-			settings.entityFilters?.forEach((filter, index) => {
-				const filterSetting = new Setting(filtersContainer);
-
-				let regexStatusIcon: ExtraButtonComponent;
-				const updateRegexStatusIcon = (regex: string) => {
-					const status = validateRegex(regex);
-					if (status === "valid") {
-						setValidationStatus(
-							regexStatusIcon,
-							"checkmark",
-							"Valid regex",
-							"neutral"
-						);
-					} else if (status === "invalid") {
-						setValidationStatus(
-							regexStatusIcon,
-							"cross",
-							"Invalid regex",
-							"error"
-						);
-					} else {
-						setValidationStatus(
-							regexStatusIcon,
-							"help",
-							"Empty regex",
-							"muted"
-						);
-					}
-				};
-
-				filterSetting.addExtraButton((button) => {
-					regexStatusIcon = button;
-					button.setDisabled(true);
-					updateRegexStatusIcon(filter.value);
-				});
-
-				filterSetting.addDropdown((dropdown) => {
-					dropdown.addOption("include", "Include if");
-					dropdown.addOption("exclude", "Exclude if");
-					dropdown.setValue(filter.type);
-					dropdown.onChange((value) => {
-						filter.type = value as "include" | "exclude";
-						onShouldSave(settings);
-					});
-				});
-
-				filterSetting.addText((text) => {
-					text.setPlaceholder("Property name");
-					text.setValue(filter.property);
-					text.onChange((value) => {
-						filter.property = value;
-						onShouldSave(settings);
-					});
-
-					new FrontmatterKeySuggest(plugin.app, text.inputEl, {
-						shouldCloseIfNoSuggestions: true,
-					});
-				});
-
-				filterSetting.addText((text) => {
-					text.setPlaceholder("Property value/regex");
-					text.setValue(filter.value);
-					text.onChange((value) => {
-						filter.value = value;
-						onShouldSave(settings);
-						updateRegexStatusIcon(value);
-					});
-				});
-
-				filterSetting.addButton((button) => {
-					button.setIcon("trash");
-					button.onClick(() => {
-						settings.entityFilters?.splice(index, 1);
-						onShouldSave(settings);
-						rebuildFilters();
-					});
-				});
-			});
-		};
-
-		rebuildFilters();
-	}
-
-	static buildAdvancedSettings(
-		settingContainer: HTMLElement,
-		settings: FolderProviderUserSettings,
-		onShouldSave: (newSettings: FolderProviderUserSettings) => void,
-		plugin: Plugin
-	): void {
-		new Setting(settingContainer)
-			.setName("Create entities for values of note property")
-			.setDesc(
-				sanitizeHTMLToDom(
-					"Whether to also create entities for each value listed in the specified property of a note in the folder.<br><br>For example, add entities based on 'username' of a note for a person."
-				)
-			)
-			.addText((text) => {
-				text.setPlaceholder("Property name").setValue("");
-			});
-		new Setting(settingContainer)
-			.setName("Filter entities by matching property")
-			.setDesc(
-				sanitizeHTMLToDom(
-					"Filter entities based on the value of the specified property of the current note.<br><br>For example, only show entities that have the same 'project' property as the current note."
-				)
-			)
-			.addText((text) => {
-				text.setPlaceholder("Property name").setValue("");
-			});
+		buildFileFilterSettings(settingContainer, settings, onShouldSave, plugin.app, updateSource);
 	}
 }

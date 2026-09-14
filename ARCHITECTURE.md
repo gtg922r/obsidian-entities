@@ -95,18 +95,31 @@ This document explains the overall layout and flow of the **Entities** Obsidian 
 
 ### EntityFilters (`src/Providers/EntityFilters.ts`)
 
-Extracts the duplicated filter compilation and application logic used by both
-`FolderEntityProvider` and `DataviewEntityProvider`:
+Folder and Dataview select real `TFile` candidates before applying shared filters
+and expanding aliases. `fileSources.ts` follows actual folder children or filters
+the resolved Dataview files, retaining counts before alias expansion. Dataview
+converts the synchronous `pages(source)` iterable with `Array.from` once per
+source evaluation and ignores malformed/unresolved page neighbors.
 
-- `compileFilters(filters)` – Compiles `EntityFilter[]` into regex-ready
-  `CompiledFilter[]`, discarding invalid patterns.
-- `applyFiltersToFiles(files, filters, app)` – Filters `TFile[]` by frontmatter
-  properties using the metadata cache.
-- `applyFiltersToQueryResults(results, filters, app)` – Generic version for
-  Dataview query results (any `{ file: { path } }[]`).
+- `classifyFilter()` distinguishes inactive blank rows, active case-insensitive
+  regexes and invalid rows. `compileFilters()` retains a configuration error
+  instead of dropping an invalid constraint.
+- `applyCompiledFiltersToFiles()` uses AND across rows, ANY supported scalar list
+  member for include and NONE for exclude. It reads exact own frontmatter keys;
+  missing/null/unsupported values are absent, while false/zero/empty strings are
+  real values. Invalid configurations return no ordinary files.
+- `fileAliases.ts` uses public `parseFrontMatterAliases` and
+  `parseFrontMatterStringArray` against the real file's cached frontmatter.
+  Native aliases and one optional exact custom key are independent. Selector
+  defaults stay undefined for R1 compatibility; unsupported legacy selectors
+  suppress only custom aliases. R3 owns target/alias deduplication and linking.
+- `ui/fileProviderSettings.ts` shares the runtime classifier with the filter
+  editor and keeps whole-array R1 draft conflicts. Exact invalid source/path/regex
+  edits remain canonical; validation never claims a successful disk save.
+  Source diagnostics are synchronous with no polling or delayed count updates.
 
-All filters use AND logic. Include filters require a property match; exclude
-filters pass entities that lack the property.
+Ordinary-source/filter errors do not disable a provider or change its independent
+creation recipes. See [file provider semantics](docs/file-providers.md).
 
 ### Provider Settings Components (`src/ui/providerSettingsComponents.ts`)
 

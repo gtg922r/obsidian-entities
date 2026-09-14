@@ -144,8 +144,8 @@ test("two Folder and two Dataview configured instances all contribute distinct l
 		{ ...DataviewEntityProvider.getDefaultSettings(), providerInstanceId: "dv-b", query: "B" },
 	]);
 	r.folders.set("A", [file("A/Folder A.md")]); r.folders.set("B", [file("B/Folder B.md")]);
-	r.files.set("A.md", file("A.md")); r.files.set("B.md", file("B.md"));
-	r.integrations.dataview = { api: { pages: (query: string) => [{ file: { name: `Dataview ${query}`, path: `${query}.md`, aliases: [] } }] } };
+	r.files.set("Dataview A.md", file("Dataview A.md")); r.files.set("Dataview B.md", file("Dataview B.md"));
+	r.integrations.dataview = { api: { pages: (query: string) => [{ file: { name: `Dataview ${query}`, path: `Dataview ${query}.md`, aliases: [] } }] } };
 	expect(labels(r.suggestor.getSuggestions(context()))).toEqual(["Folder A", "Folder B", "Dataview A", "Dataview B"]);
 });
 
@@ -468,4 +468,18 @@ test("repeated load/unload lifetimes release event and registry listeners and ig
 		expect((r.registry as unknown as { changeListeners: Set<unknown> }).changeListeners.size).toBe(0);
 		expect(active.getSuggestions(context())).toEqual([]);
 	}
+});
+
+test.each([FolderEntityProvider, DataviewEntityProvider].map(Provider => [Provider.providerTypeID, Provider] as const))("%s metadata events refresh custom aliases and filters without reconstruction", async (_name, Provider) => {
+	const r = await runtime([{ ...Provider.getDefaultSettings(), providerInstanceId: "people", path: "People", shouldCreateEntitiesForAliases: false, propertyToCreateEntitiesFor: "ldap", entityFilters: [{ type: "include", property: "active", value: "^true$" }] }]);
+	const bob = file("People/Bob Hope.md"); r.files.set(bob.path, bob); r.folders.set("People", [bob]);
+	r.integrations.dataview = { api: { pages: () => [{ file: { path: bob.path } }] } };
+	r.metadata.set(bob.path, { frontmatter: { ldap: "old@", active: false } });
+	expect(labels(r.suggestor.getSuggestions(context()))).toEqual([]);
+	r.metadata.set(bob.path, { frontmatter: { ldap: "hopeb@", active: true } });
+	r.metadataCache.trigger("changed", bob);
+	expect(labels(r.suggestor.getSuggestions(context()))).toEqual(["Bob Hope", "hopeb@"]);
+	r.metadata.set(bob.path, { frontmatter: { ldap: "must-not-leak@", active: false } });
+	r.metadataCache.trigger("changed", bob);
+	expect(labels(r.suggestor.getSuggestions(context()))).toEqual([]);
 });
