@@ -102,6 +102,21 @@ test("late cleanup of an unmoved prior row cannot reclaim a fresh destination re
 	lifetime.dispose(); frame.remove();
 });
 
+test("late cleanup of an adopted prior row cannot reclaim the fresh current render", async () => {
+	const owner = new InputSuggestScope(); scopes.push(owner);
+	const oldRoot = document.createElement("div"); document.body.append(oldRoot);
+	const frame = document.createElement("iframe"); document.body.append(frame); const doc = frame.contentDocument!;
+	const rebuild = jest.fn(); const lifetime = new NativeSettingsLifetime(() => oldRoot, owner, rebuild);
+	const old = lifetime.render(oldRoot, () => {}); doc.body.append(doc.adoptNode(oldRoot));
+	const freshRoot = document.createElement("div"); document.body.append(freshRoot);
+	const fresh = lifetime.render(freshRoot, () => {});
+	old.scope.dispose(); freshRoot.append(document.createElement("span")); await tick();
+	await new Promise<void>(resolve => doc.defaultView!.setTimeout(resolve, 0));
+	const action = jest.fn(); fresh.scope.guard(action)();
+	expect(action).toHaveBeenCalledTimes(1); expect(rebuild).not.toHaveBeenCalled();
+	lifetime.dispose(); frame.remove();
+});
+
 // Every meaningful field is a real native definition; generation/search create no render sessions or writes.
 test.each(types.map(type => [type.providerTypeID, type] as const))("%s definitions are stable, searchable and free of render work", async (_type, Provider) => {
 	const h = await harness(Provider, { entityFilters: [filter("yes")], entityCreationTemplates: recipes });

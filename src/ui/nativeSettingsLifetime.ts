@@ -54,13 +54,15 @@ export class NativeSettingsLifetime {
 	/** Each callback retains this scope; no old control resolves a newly rendered session. */
 	render(root: HTMLElement, finish: (phase: CompositionFinish) => void): { scope: InputSuggestScope; composing: () => boolean } {
 		this.hidden = false;
-		this.adoptionRoot = undefined;
 		this.moving = false;
 		this.cancelScheduled();
+		// A fresh native render supersedes old adopted scopes before their late cleanup can reclaim it.
+		for (const render of this.renders) if (render.root.ownerDocument !== render.attachedDocument) render.scope.dispose();
 		this.watch(root.ownerDocument);
 		const scope = new InputSuggestScope(root, this.parent);
 		const render: Render = { root, attachedDocument: root.ownerDocument, scope, finish, epoch: 0 };
 		this.renders.add(render);
+		this.adoptionRoot = undefined;
 		const start = (event: Event) => { render.composing = event.target; render.interaction = false; render.epoch++; render.finish?.("start"); };
 		const end = (event: Event) => {
 			// compositionend can precede the final input, even in a later event turn.
