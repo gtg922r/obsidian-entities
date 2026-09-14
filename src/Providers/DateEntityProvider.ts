@@ -15,7 +15,7 @@ import { EntitiesNotice } from "src/userComponents";
 import { RefreshBehavior } from "./EntityProvider";
 import { IconPickerModal } from "src/userComponents";
 import { setValidationStatus } from "src/ui/validationStatus";
-import { capturePeriodicRoute, lookupPeriodicFile, PeriodicRoute, PeriodicRouteSnapshot, periodicLinkpath } from "../periodicNotes";
+import { capturePeriodicRoute, getPeriodicLookupDate, lookupPeriodicFile, PeriodicRoute, PeriodicRouteSnapshot, periodicLinkpath } from "../periodicNotes";
 import { classifyExplicitWeek } from "./explicitWeek";
 
 const dateProviderTypeID = "nlDates";
@@ -194,7 +194,10 @@ export class DateEntityProvider extends EntityProvider<DatesProviderUserSettings
 			nlpPlugin?.settings?.autocompleteTriggerPhrase === "@" &&
 			nlpPlugin?.settings?.isAutosuggestEnabled === true;
 		const granularities: PeriodicNotesGranularity[] = settings.includeWeekSuggestions ? ["day", "week"] : ["day"];
-		const unavailableGranularity = granularities.find(granularity => capturePeriodicRoute(plugin.app, granularity).kind === "unavailable");
+		const routes = granularities.map(granularity => ({ granularity, route: capturePeriodicRoute(plugin.app, granularity) }));
+		const unavailableGranularity = routes.find(({ route }) => route.kind === "unavailable")?.granularity;
+		const now = moment();
+		const limitedRoute = routes.find(({ route }) => route.kind === "ready" && !getPeriodicLookupDate(route.snapshot.format, now))?.route;
 
 		settingContainer.addExtraButton((button) => {
 			if (!pluginIsConfigured) {
@@ -222,6 +225,9 @@ export class DateEntityProvider extends EntityProvider<DatesProviderUserSettings
 				return;
 			} else if (unavailableGranularity) {
 				setValidationStatus(button, "package-x", `Periodic Notes ${unavailableGranularity} calendar unavailable; check its active configuration`, "error");
+			} else if (limitedRoute?.kind === "ready") {
+				const { granularity, format } = limitedRoute.snapshot;
+				setValidationStatus(button, "alert-triangle", `Periodic Notes ${granularity} format cannot resolve ${now.format(format)} without an existing note at its configured path. Check the format in Periodic Notes.`, "warning");
 			} else {
 				setValidationStatus(
 					button,

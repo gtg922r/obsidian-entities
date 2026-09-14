@@ -1,6 +1,6 @@
 import { actionContext, getAction } from "../suggestionTestHelpers";
 import moment = require("moment");
-import { Plugin, TFile, TFolder } from "obsidian";
+import { ExtraButtonComponent, Plugin, Setting, TFile, TFolder } from "obsidian";
 import { DateEntityProvider } from "../../src/Providers/DateEntityProvider";
 import { EntitiesNotice } from "../../src/userComponents";
 
@@ -545,6 +545,121 @@ test("re-resolves NLP and Periodic Notes capabilities on each evaluation", () =>
 	expect(nlp.parseDate).not.toHaveBeenCalled(); expect(replacementNlp.parseDate).toHaveBeenCalled();
 	delete integrations["nldates-obsidian"];
 	expect(provider.getEntityList("today")).toEqual([]);
+});
+
+describe("periodic date summary format warnings", () => {
+	const originalMomentNow = moment.now;
+	const originalLocale = moment.locale();
+
+	beforeEach(() => {
+		freezeMomentNow("2021-01-01");
+		moment.locale("en");
+	});
+
+	afterEach(() => {
+		moment.now = originalMomentNow;
+		moment.locale(originalLocale);
+		jest.restoreAllMocks();
+		jest.clearAllMocks();
+	});
+
+	function fixture(shouldCreateIfNotExists = false, includeWeekSuggestions = true) {
+		const periodic = {
+			calendarSetManager: createCalendarManager(["day", "week"], "YYYY-[W]ww"),
+			getPeriodicNote: jest.fn((): TFile | null => null),
+			createPeriodicNote: jest.fn(),
+		};
+		const nlp = createNlDatesPlugin();
+		const integrations: Record<string, unknown> = { "nldates-obsidian": nlp, "periodic-notes": periodic };
+		const plugin = createPluginWithPlugins(integrations);
+		const files = new Map<string, TFile>();
+		const getFile = jest.fn((path: string) => files.get(path) ?? null);
+		Object.assign(plugin.app.vault, { getAbstractFileByPath: getFile });
+		const settings = { ...DateEntityProvider.getDefaultSettings(), shouldCreateIfNotExists, includeWeekSuggestions };
+		const button = {
+			setIcon: jest.fn(), setTooltip: jest.fn(), onClick: jest.fn(),
+			extraSettingsEl: { removeClass: jest.fn(), addClass: jest.fn() },
+		};
+		const setting = { addExtraButton: (callback: (value: ExtraButtonComponent) => void) => callback(button as unknown as ExtraButtonComponent) };
+		const render = () => {
+			DateEntityProvider.buildSummarySetting(setting as unknown as Setting, settings, jest.fn(), plugin);
+			expect(getFile).not.toHaveBeenCalled();
+			expect(periodic.getPeriodicNote).not.toHaveBeenCalled();
+			expect(periodic.createPeriodicNote).not.toHaveBeenCalled();
+			expect(nlp.parseDate).not.toHaveBeenCalled();
+		};
+		return { periodic, nlp, integrations, plugin, files, settings, button, render };
+	}
+
+	test.each(["en", "en-gb"].flatMap(locale => [false, true].flatMap(create => [false, true].map(exact => [locale, create, exact] as const))))(
+		"warns for %s with creation=%s and exact file=%s while preserving existing-file eligibility", (locale, create, exact) => {
+			moment.locale(locale);
+			const h = fixture(create);
+			const title = locale === "en" ? "2021-W01" : "2021-W53";
+			const file = Object.assign(new TFile(), { path: `Periodic/Weeks/${title}.md` });
+			if (exact) h.files.set(file.path, file);
+			h.render();
+			expect(h.button.setIcon).toHaveBeenCalledWith("alert-triangle");
+			expect(h.button.extraSettingsEl.addClass).toHaveBeenCalledWith("entities-validation-status-warning");
+			expect(h.button.setTooltip).toHaveBeenCalledWith(`Periodic Notes week format cannot resolve ${title} without an existing note at its configured path. Check the format in Periodic Notes.`);
+			const row = new DateEntityProvider(h.plugin, { ...h.settings, providerInstanceId: "summary-existing" })
+				.getEntityList("this week").find(item => item.suggestionText === "this week" && item.icon === "calendar-range");
+			expect(row?.target).toEqual(exact ? { kind: "file", file, alias: "this week" } : undefined);
+			expect(h.periodic.createPeriodicNote).not.toHaveBeenCalled();
+		}
+	);
+
+	test.each(["en", "en-gb"].flatMap(locale => ["GGGG-[W]WW", "gggg-[W]ww"].map(format => [locale, format] as const)))(
+		"keeps valid daily and %s %s weekly formats healthy", (locale, format) => {
+			moment.locale(locale);
+			const h = fixture();
+			h.periodic.calendarSetManager.state.configs.week.format = format;
+			h.render();
+			expect(h.button.setIcon).toHaveBeenCalledWith("package-check");
+			expect(h.button.extraSettingsEl.addClass).not.toHaveBeenCalled();
+			for (const granularity of ["day", "week"]) {
+				expect(h.periodic.calendarSetManager.getActiveConfig.mock.calls.filter(([value]) => value === granularity)).toHaveLength(1);
+			}
+		}
+	);
+
+	test.each(["unused", "inactive", "absent"])("does not warn for an %s weekly route", state => {
+		const h = fixture(false, state !== "unused");
+		if (state === "inactive") h.periodic.calendarSetManager.state.configs.week.enabled = false;
+		if (state === "absent") delete h.integrations["periodic-notes"];
+		h.render();
+		expect(h.button.setIcon).toHaveBeenCalledWith("package-check");
+		if (state === "unused") expect(h.periodic.calendarSetManager.getActiveConfig).not.toHaveBeenCalledWith("week");
+	});
+
+	test("names a limited daily format without requiring week suggestions", () => {
+		const h = fixture(false, false);
+		h.periodic.calendarSetManager.state.configs.day.format = "[constant]";
+		h.render();
+		expect(h.button.setTooltip).toHaveBeenCalledWith("Periodic Notes day format cannot resolve constant without an existing note at its configured path. Check the format in Periodic Notes.");
+		expect(h.button.extraSettingsEl.addClass).toHaveBeenCalledWith("entities-validation-status-warning");
+	});
+
+	test.each([
+		["missing NLP", "NLDates plugin not found"],
+		["conflict", "NLDates plugin conflicts with autocomplete!"],
+		["capability", "Periodic Notes day calendar unavailable; check its active configuration"],
+	])("preserves %s precedence over the format warning", (problem, tooltip) => {
+		const h = fixture();
+		if (problem === "missing NLP") delete h.integrations["nldates-obsidian"];
+		if (problem === "conflict") h.nlp.settings.isAutosuggestEnabled = true;
+		if (problem === "capability") Reflect.set(h.periodic.calendarSetManager.state.configs.day, "folder", null);
+		h.render();
+		expect(h.button.setTooltip).toHaveBeenCalledWith(tooltip);
+		expect(h.button.extraSettingsEl.addClass).toHaveBeenCalledWith("entities-validation-status-error");
+	});
+
+	test("checks only the current title, not nearby week boundaries", () => {
+		freezeMomentNow("2021-01-03");
+		const h = fixture();
+		h.render();
+		expect(h.button.setIcon).toHaveBeenCalledWith("package-check");
+	});
 });
 
 describe("current periodic date route regressions", () => {

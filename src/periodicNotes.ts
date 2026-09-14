@@ -73,6 +73,13 @@ export function periodicLinkpath(route: PeriodicRouteSnapshot, date: moment.Mome
 	return path.endsWith(".md") ? path.slice(0, -3) : path;
 }
 
+/** Derive a strict format identity without mutating the supplied date or consulting native state. */
+export function getPeriodicLookupDate(format: string, date: moment.Moment): moment.Moment | null {
+	const title = date.format(format);
+	const representative = moment(title, format, date.locale(), true);
+	return representative.isValid() && representative.format(format) === title ? representative : null;
+}
+
 /** Prefer the configured file, then native mappings using the format's date identity. Never mutate the creation date. */
 export function lookupPeriodicFile(app: App, route: PeriodicRouteSnapshot, date: moment.Moment): TFile | null {
 	const canonical = app.vault.getAbstractFileByPath(`${periodicLinkpath(route, date)}.md`);
@@ -80,9 +87,8 @@ export function lookupPeriodicFile(app: App, route: PeriodicRouteSnapshot, date:
 		if (!(canonical instanceof TFile)) throw new Error("A nonfile occupies the configured periodic note path.");
 		return requireLivePeriodicFile(app, canonical);
 	}
-	const title = date.format(route.format);
-	const representative = moment(title, route.format, date.locale(), true);
-	if (!representative.isValid() || representative.format(route.format) !== title) {
+	const representative = getPeriodicLookupDate(route.format, date);
+	if (!representative) {
 		throw new Error("The periodic format cannot resolve a date for lookup. Use an existing configured file or update the format.");
 	}
 	let existing: TFile | null;

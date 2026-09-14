@@ -33,6 +33,8 @@ template. A folder or other nonfile occupying the configured file path is a
 conflict. If the formatted name cannot be parsed back without changing it, only
 an exact existing file can be used; missing-note suggestions and creation are
 unavailable for that format.
+The settings status warns when today's configured name cannot be parsed back.
+This does not disable exact existing files or validate every possible query date.
 
 Without Periodic Notes, or with a recognized inactive granularity, the provider
 keeps its Natural Language Dates daily / ISO weekly unresolved-link fallback.
