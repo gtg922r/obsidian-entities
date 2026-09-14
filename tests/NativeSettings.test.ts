@@ -9,7 +9,7 @@ import { HelperEntityProvider } from "../src/Providers/HelperActionsProvider";
 import { DateEntityProvider } from "../src/Providers/DateEntityProvider";
 import { CharacterProvider } from "../src/Providers/CharacterProvider";
 import { MetadataMenuProvider } from "../src/Providers/MetadataMenuProvider";
-import { InputSuggestScope } from "../src/ui/inputSuggestLifecycle";
+import { InputSuggestScope, inputSuggestScope } from "../src/ui/inputSuggestLifecycle";
 import { NativeSettingsLifetime } from "../src/ui/nativeSettingsLifetime";
 import { FrontmatterKeySuggest } from "../src/ui/FrontmatterKeySuggest";
 import { EntitiesNotice, IconPickerModal } from "../src/userComponents";
@@ -681,4 +681,28 @@ test("selection restoration accepts native focus on the replacement field withou
 	const spy = jest.spyOn(native, "update").mockImplementation(function (this: unknown) { update.call(this); control(this, "Folder path").inputEl.focus(); });
 	try { h.tab.update(); const next = control(h.tab, "Folder path").inputEl; expect(next).not.toBe(old); expect(next.selectionStart).toBe(1); expect(next.selectionEnd).toBe(4); }
 	finally { spy.mockRestore(); }
+});
+
+
+test("Date warning callbacks belong to connected buttons without accumulating across status refreshes", async () => {
+	const h = await harness(DateEntityProvider, { includeWeekSuggestions: false });
+	const settings = { autocompleteTriggerPhrase: "@", isAutosuggestEnabled: true };
+	h.integrations["nldates-obsidian"] = { parseDate: jest.fn(), settings }; h.open();
+	const owner = inputSuggestScope(row(h.tab, "Date availability").settingEl)!;
+	const registrations = owner as unknown as { cleanups: Set<() => void> };
+	const initial = registrations.cleanups.size;
+	const old = control(h.tab, "Date availability", "extra"); old.buttonEl.click();
+	expect(EntitiesNotice).toHaveBeenCalledTimes(1);
+	settings.autocompleteTriggerPhrase = "#"; control(h.tab, "Create non-existent dates", "toggle").change(false);
+	expect(control(h.tab, "Date availability", "extra").tooltip).toBe("NLDates plugin OK");
+	expect(old.buttonEl.isConnected).toBe(false); old.buttonEl.click(); expect(EntitiesNotice).toHaveBeenCalledTimes(1);
+	for (let i = 0; i < 40; i++) {
+		settings.autocompleteTriggerPhrase = i % 2 ? "@" : "#";
+		control(h.tab, "Create non-existent dates", "toggle").change(Boolean(i % 2));
+	}
+	expect(inputSuggestScope(row(h.tab, "Date availability").settingEl)).toBe(owner);
+	expect(registrations.cleanups.size).toBeLessThanOrEqual(initial);
+	const current = control(h.tab, "Date availability", "extra"); current.buttonEl.click();
+	expect(EntitiesNotice).toHaveBeenCalledTimes(2);
+	h.tab.hide(); current.buttonEl.click(); old.buttonEl.click(); expect(EntitiesNotice).toHaveBeenCalledTimes(2);
 });

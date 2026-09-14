@@ -217,13 +217,15 @@ export class DateEntityProvider extends EntityProvider<DatesProviderUserSettings
 					"NLDates plugin conflicts with autocomplete!",
 					"error"
 				);
-				button.onClick(inputSuggestScope(settingContainer.settingEl)?.guard(() => {
+				const owner = inputSuggestScope(settingContainer.settingEl);
+				button.onClick(() => {
+					if (!owner?.active || !button.extraSettingsEl.isConnected) return;
 					new EntitiesNotice(
 						"NLDates plugin conflicts with autocomplete. " +
 							"Disable autocomplete in NLDates settings, or change its trigger phrase.",
 						"alert-triangle"
 					);
-				}) ?? (() => {}));
+				});
 				return;
 			} else if (unavailable?.status.kind === "unavailable") {
 				const { status, granularity } = unavailable;
