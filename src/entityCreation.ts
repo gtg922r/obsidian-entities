@@ -1,6 +1,8 @@
 import { App, TFile, TFolder, normalizePath, moment } from "obsidian";
 import { AppWithPlugins, entityFromTemplateSettings, PeriodicNotesGranularity, TemplaterPlugin } from "./entities.types";
-import { capturePeriodicRoute, lookupPeriodicFile, matchesPeriodicRoute, PeriodicRouteSnapshot } from "./periodicNotes";
+import { lookupPeriodicFile } from "./periodicNotes";
+import { captureDateRoute, DateRouteSnapshot, matchesDateRoute } from "./dateNotes";
+import { invokeCoreDailyNote, recheckCoreDailyFile } from "./coreDailyNotes";
 
 /** Confirmed vault outcomes, independent of prompts, editors and link formatting. */
 export type CreationResult =
@@ -102,7 +104,7 @@ export async function createNewNoteFromTemplate(app: App, request: TemplateCreat
 
 /** A retained Date action supplies its route and the coordinator's pre-start guard. */
 export interface PeriodicCreationOptions {
-	expectedRoute?: PeriodicRouteSnapshot;
+	expectedRoute?: DateRouteSnapshot;
 	canStartWork?: () => boolean;
 }
 
@@ -113,19 +115,21 @@ export async function createOrReusePeriodicNote(
 	try {
 		if (options.canStartWork && !options.canStartWork()) return { status: "cancelled" };
 		if (!moment.isMoment(date) || !date.isValid()) throw new Error("The periodic date is invalid.");
-		const current = capturePeriodicRoute(app, granularity);
-		if (current.kind !== "ready" || (options.expectedRoute && !matchesPeriodicRoute(options.expectedRoute, current))) {
-			throw new Error("Periodic Notes calendar changed or is unavailable. Refresh the suggestions and retry.");
+		const current = captureDateRoute(app, granularity);
+		const expected = options.expectedRoute;
+		if (current.kind !== "ready" || (expected && !matchesDateRoute(expected, current))) {
+			throw new Error("The date note destination changed or is unavailable. Refresh the suggestions and retry.");
 		}
 		const route = current.snapshot;
-		const existing = lookupPeriodicFile(app, route, date);
-		if (!matchesPeriodicRoute(route, capturePeriodicRoute(app, granularity))) {
-			throw new Error("Periodic Notes calendar changed during lookup. Refresh the suggestions and retry.");
+		const existing = route.engine === "core-daily" ? recheckCoreDailyFile(app, route, date) : lookupPeriodicFile(app, route, date);
+		if (!matchesDateRoute(route, captureDateRoute(app, granularity))) {
+			throw new Error("The date note destination changed during lookup. Refresh the suggestions and retry.");
 		}
 		if (existing != null) return { status: "existing", file: requireLiveFile(app, existing) };
 		if (!route.create) throw new Error("Periodic Notes creation is unavailable.");
 		if (options.canStartWork && !options.canStartWork()) return { status: "cancelled" };
-		return { status: "created", file: requireLiveFile(app, await route.create.call(route.plugin, granularity, date.clone())) };
+		return { status: "created", file: requireLiveFile(app, await (route.engine === "core-daily" ?
+			invokeCoreDailyNote(route, date) : route.create.call(route.plugin, granularity, date.clone()))) };
 	} catch (error) {
 		return creationFailure(error);
 	}
