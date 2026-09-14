@@ -2,13 +2,15 @@ import { InputSuggestScope, runInputCleanups } from "./inputSuggestLifecycle";
 
 export type CompositionFinish = "start" | "capture" | "commit" | "input";
 
-type Render = { root: HTMLElement; scope: InputSuggestScope; composing?: EventTarget | null; finish?: (phase: CompositionFinish) => void; interaction?: boolean; epoch: number };
+type Render = { root: HTMLElement; attachedDocument: Document; scope: InputSuggestScope; composing?: EventTarget | null; finish?: (phase: CompositionFinish) => void; interaction?: boolean; epoch: number };
 
 /** Owns public native row renders, document adoption, and deferred composition rebuilds. */
 export class NativeSettingsLifetime {
 	private renders = new Set<Render>();
 	private observer?: MutationObserver;
 	private ownerDocument?: Document;
+	private lastDocument?: Document;
+	private adoptionRoot?: HTMLElement;
 	private removeWindow?: () => void;
 	private pending = false;
 	private settledActions = new Set<{ scope: InputSuggestScope; run: () => void; cancel: () => void }>();
@@ -26,7 +28,7 @@ export class NativeSettingsLifetime {
 
 	/** Registration may update definitions before any rows exist. */
 	update(): void {
-		if (this.disposed || !this.parent.active || this.closedDocuments.has(this.root().ownerDocument)) return;
+		if (this.disposed || !this.parent.active || this.closedDocuments.has(this.ownerDocument ?? this.lastDocument ?? this.root().ownerDocument)) return;
 		if ([...this.renders].some(render => render.composing)) { this.pending = true; return; }
 		this.pending = false;
 		const doc = this.ownerDocument;
@@ -52,9 +54,12 @@ export class NativeSettingsLifetime {
 	/** Each callback retains this scope; no old control resolves a newly rendered session. */
 	render(root: HTMLElement, finish: (phase: CompositionFinish) => void): { scope: InputSuggestScope; composing: () => boolean } {
 		this.hidden = false;
+		this.adoptionRoot = undefined;
+		this.moving = false;
+		this.cancelScheduled();
 		this.watch(root.ownerDocument);
 		const scope = new InputSuggestScope(root, this.parent);
-		const render: Render = { root, scope, finish, epoch: 0 };
+		const render: Render = { root, attachedDocument: root.ownerDocument, scope, finish, epoch: 0 };
 		this.renders.add(render);
 		const start = (event: Event) => { render.composing = event.target; render.interaction = false; render.epoch++; render.finish?.("start"); };
 		const end = (event: Event) => {
@@ -81,6 +86,8 @@ export class NativeSettingsLifetime {
 		root.addEventListener("click", laterInteraction);
 		root.addEventListener("keyup", keyup);
 		scope.own(() => {
+			// R6a may retire an adopted input before the old document's observer runs.
+			if (!this.hidden && root.ownerDocument !== render.attachedDocument) this.adoptionRoot = root;
 			if (render.composing) { render.finish?.("capture"); this.pending = false; this.cancelScheduled(); this.cancelActions(); }
 			render.composing = undefined;
 			render.finish = undefined;
@@ -149,10 +156,11 @@ export class NativeSettingsLifetime {
 		this.observer?.disconnect();
 		this.removeWindow?.();
 		this.ownerDocument = doc;
+		this.lastDocument = doc;
 		const win = doc.defaultView;
 		if (!win) return;
 		const pagehide = () => {
-			if (this.root().ownerDocument !== doc) this.checkDocument();
+			if ([...this.renders].some(render => render.root.ownerDocument !== doc) || (this.adoptionRoot && this.adoptionRoot.ownerDocument !== doc)) this.checkDocument();
 			else { this.closedDocuments.add(doc); this.hide(); }
 		};
 		win.addEventListener("pagehide", pagehide);
@@ -165,23 +173,25 @@ export class NativeSettingsLifetime {
 
 	private checkDocument(): void {
 		if (this.hidden || this.disposed) return;
-		const root = this.root();
-		if (root.ownerDocument !== this.ownerDocument) {
+		const adopted = [...this.renders].find(render => render.root.ownerDocument !== render.attachedDocument)?.root ?? this.adoptionRoot;
+		if (adopted && adopted.ownerDocument !== this.ownerDocument) {
 			this.moving = true;
+			this.adoptionRoot = adopted;
 			this.retireRenders();
-			this.watch(root.ownerDocument);
+			this.watch(adopted.ownerDocument);
 		}
 		if (this.moving) {
-			const win = root.ownerDocument.defaultView;
-			if (root.isConnected && win && this.scheduled === undefined) this.scheduled = { window: win, timer: win.setTimeout(() => {
+			const root = this.adoptionRoot;
+			const win = root?.ownerDocument.defaultView;
+			if (root?.isConnected && win && this.scheduled === undefined) this.scheduled = { window: win, timer: win.setTimeout(() => {
 				this.scheduled = undefined;
 				if (this.hidden || this.disposed || !root.isConnected) return;
 				this.moving = false;
+				this.adoptionRoot = undefined;
 				this.update();
 			}, 0) };
 			return;
 		}
-		if (!root.isConnected) { this.hide(); return; }
 		for (const render of this.renders) {
 			const composing = render.composing as Node | undefined;
 			if (!render.root.isConnected || (composing && !render.root.contains(composing))) {
@@ -189,6 +199,8 @@ export class NativeSettingsLifetime {
 				render.scope.dispose();
 			}
 		}
+		// Native provider pages need not be descendants of the original tab container.
+		if (!this.renders.size) this.hide();
 	}
 
 	private cancelScheduled(): void {
@@ -205,6 +217,7 @@ export class NativeSettingsLifetime {
 		this.hidden = true;
 		this.pending = false;
 		this.moving = false;
+		this.adoptionRoot = undefined;
 		this.cancelScheduled();
 		this.cancelActions();
 		this.retireRenders();
@@ -213,5 +226,5 @@ export class NativeSettingsLifetime {
 		this.ownerDocument = undefined;
 	}
 
-	dispose(): void { this.disposed = true; this.hide(); }
+	dispose(): void { this.disposed = true; this.hide(); this.lastDocument = undefined; }
 }

@@ -10,6 +10,7 @@ import { DateEntityProvider } from "../src/Providers/DateEntityProvider";
 import { CharacterProvider } from "../src/Providers/CharacterProvider";
 import { MetadataMenuProvider } from "../src/Providers/MetadataMenuProvider";
 import { InputSuggestScope } from "../src/ui/inputSuggestLifecycle";
+import { NativeSettingsLifetime } from "../src/ui/nativeSettingsLifetime";
 import { EntitiesNotice, IconPickerModal } from "../src/userComponents";
 import { control, nativeTab, pageNames, row } from "./nativeSettingsHostMock";
 import { installNativeDom, modals } from "./nativeSettingsTestSupport";
@@ -70,6 +71,34 @@ const input = (element: HTMLInputElement, value: string, composing = false) => {
 	element.value = value; element.dispatchEvent(new InputEvent("input", { bubbles: true, isComposing: composing }));
 };
 async function tick() { await Promise.resolve(); await Promise.resolve(); }
+
+test("provider page rows remain editable outside the detached top-level tab container", async () => {
+	const h = await harness(); nativeTab(h.tab).show(); h.open(); await tick();
+	expect(h.tab.containerEl.isConnected).toBe(false);
+	expect(control(h.tab, "Folder path").inputEl.isConnected).toBe(true);
+	input(control(h.tab, "Folder path").inputEl, "native page edit");
+	expect(h.store.settings.providerSettings[0]).toMatchObject({ path: "native page edit" });
+	row(h.tab, "Remove provider").settingEl.remove(); await tick();
+	input(control(h.tab, "Folder path").inputEl, "connected sibling edit");
+	expect(h.store.settings.providerSettings[0]).toMatchObject({ path: "connected sibling edit" });
+	h.tab.hide(); h.open(); await tick();
+	input(control(h.tab, "Folder path").inputEl, "reopened page edit");
+	expect(h.store.settings.providerSettings[0]).toMatchObject({ path: "reopened page edit" });
+});
+
+test("late cleanup of an unmoved prior row cannot reclaim a fresh destination render", async () => {
+	jest.useFakeTimers(); const owner = new InputSuggestScope(); scopes.push(owner);
+	const oldRoot = document.createElement("div"); document.body.append(oldRoot);
+	const frame = document.createElement("iframe"); document.body.append(frame);
+	const doc = frame.contentDocument!; const newRoot = doc.createElement("div"); doc.body.append(newRoot);
+	const rebuild = jest.fn(); const lifetime = new NativeSettingsLifetime(() => oldRoot, owner, rebuild);
+	const old = lifetime.render(oldRoot, () => {}); const fresh = lifetime.render(newRoot, () => {});
+	old.scope.dispose(); newRoot.append(doc.createElement("span")); await tick();
+	await new Promise<void>(resolve => doc.defaultView!.setTimeout(resolve, 0)); jest.runOnlyPendingTimers();
+	const action = jest.fn(); fresh.scope.guard(action)();
+	expect(action).toHaveBeenCalledTimes(1); expect(rebuild).not.toHaveBeenCalled();
+	lifetime.dispose(); frame.remove();
+});
 
 // Every meaningful field is a real native definition; generation/search create no render sessions or writes.
 test.each(types.map(type => [type.providerTypeID, type] as const))("%s definitions are stable, searchable and free of render work", async (_type, Provider) => {
@@ -235,7 +264,7 @@ test("Folder source counts react to recursion and filter edits without alias exp
 
 test.each([
 	[FolderEntityProvider, "Icon"], [DataviewEntityProvider, "Icon"], [DateEntityProvider, "Icon"],
-	[MetadataMenuProvider, "Icon"], [HelperEntityProvider, "Checkbox icon"], [HelperEntityProvider, "Callout icon"],
+	[HelperEntityProvider, "Checkbox icon"], [HelperEntityProvider, "Callout icon"],
 ] as const)("%s %s owns picker opening, success, refresh cancellation and stale settlement", async (Provider, name) => {
 	const h = await harness(Provider); h.open();
 	const opener = control(h.tab, name, "button");
@@ -327,11 +356,13 @@ test("document adoption without native rerender and move-back create fresh input
 	try {
 		const old = control(h.tab, "Folder path"); old.inputEl.focus();
 		h.store.updateProvider("a", { path: "canonical" } as never); old.change("exact rejected");
-		doc.body.append(doc.adoptNode(h.tab.containerEl)); await tick(); await new Promise<void>(resolve => doc.defaultView!.setTimeout(resolve, 0)); jest.runOnlyPendingTimers();
+		doc.body.append(doc.adoptNode(nativeTab(h.tab).activeContainerEl));
+		old.change("retired before observer");
+		await tick(); await new Promise<void>(resolve => doc.defaultView!.setTimeout(resolve, 0)); jest.runOnlyPendingTimers();
 		const moved = control(h.tab, "Folder path"); expect(moved.inputEl.ownerDocument).toBe(doc); expect(moved.inputEl).not.toBe(old.inputEl);
 		expect(moved.inputEl.value).toBe("exact rejected"); old.change("retired");
 		moved.inputEl.value = "Pe"; moved.inputEl.focus(); expect(suggestionRows(moved.inputEl).length).toBeGreaterThan(0);
-		document.body.append(document.adoptNode(h.tab.containerEl)); await tick(); jest.runOnlyPendingTimers();
+		document.body.append(document.adoptNode(nativeTab(h.tab).activeContainerEl)); await tick(); jest.runOnlyPendingTimers();
 		const returned = control(h.tab, "Folder path"); expect(returned.inputEl.ownerDocument).toBe(document); expect(returned.inputEl).not.toBe(moved.inputEl);
 		expect(returned.inputEl.value).toBe("exact rejected");
 		expect(listeners.filter(listener => listener.type === "pagehide")).toHaveLength(0);
@@ -343,7 +374,7 @@ test("moved window destruction closes owned picker and retires callbacks without
 	jest.useFakeTimers(); const h = await harness(); h.open();
 	const frame = document.createElement("iframe"); document.body.append(frame); const doc = frame.contentDocument!; const restoreOther = installNativeDom(doc);
 	try {
-		doc.body.append(doc.adoptNode(h.tab.containerEl)); await tick(); await new Promise<void>(resolve => doc.defaultView!.setTimeout(resolve, 0)); jest.runOnlyPendingTimers();
+		doc.body.append(doc.adoptNode(nativeTab(h.tab).activeContainerEl)); await tick(); await new Promise<void>(resolve => doc.defaultView!.setTimeout(resolve, 0)); jest.runOnlyPendingTimers();
 		(h.app as unknown as { activeDocument: Document }).activeDocument = doc;
 		const stale = control(h.tab, "Folder path"); const pending = control(h.tab, "Icon", "button").click() as Promise<void>;
 		const picker = modals.at(-1)! as unknown as IconPickerModal;
@@ -525,6 +556,28 @@ test("unavailable provider data and non-editable enabled/generic-icon values are
 	const unavailable = h.store.addProvider({ providerTypeID: "unknown-provider", enabled: false, icon: "retained" })!;
 	h.open(h.tab, 2); expect([...nativeTab(h.tab).nativeRows.values()].map(row => row.setting.name)).toEqual(["Provider unavailable"]);
 	expect(h.store.settings.providerSettings[2]).toEqual(unavailable);
+});
+
+test("Metadata Menu's unused provider icon is preserved without an ineffective control", async () => {
+	const h = await harness(MetadataMenuProvider, { icon: "stored unused icon" }); h.open();
+	expect(names(h.tab.getSettingDefinitions())).not.toContain("Icon");
+	expect(h.store.settings.providerSettings[0].icon).toBe("stored unused icon");
+	expect(h.write).not.toHaveBeenCalled();
+});
+
+test("icon searches release removed results and only the current result can settle", async () => {
+	const h = await harness(); h.open(); const pending = control(h.tab, "Icon", "button").click() as Promise<void>;
+	const picker = modals.at(-1)! as unknown as IconPickerModal;
+	const state = picker as unknown as { renderScope: { cleanups: Set<() => void> } };
+	const before = state.renderScope.cleanups.size;
+	const stale = picker.modalEl.querySelector<HTMLElement>('[title="box"]')!;
+	const search = picker.modalEl.querySelector<HTMLInputElement>("input")!;
+	for (let i = 0; i < 40; i++) input(search, i % 2 ? "" : "star");
+	expect(state.renderScope.cleanups.size).toBeLessThanOrEqual(before + 1);
+	stale.click(); expect(picker.modalEl.isConnected).toBe(true);
+	picker.modalEl.querySelector<HTMLElement>('[title="star"]')!.click(); await pending;
+	expect(h.store.settings.providerSettings[0].icon).toBe("star");
+	expect(state.renderScope.cleanups.size).toBe(0);
 });
 
 test("composition cancellation preserves a raw unsupported alias selector", async () => {

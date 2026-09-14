@@ -56,6 +56,8 @@ export class NativeSetting {
 /** A test controller with the floor's public Setting reuse and cleanup boundaries. */
 export class NativeTab {
 	containerEl = document.createElement("div");
+	private pageContainerEl?: HTMLElement;
+	get activeContainerEl(): HTMLElement { return this.pageContainerEl ?? this.containerEl; }
 	settingItems: SettingDefinitionItem[] = [];
 	nativeRows = new Map<string, { setting: NativeSetting; cleanup?: () => void }>();
 	page: string[] = [];
@@ -67,12 +69,18 @@ export class NativeTab {
 	setControlValue(_key: string, _value: unknown): void { throw new Error("Unexpected inherited persistence"); }
 	update() { this.updates++; this.settingItems = this.getSettingDefinitions(); if (this.shown) this.render(); }
 	show(page: string[] = []) {
+		const doc = this.activeContainerEl.ownerDocument;
 		this.clearRows(); this.page = page; this.shown = true;
-		if (!this.containerEl.isConnected) document.body.append(this.containerEl);
+		this.pageContainerEl?.remove();
+		if (page.length) {
+			this.containerEl.remove();
+			this.pageContainerEl = doc.createElement("div");
+		} else this.pageContainerEl = undefined;
+		if (!this.activeContainerEl.isConnected) doc.body.append(this.activeContainerEl);
 		this.update();
 	}
 	hide() { this.shown = false; this.clearRows(); }
-	private clearRows() { for (const row of this.nativeRows.values()) row.cleanup?.(); this.nativeRows.clear(); this.containerEl.replaceChildren(); }
+	private clearRows() { for (const row of this.nativeRows.values()) row.cleanup?.(); this.nativeRows.clear(); this.activeContainerEl.replaceChildren(); }
 	refreshDomState() {}
 	private render() {
 		let items = this.settingItems;
@@ -87,7 +95,7 @@ export class NativeTab {
 				const key = `${group}/${item.name}`;
 				remaining.delete(key);
 				let row = this.nativeRows.get(key);
-				if (!row) { row = { setting: new NativeSetting(this.containerEl) }; this.nativeRows.set(key, row); }
+				if (!row) { row = { setting: new NativeSetting(this.activeContainerEl) }; this.nativeRows.set(key, row); }
 				row.cleanup?.(); row.setting.clear();
 				row.setting.setName(item.name).setDesc(typeof item.desc === "string" ? item.desc : "");
 				if (item.render) row.cleanup = (item as SettingDefinitionRender).render(row.setting as never, {} as never) ?? undefined;

@@ -130,6 +130,7 @@ export class IconPickerModal extends Modal {
 	private resolve!: (value: string | undefined) => void;
 	private settled = false;
 	private renderScope?: InputSuggestScope;
+	private resultScope?: InputSuggestScope;
 	private releaseClose?: () => void;
 	private icons: string[];
 	private filteredIcons: string[];
@@ -211,6 +212,8 @@ export class IconPickerModal extends Modal {
 	}
 
 	private displayIcons(container: HTMLElement) {
+		this.resultScope?.dispose();
+		const results = this.resultScope = new InputSuggestScope(container, this.renderScope);
 		container.empty();
 		this.filteredIcons.forEach((iconName) => {
 			const iconEl = container.createEl("div", { cls: "icon-item" });
@@ -222,7 +225,7 @@ export class IconPickerModal extends Modal {
 			iconEl.setAttribute("title", iconName); // Set the title attribute for tooltip
 			// const iconLabel = iconEl.createEl("span", { cls: "icon-name" });
 			// iconLabel.setText(iconName); // Set the text label for the icon (optional, uncomment if you want labels)
-			iconEl.addEventListener("click", this.renderScope!.guard(() => {
+			iconEl.addEventListener("click", results.guard(() => {
 				this.settle(iconName);
 				this.close();
 			}));

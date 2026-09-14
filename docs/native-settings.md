@@ -39,7 +39,7 @@ movement preserve detached pending/rejected drafts for the settings-tab lifetime
 Provider deletion and plugin disposal retire them. Drafts are never written to
 `data.json`.
 
-The generic stored icons for Template, Helper, and Character providers do not
+The generic stored icons for Template, Helper, Character, and Metadata Menu providers do not
 control their suggestion output and have no native page appearance effect, so the
 native tree does not offer those ineffective controls. Their values remain
 preserved. Helper's checkbox and callout icons remain separate editable fields.
@@ -63,8 +63,9 @@ captures a child draft with its original baseline. Its opening render owns both
 opening and settlement; disposal cancels it, settles cancellation once, closes the
 modal, and releases its registrations.
 
-An ordinary DOM MutationObserver watches the captured document for actual adoption
-of the settings container. Adoption retires the old input scopes, observes the
+An ordinary DOM MutationObserver watches the captured document and rendered public
+rows. Native provider pages can live outside the top-level tab container, so its
+detachment does not retire connected rows. Actual row adoption retires the old input scopes, observes the
 destination document, and requests a fresh native render once connected. Window
 teardown and plugin teardown provide cleanup even when native row cleanup is absent.
 The existing owned input suggester remains; see [input suggestions](input-suggestions.md).

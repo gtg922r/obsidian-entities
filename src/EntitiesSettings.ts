@@ -262,7 +262,7 @@ export class EntitiesSettingTab extends PluginSettingTab {
 					type: "page" as const, name,
 					desc: type?.getDescription(provider) ?? `Unavailable provider type: ${provider.providerTypeID}. Its settings are preserved.`,
 					items: type ? [
-						...(["helper", "characterProvider", "template"].includes(provider.providerTypeID) ? [] : [iconSetting(context, "icon", "Icon", "Icon for the entities returned by this provider.", provider.icon || "box-select")]),
+						...(["helper", "characterProvider", "template", "metadata-menu"].includes(provider.providerTypeID) ? [] : [iconSetting(context, "icon", "Icon", "Icon for the entities returned by this provider.", provider.icon || "box-select")]),
 						...type?.getSettingDefinitions?.(context) ?? [],
 						this.row("Remove provider", "Remove this configured provider.", (setting, scope) => {
 							setting.addButton(button => button.setButtonText("Remove provider").onClick(scope.guard(() => {
