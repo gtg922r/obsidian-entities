@@ -90,7 +90,7 @@ export function coreDailyLinkpath(route: CoreDailyRouteSnapshot, date: moment.Mo
 /** Compare native lookup and creation naming without reverse-parsing dates or implementing a filename engine. */
 export function getCoreDailyTitle(format: string, date: moment.Moment): { title: string; compatible: boolean } {
 	const title = date.format(format).trim();
-	return { title, compatible: !!title && !title.toLowerCase().endsWith(".md") && normalizePath(title) === title };
+	return { title, compatible: !!title && title !== "/" && !title.toLowerCase().endsWith(".md") && normalizePath(title) === title };
 }
 
 function isFullPathMatch(file: TAbstractFile, path: string): boolean {

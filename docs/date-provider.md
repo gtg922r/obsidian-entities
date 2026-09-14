@@ -56,7 +56,7 @@ folder preference; it does not use the note containing the suggestion. Missing
 configured folders make the route unavailable.
 
 Core's native lookup and creation can disagree when a trimmed title is blank,
-ends in `.md` (ignoring case), or changes under Obsidian's path normalization.
+is `/`, ends in `.md` (ignoring case), or changes under Obsidian's path normalization.
 For these formats, Entities still accepts confirmed existing files at the native
 lookup path, but suppresses missing-note links/actions and refuses creation.
 It does not reinterpret a different existing path as the intended note. Correct

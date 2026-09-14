@@ -2,6 +2,7 @@ import moment = require("moment");
 import { App, ExtraButtonComponent, Plugin, Setting, TAbstractFile, TFile, TFolder } from "obsidian";
 import { captureDateRoute, DateRouteSnapshot, dateLinkpath, getDateRouteStatus, lookupDateFile } from "../src/dateNotes";
 import { createOrReusePeriodicNote } from "../src/entityCreation";
+import { getCoreDailyTitle } from "../src/coreDailyNotes";
 import { DateEntityProvider } from "../src/Providers/DateEntityProvider";
 import { actionContext, getAction } from "./suggestionTestHelpers";
 
@@ -410,6 +411,27 @@ describe("Date provider Core destinations", () => {
 		expect(h.row()?.target).toEqual({ kind: "file", file, alias: "today" });
 		expect(h.create).not.toHaveBeenCalled(); expect(h.lookupInsensitive).not.toHaveBeenCalled();
 	});
+
+	test.each(["", "Daily"].flatMap(folder => [false, true].map(create => [folder, create] as const)))(
+		"root-sentinel title cannot offer or create missing notes with folder=%p and creation=%s", async (folder, shouldCreate) => {
+			const h = providerFixture(shouldCreate); h.options.format = "[/]"; h.options.folder = folder;
+			const snapshot = ready(h), nativePath = `${dateLinkpath(snapshot, date)}.md`;
+			expect(nativePath).toBe(folder ? "Daily//.md" : "/.md");
+			expect(getCoreDailyTitle(h.options.format, date)).toEqual({ title: "/", compatible: false });
+			expect(h.row()).toBeUndefined();
+			h.render();
+			expect(h.button.setTooltip).toHaveBeenLastCalledWith(expect.stringContaining('Daily Notes cannot resolve missing notes for "/"'));
+			expect(h.lookupInsensitive).not.toHaveBeenCalled();
+			for (let attempt = 0; attempt < 2; attempt++) {
+				expect((await createOrReusePeriodicNote(h.app, "day", date, { expectedRoute: snapshot })).status).toBe("failed");
+			}
+			expect(h.create).not.toHaveBeenCalled();
+			const file = h.add(makeFile(nativePath));
+			expect(h.row()?.target).toEqual({ kind: "file", file, alias: "today" });
+			expect(await createOrReusePeriodicNote(h.app, "day", date, { expectedRoute: snapshot })).toEqual({ status: "existing", file });
+			expect(h.create).not.toHaveBeenCalled();
+		}
+	);
 
 	test.each(["NLP", "conflict", "folder"])("summary preserves %s error precedence over title limitation", problem => {
 		const h = providerFixture(); h.options.format = "[title.md]";
