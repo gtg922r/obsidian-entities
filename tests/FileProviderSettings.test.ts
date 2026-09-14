@@ -7,6 +7,8 @@ import { TemplateEntityProvider } from "../src/Providers/TemplateProvider";
 import { SettingsStore } from "../src/SettingsStore";
 import { EntitiesNotice } from "../src/userComponents";
 import { FrontmatterKeySuggest } from "../src/ui/FrontmatterKeySuggest";
+import { InputSuggestScope } from "../src/ui/inputSuggestLifecycle";
+import { createKeymap, installInputSuggestDom, poppers, suggestionRows } from "./inputSuggestHostMock";
 
 type Control = { inputEl: HTMLInputElement; text: string; tooltip: string; value: string; placeholder: string; change: (value: string) => void; click: () => void };
 type Row = { name: string; description: string; controls: Control[]; settingEl: HTMLElement };
@@ -63,8 +65,7 @@ jest.mock("obsidian", () => {
 		},
 	};
 });
-jest.mock("../src/ui/file-suggest", () => ({ FolderSuggest: class {} }));
-jest.mock("../src/ui/suggest", () => ({ TextInputSuggest: class { constructor(public app: App, public inputEl: HTMLInputElement) {} close() {} } }));
+jest.mock("@popperjs/core", () => ({ createPopper: jest.requireActual("./inputSuggestHostMock").createPopper }));
 jest.mock("../src/userComponents", () => ({ EntitiesNotice: jest.fn(), IconPickerModal: class {} }));
 
 const types = [FolderEntityProvider, DataviewEntityProvider];
@@ -82,20 +83,25 @@ const status = (root: HTMLElement) => controls(root).filter(c => c.tooltip).map(
 async function harness(Provider: typeof FolderEntityProvider | typeof DataviewEntityProvider, overrides: Record<string, unknown> = {}) {
 	const pages = jest.fn((query: string) => { if (query === "[") throw new Error("bad source"); return query === "empty" ? [] : [{ file: { path: file.path } }, { file: { path: file.path } }, { file: { path: "Missing.md" } }]; });
 	const integrations: Record<string, unknown> = { dataview: { api: { pages } } };
-	const app = { vault: { getRoot: () => rootFolder, getFolderByPath: (path: string) => path === "People" ? folder : path === "/" ? rootFolder : null, getAbstractFileByPath: (path: string) => path === file.path ? file : null, getMarkdownFiles: () => [], getAllLoadedFiles: () => [] }, metadataCache: { getFileCache: () => ({ frontmatter: { yes: "yes", ldap: "hopeb@" } }) }, plugins: { getPlugin: (id: string) => integrations[id] } } as unknown as App;
+	const keymap = createKeymap();
+	const app = { keymap, vault: { getRoot: () => rootFolder, getFolderByPath: (path: string) => path === "People" ? folder : path === "/" ? rootFolder : null, getAbstractFileByPath: (path: string) => path === file.path ? file : null, getMarkdownFiles: () => [file], getAllLoadedFiles: () => [rootFolder, folder] }, metadataCache: { getFileCache: () => ({ frontmatter: { yes: "yes", ldap: "hopeb@" } }) }, plugins: { getPlugin: (id: string) => integrations[id] } } as unknown as App;
 	const write = jest.fn(async (_settings: unknown) => {});
 	const store = new SettingsStore(write, async () => {}, () => Provider.getDefaultSettings());
 	const loaded = await store.load(async () => JSON.parse(JSON.stringify({ schemaVersion: 1, providerSettings: [{ ...Provider.getDefaultSettings(), providerInstanceId: "a", path: "People", ...overrides }, { ...Provider.getDefaultSettings(), providerInstanceId: "b", path: "People" }] })));
 	expect(loaded).toBe(true);
-	const plugin = { app, settingsStore: store, get settings() { return store.settings; }, loadEntityProviders: jest.fn(), saveSettings: () => store.flush(), providerRegistry: { getProviderClasses: () => new Map([[Provider.providerTypeID, Provider]]) } } as unknown as Entities;
+	const lifetime = new InputSuggestScope();
+	mockLifetimes.push(lifetime);
+	const plugin = { app, inputSuggestions: lifetime, settingsStore: store, get settings() { return store.settings; }, loadEntityProviders: jest.fn(), saveSettings: () => store.flush(), providerRegistry: { getProviderClasses: () => new Map([[Provider.providerTypeID, Provider]]) } } as unknown as Entities;
 	const tab = new EntitiesSettingTab(app, plugin);
 	const open = () => { tab.display(); button(tab.containerEl, "settings").click(); return mockModals.at(-1)!; };
-	return { app, plugin, store, write, tab, pages, integrations, open };
+	return { app, plugin, store, write, tab, pages, integrations, open, keymap };
 }
 
-beforeEach(() => { document.body.replaceChildren(); mockRows.length = 0; mockModals.length = 0; jest.clearAllMocks(); });
+const mockLifetimes: InputSuggestScope[] = [];
+let restoreDom: () => void;
+beforeEach(() => { restoreDom = installInputSuggestDom(document); document.body.replaceChildren(); mockRows.length = 0; mockModals.length = 0; poppers.length = 0; jest.clearAllMocks(); });
 
-afterEach(() => { document.body.replaceChildren(); });
+afterEach(() => { mockLifetimes.splice(0).forEach(scope => scope.dispose()); document.body.replaceChildren(); restoreDom(); });
 
 describe.each(types.map(Provider => [Provider.providerTypeID, Provider] as const))("%s settings", (_name, Provider) => {
 	test("shared filter editor saves invalid then repaired exact text through R1 and reload", async () => {
@@ -279,5 +285,58 @@ describe.each(types.map(Provider => [Provider.providerTypeID, Provider] as const
 		expect(old.inputEl.isConnected).toBe(false);
 		old.change(true as unknown as string);
 		expect(h.store.settings.providerSettings[0]).toMatchObject({ shouldCreateEntitiesForAliases: false });
+	});
+});
+
+
+describe.each(types.map(Provider => [Provider.providerTypeID, Provider] as const))("%s popup lifecycle", (_name, Provider) => {
+	test.each(["hide", "rebuild", "unload"])("summary popup and retained save close on %s", async reason => {
+		const h = await harness(Provider);
+		h.tab.display();
+		const source = controls(h.tab.containerEl).find(c => c.placeholder === (Provider === FolderEntityProvider ? "Folder path" : "Dataview source"))!;
+		source.inputEl.value = "";
+		source.inputEl.focus();
+		expect(h.keymap.scopes).toHaveLength(1);
+		const popper = poppers.at(-1)!;
+		const before = h.store.settings;
+		if (reason === "hide") h.tab.hide();
+		if (reason === "rebuild") h.tab.display();
+		if (reason === "unload") h.plugin.inputSuggestions.dispose();
+		expect(h.keymap.scopes).toHaveLength(0);
+		expect(popper.destroy).toHaveBeenCalledTimes(1);
+		expect(popper.popup.isConnected).toBe(false);
+		source.change("detached value");
+		expect(h.store.settings).toEqual(before);
+	});
+
+	test.each(["close", "rebuild", "unload"])("modal alias popup closes on %s and old controls cannot save", async reason => {
+		const h = await harness(Provider, { propertyToCreateEntitiesFor: "" });
+		const modal = h.open();
+		const alias = mockRows.find(r => modal.contentEl.contains(r.settingEl) && r.name === "Frontmatter alias property")!.controls[0];
+		alias.inputEl.focus();
+		expect(suggestionRows(alias.inputEl).map(row => row.textContent)).toContain("ldap");
+		expect(h.keymap.scopes).toHaveLength(1);
+		const popper = poppers.at(-1)!;
+		if (reason === "close") modal.close();
+		if (reason === "rebuild") modal.display();
+		if (reason === "unload") h.plugin.inputSuggestions.dispose();
+		expect(h.keymap.scopes).toHaveLength(0);
+		expect(popper.destroy).toHaveBeenCalledTimes(1);
+		alias.change("ldap");
+		expect(h.store.settings.providerSettings[0]).toMatchObject({ propertyToCreateEntitiesFor: "" });
+	});
+
+	test("filter structural rebuild disposes old key suggestions immediately", async () => {
+		const h = await harness(Provider, { entityFilters: [filter("")] });
+		const modal = h.open();
+		const key = controls(modal.contentEl).filter(c => c.placeholder === "Property name").at(-1)!;
+		key.inputEl.focus();
+		const popper = poppers.at(-1)!;
+		expect(h.keymap.scopes).toHaveLength(1);
+		button(modal.contentEl, "Add filter").click();
+		expect(popper.destroy).toHaveBeenCalledTimes(1);
+		expect(h.keymap.scopes).toHaveLength(0);
+		key.change("detached");
+		expect(h.store.settings.providerSettings[0].entityFilters).toEqual([filter(""), { type: "include", property: "", value: "" }]);
 	});
 });

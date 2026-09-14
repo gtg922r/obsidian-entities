@@ -1,21 +1,18 @@
-import { App } from "obsidian";
-import { TextInputSuggest, TextInputSuggestOptions } from "./suggest";
+import { TextInputSuggest } from "./suggest";
 
+/** Offer cached frontmatter keys, refreshed when the input next receives focus. */
 export class FrontmatterKeySuggest extends TextInputSuggest<string> {
-	private allKeys: string[] = [];
-
-	constructor(app: App, inputEl: HTMLInputElement, options?: Partial<TextInputSuggestOptions>) {
-		super(app, inputEl, options);
-		this.initialize();
+	protected getCatalog(): string[] {
+		const keys = new Set<string>();
+		for (const file of this.app.vault.getMarkdownFiles()) {
+			const frontmatter = this.app.metadataCache.getFileCache(file)?.frontmatter;
+			if (frontmatter) Object.keys(frontmatter).forEach(key => keys.add(key));
+		}
+		return Array.from(keys);
 	}
 
-	private async initialize() {
-		const allKeysSet = await getAllFrontmatterKeys(this.app);
-		this.allKeys = Array.from(allKeysSet);
-	}
-
-	getSuggestions(inputStr: string): string[] {
-		return this.allKeys.filter(key => key.toLowerCase().includes(inputStr.toLowerCase()));
+	protected filterCatalog(catalog: string[], query: string): string[] {
+		return catalog.filter(key => key.toLowerCase().includes(query.toLowerCase()));
 	}
 
 	renderSuggestion(key: string, el: HTMLElement): void {
@@ -23,27 +20,6 @@ export class FrontmatterKeySuggest extends TextInputSuggest<string> {
 	}
 
 	selectSuggestion(key: string): void {
-		this.inputEl.value = key;
-		this.inputEl.trigger("input");
-		this.close();
+		this.commitValue(key);
 	}
-}
-
-async function getAllFrontmatterKeys(app: App): Promise<Set<string>> {
-	const metadataCache = app.metadataCache;
-	const vault = app.vault;
-	const allFiles = vault.getMarkdownFiles();
-
-	const allKeys = new Set<string>();
-
-	for (const file of allFiles) {
-		const fileCache = metadataCache.getFileCache(file);
-
-		if (fileCache && fileCache.frontmatter) {
-			const frontmatterKeys = Object.keys(fileCache.frontmatter);
-			frontmatterKeys.forEach(key => allKeys.add(key));
-		}
-	}
-
-	return allKeys;
 }

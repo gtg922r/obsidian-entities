@@ -9,6 +9,7 @@ import {
 } from "obsidian";
 import { entityFromTemplateSettings } from "./entities.types";
 import { FileSuggest, FolderSuggest } from "./ui/file-suggest";
+import { InputSuggestScope } from "./ui/inputSuggestLifecycle";
 
 
 import { Notice, setIcon } from "obsidian";
@@ -132,9 +133,10 @@ export class EntitiesModalInput extends Modal {
 
 export async function openTemplateDetailsModal(
 	app: App,
-	initialSettings: entityFromTemplateSettings
+	initialSettings: entityFromTemplateSettings,
+	owner?: InputSuggestScope
 ): Promise<entityFromTemplateSettings | null> {
-	const modal = new TemplateDetailsModal(app, initialSettings);
+	const modal = new TemplateDetailsModal(app, initialSettings, owner);
 	return await modal.openAndGetValue();
 }
 
@@ -142,13 +144,21 @@ export class TemplateDetailsModal extends Modal {
 	private resolve!: (value: entityFromTemplateSettings | null) => void;
 	private initialSettings?: entityFromTemplateSettings;
 	private settled = false;
+	private renderScope?: InputSuggestScope;
+	private releaseOwner?: () => void;
 
-	constructor(app: App, initialSettings?: entityFromTemplateSettings) {
+	constructor(app: App, initialSettings?: entityFromTemplateSettings, private owner?: InputSuggestScope) {
 		super(app);
 		this.initialSettings = initialSettings;
 	}
 
 	onOpen() {
+		this.renderScope?.dispose();
+		if (this.owner && !this.owner.active) { this.close(); return; }
+		this.releaseOwner?.();
+		this.releaseOwner = this.owner?.own(() => this.close());
+		const view = this.renderScope = new InputSuggestScope(this.contentEl, this.owner);
+		view.own(() => { this.releaseOwner?.(); this.releaseOwner = undefined; this.settle(null); });
 		const { contentEl } = this;
 		contentEl.empty(); // Clear previous content
 
@@ -221,7 +231,7 @@ export class TemplateDetailsModal extends Modal {
 		// Save Button
 		new Setting(contentEl)
 			.addButton((button) =>
-				button.setButtonText("Save").onClick(() => {
+				button.setButtonText("Save").onClick(view.guard(() => {
 					const templateDetails: entityFromTemplateSettings = {
 						...this.initialSettings,
 						engine: engineDropdown.getValue() as
@@ -234,7 +244,7 @@ export class TemplateDetailsModal extends Modal {
 					};
 					this.settle(templateDetails);
 					this.close();
-				})
+				}))
 			)
 			.addButton((button) =>
 				button.setButtonText("Cancel").onClick(() => {
@@ -244,6 +254,9 @@ export class TemplateDetailsModal extends Modal {
 	}
 
 	onClose(): void {
+		this.releaseOwner?.();
+		this.releaseOwner = undefined;
+		this.renderScope?.dispose();
 		this.settle(null);
 		this.contentEl.empty();
 	}

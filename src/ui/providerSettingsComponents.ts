@@ -3,6 +3,7 @@ import { entityFromTemplateSettings } from "../entities.types";
 import { IconPickerModal, openTemplateDetailsModal } from "../userComponents";
 import { FolderSuggest } from "./file-suggest";
 import { setValidationStatus } from "./validationStatus";
+import { inputSuggestScope } from "./inputSuggestLifecycle";
 
 /**
  * Builds an icon picker setting row.
@@ -82,7 +83,8 @@ export function buildTemplateCreationSetting<T extends { entityCreationTemplates
 				const initialSettings = settings.entityCreationTemplates ?? [];
 				const templateDetails = await openTemplateDetailsModal(
 					app,
-					initialSettings[0]
+					initialSettings[0],
+					inputSuggestScope(container)
 				);
 				if (templateDetails) {
 					settings.entityCreationTemplates = [{ ...initialSettings[0], ...templateDetails }, ...initialSettings.slice(1)];
@@ -143,6 +145,7 @@ export function buildFolderPathSummarySetting<T extends { path: string }>(
 	settingContainer.addText((text) => {
 		text.setPlaceholder("Folder path").setValue(settings.path);
 		text.onChange((value) => {
+			if (!text.inputEl.isConnected) return;
 			updateFolderExistsIcon(value);
 			if (folderExists(value)) {
 				settings.path = value;
@@ -150,8 +153,6 @@ export function buildFolderPathSummarySetting<T extends { path: string }>(
 			}
 		});
 
-		new FolderSuggest(plugin.app, text.inputEl, {
-			additionalClasses: "entities-settings",
-		});
+		new FolderSuggest(plugin.app, text.inputEl, { additionalClasses: "entities-settings" });
 	});
 }
