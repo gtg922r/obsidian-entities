@@ -5,6 +5,7 @@ import { aliasSelectorError, FileAliasSettings } from "../Providers/fileAliases"
 import { FileSourceResult } from "../Providers/fileSources";
 import { FrontmatterKeySuggest } from "./FrontmatterKeySuggest";
 import { setValidationStatus } from "./validationStatus";
+import { InputSuggestScope } from "./inputSuggestLifecycle";
 
 /** Build synchronous source feedback; persistence feedback remains owned by SettingsStore. */
 export function buildFileSourceSetting(
@@ -66,7 +67,7 @@ export function buildFileAliasSettings<T extends FileAliasSettings>(
 			save(settings);
 			if (text.inputEl.isConnected) describe();
 		});
-		new FrontmatterKeySuggest(app, text.inputEl, { shouldCloseIfNoSuggestions: true });
+		new FrontmatterKeySuggest(app, text.inputEl);
 	});
 }
 
@@ -78,6 +79,7 @@ export function buildFileFilterSettings<T extends { entityFilters?: EntityFilter
 	const heading = new Setting(container).setName("Entity filters").setHeading()
 		.setDesc("All active filters must pass. Include matches any supported frontmatter value; exclude matches none. Matching is case-insensitive.");
 	const rows = container.createDiv();
+	let rowScope: InputSuggestScope | undefined;
 	const commit = (structural: boolean) => {
 		save(settings);
 		// R1 closes a conflicted modal. Never rebuild its rejected draft or update its status.
@@ -87,6 +89,8 @@ export function buildFileFilterSettings<T extends { entityFilters?: EntityFilter
 	};
 	const rebuild = () => {
 		generation++;
+		rowScope?.dispose();
+		rowScope = new InputSuggestScope(rows);
 		rows.empty();
 		const filters = settings.entityFilters;
 		if (filters !== undefined && (!Array.isArray(filters) || filters.some(filter => {
@@ -121,7 +125,7 @@ export function buildFileFilterSettings<T extends { entityFilters?: EntityFilter
 			});
 			row.addText(text => {
 				text.setPlaceholder("Property name").setValue(filter.property).onChange(value => edit(() => { filter.property = value; }));
-				new FrontmatterKeySuggest(app, text.inputEl, { shouldCloseIfNoSuggestions: true });
+				new FrontmatterKeySuggest(app, text.inputEl);
 			});
 			row.addText(text => text.setPlaceholder("Property value/regex").setValue(filter.value).onChange(value => edit(() => { filter.value = value; })));
 			row.addButton(button => button.setIcon("trash").onClick(() => {

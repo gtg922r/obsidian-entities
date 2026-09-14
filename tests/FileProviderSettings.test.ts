@@ -4,9 +4,12 @@ import { EntitiesSettingTab, ProviderSettingsModal } from "../src/EntitiesSettin
 import { FolderEntityProvider } from "../src/Providers/FolderEntityProvider";
 import { DataviewEntityProvider } from "../src/Providers/DataviewEntityProvider";
 import { TemplateEntityProvider } from "../src/Providers/TemplateProvider";
+import { CharacterProvider } from "../src/Providers/CharacterProvider";
 import { SettingsStore } from "../src/SettingsStore";
-import { EntitiesNotice } from "../src/userComponents";
+import { EntitiesNotice, IconPickerModal } from "../src/userComponents";
 import { FrontmatterKeySuggest } from "../src/ui/FrontmatterKeySuggest";
+import { InputSuggestScope } from "../src/ui/inputSuggestLifecycle";
+import { createKeymap, installInputSuggestDom, poppers, suggestionRows } from "./inputSuggestHostMock";
 
 type Control = { inputEl: HTMLInputElement; text: string; tooltip: string; value: string; placeholder: string; change: (value: string) => void; click: () => void };
 type Row = { name: string; description: string; controls: Control[]; settingEl: HTMLElement };
@@ -33,11 +36,11 @@ jest.mock("obsidian", () => {
 		setIcon(value: string) { this.text = value; return this; }
 		setTooltip(value: string) { this.tooltip = value; return this; }
 		setValue(value: string) { this.value = value; this.inputEl.value = value; return this; }
-		setPlaceholder(value: string) { this.placeholder = value; return this; }
-		getValue() { return this.value; }
+		setPlaceholder(value: string) { this.placeholder = value; this.inputEl.placeholder = value; return this; }
+		getValue() { return this.inputEl.value; }
 		onChange(callback: (value: string) => void) { this.change = callback; this.inputEl.addEventListener("input", () => callback(this.inputEl.value)); return this; }
 		onClick(callback: () => void) { this.click = callback; return this; }
-		setDisabled() { return this; } setCta() { return this; } addOption() { return this; }
+		setDisabled() { return this; } setCta() { return this; } addOption() { return this; } addOptions() { return this; }
 	}
 	class MockSetting {
 		name = ""; description = ""; controls: Control[] = []; settingEl: HTMLElement;
@@ -52,7 +55,7 @@ jest.mock("obsidian", () => {
 		addExtraButton(build: (control: Control) => void) { return this.addButton(build); }
 	}
 	return {
-		...jest.requireActual("./__mocks__/obsidian"), Setting: MockSetting, ButtonComponent: Control,
+		...jest.requireActual("./__mocks__/obsidian"), Setting: MockSetting, ButtonComponent: Control, Notice: class {},
 		sanitizeHTMLToDom: (html: string) => html,
 		PluginSettingTab: class { containerEl = element(document.body); constructor(public app: App) {} },
 		Modal: class {
@@ -63,9 +66,8 @@ jest.mock("obsidian", () => {
 		},
 	};
 });
-jest.mock("../src/ui/file-suggest", () => ({ FolderSuggest: class {} }));
-jest.mock("../src/ui/suggest", () => ({ TextInputSuggest: class { constructor(public app: App, public inputEl: HTMLInputElement) {} close() {} } }));
-jest.mock("../src/userComponents", () => ({ EntitiesNotice: jest.fn(), IconPickerModal: class {} }));
+jest.mock("@popperjs/core", () => ({ createPopper: jest.requireActual("./inputSuggestHostMock").createPopper }));
+jest.mock("../src/userComponents", () => ({ ...jest.requireActual("../src/userComponents"), EntitiesNotice: jest.fn(), IconPickerModal: jest.fn() }));
 
 const types = [FolderEntityProvider, DataviewEntityProvider];
 const file = Object.assign(new TFile(), { path: "People/Bob Hope.md", basename: "Bob Hope" });
@@ -79,23 +81,46 @@ const patterns = (root: HTMLElement) => controls(root).filter(c => c.placeholder
 const button = (root: HTMLElement, text: string) => controls(root).find(c => c.text === text)!;
 const status = (root: HTMLElement) => controls(root).filter(c => c.tooltip).map(c => c.tooltip).join("; ");
 
-async function harness(Provider: typeof FolderEntityProvider | typeof DataviewEntityProvider, overrides: Record<string, unknown> = {}) {
+async function harness(Provider: typeof FolderEntityProvider | typeof DataviewEntityProvider | typeof CharacterProvider, overrides: Record<string, unknown> = {}) {
 	const pages = jest.fn((query: string) => { if (query === "[") throw new Error("bad source"); return query === "empty" ? [] : [{ file: { path: file.path } }, { file: { path: file.path } }, { file: { path: "Missing.md" } }]; });
 	const integrations: Record<string, unknown> = { dataview: { api: { pages } } };
-	const app = { vault: { getRoot: () => rootFolder, getFolderByPath: (path: string) => path === "People" ? folder : path === "/" ? rootFolder : null, getAbstractFileByPath: (path: string) => path === file.path ? file : null, getMarkdownFiles: () => [], getAllLoadedFiles: () => [] }, metadataCache: { getFileCache: () => ({ frontmatter: { yes: "yes", ldap: "hopeb@" } }) }, plugins: { getPlugin: (id: string) => integrations[id] } } as unknown as App;
+	const keymap = createKeymap();
+	const app = { keymap, vault: { getRoot: () => rootFolder, getFolderByPath: (path: string) => path === "People" ? folder : path === "/" ? rootFolder : null, getAbstractFileByPath: (path: string) => path === file.path ? file : null, getMarkdownFiles: () => [file], getAllLoadedFiles: () => [rootFolder, folder] }, metadataCache: { getFileCache: () => ({ frontmatter: { yes: "yes", ldap: "hopeb@" } }) }, plugins: { getPlugin: (id: string) => integrations[id] } } as unknown as App;
 	const write = jest.fn(async (_settings: unknown) => {});
 	const store = new SettingsStore(write, async () => {}, () => Provider.getDefaultSettings());
 	const loaded = await store.load(async () => JSON.parse(JSON.stringify({ schemaVersion: 1, providerSettings: [{ ...Provider.getDefaultSettings(), providerInstanceId: "a", path: "People", ...overrides }, { ...Provider.getDefaultSettings(), providerInstanceId: "b", path: "People" }] })));
 	expect(loaded).toBe(true);
-	const plugin = { app, settingsStore: store, get settings() { return store.settings; }, loadEntityProviders: jest.fn(), saveSettings: () => store.flush(), providerRegistry: { getProviderClasses: () => new Map([[Provider.providerTypeID, Provider]]) } } as unknown as Entities;
+	const lifetime = new InputSuggestScope();
+	mockLifetimes.push(lifetime);
+	const plugin = { app, inputSuggestions: lifetime, settingsStore: store, get settings() { return store.settings; }, loadEntityProviders: jest.fn(), saveSettings: () => store.flush(), providerRegistry: { getProviderClasses: () => new Map([[Provider.providerTypeID, Provider]]) } } as unknown as Entities;
 	const tab = new EntitiesSettingTab(app, plugin);
 	const open = () => { tab.display(); button(tab.containerEl, "settings").click(); return mockModals.at(-1)!; };
-	return { app, plugin, store, write, tab, pages, integrations, open };
+	return { app, plugin, store, write, tab, pages, integrations, open, keymap };
 }
 
-beforeEach(() => { document.body.replaceChildren(); mockRows.length = 0; mockModals.length = 0; jest.clearAllMocks(); });
+const mockLifetimes: InputSuggestScope[] = [];
+let restoreDom: () => void;
+beforeEach(() => {
+	restoreDom = installInputSuggestDom(document);
+	Object.defineProperty(window.HTMLElement.prototype, "createEl", {
+		configurable: true,
+		value(this: HTMLElement, tag: string, options?: { text?: string }) {
+			const el = this.ownerDocument.createElement(tag);
+			if (options?.text) el.textContent = options.text;
+			this.appendChild(el);
+			return el;
+		},
+	});
+	document.body.replaceChildren(); mockRows.length = 0; mockModals.length = 0; poppers.length = 0; jest.clearAllMocks();
+});
 
-afterEach(() => { document.body.replaceChildren(); });
+afterEach(() => {
+	for (const modal of mockModals) if (modal.contentEl.isConnected) modal.close();
+	mockLifetimes.splice(0).forEach(scope => scope.dispose());
+	document.body.replaceChildren();
+	Reflect.deleteProperty(window.HTMLElement.prototype, "createEl");
+	restoreDom();
+});
 
 describe.each(types.map(Provider => [Provider.providerTypeID, Provider] as const))("%s settings", (_name, Provider) => {
 	test("shared filter editor saves invalid then repaired exact text through R1 and reload", async () => {
@@ -279,5 +304,152 @@ describe.each(types.map(Provider => [Provider.providerTypeID, Provider] as const
 		expect(old.inputEl.isConnected).toBe(false);
 		old.change(true as unknown as string);
 		expect(h.store.settings.providerSettings[0]).toMatchObject({ shouldCreateEntitiesForAliases: false });
+	});
+});
+
+
+describe.each(types.map(Provider => [Provider.providerTypeID, Provider] as const))("%s popup lifecycle", (_name, Provider) => {
+	test.each(["hide", "rebuild", "unload"])("summary popup and retained save close on %s", async reason => {
+		const h = await harness(Provider);
+		h.tab.display();
+		const source = controls(h.tab.containerEl).find(c => c.placeholder === (Provider === FolderEntityProvider ? "Folder path" : "Dataview source"))!;
+		source.inputEl.value = "";
+		source.inputEl.focus();
+		expect(h.keymap.scopes).toHaveLength(1);
+		const popper = poppers.at(-1)!;
+		const before = h.store.settings;
+		if (reason === "hide") h.tab.hide();
+		if (reason === "rebuild") h.tab.display();
+		if (reason === "unload") h.plugin.inputSuggestions.dispose();
+		expect(h.keymap.scopes).toHaveLength(0);
+		expect(popper.destroy).toHaveBeenCalledTimes(1);
+		expect(popper.popup.isConnected).toBe(false);
+		source.change("detached value");
+		expect(h.store.settings).toEqual(before);
+	});
+
+	test.each(["close", "rebuild", "unload"])("modal alias popup closes on %s and old controls cannot save", async reason => {
+		const h = await harness(Provider, { propertyToCreateEntitiesFor: "" });
+		const modal = h.open();
+		const alias = mockRows.find(r => modal.contentEl.contains(r.settingEl) && r.name === "Frontmatter alias property")!.controls[0];
+		alias.inputEl.focus();
+		expect(suggestionRows(alias.inputEl).map(row => row.textContent)).toContain("ldap");
+		expect(h.keymap.scopes).toHaveLength(1);
+		const popper = poppers.at(-1)!;
+		if (reason === "close") modal.close();
+		if (reason === "rebuild") modal.display();
+		if (reason === "unload") h.plugin.inputSuggestions.dispose();
+		expect(h.keymap.scopes).toHaveLength(0);
+		expect(popper.destroy).toHaveBeenCalledTimes(1);
+		alias.change("ldap");
+		expect(h.store.settings.providerSettings[0]).toMatchObject({ propertyToCreateEntitiesFor: "" });
+	});
+
+	test("filter structural rebuild disposes old key suggestions immediately", async () => {
+		const h = await harness(Provider, { entityFilters: [filter("")] });
+		const modal = h.open();
+		const key = controls(modal.contentEl).filter(c => c.placeholder === "Property name").at(-1)!;
+		key.inputEl.focus();
+		const popper = poppers.at(-1)!;
+		expect(h.keymap.scopes).toHaveLength(1);
+		button(modal.contentEl, "Add filter").click();
+		expect(popper.destroy).toHaveBeenCalledTimes(1);
+		expect(h.keymap.scopes).toHaveLength(0);
+		key.change("detached");
+		expect(h.store.settings.providerSettings[0].entityFilters).toEqual([filter(""), { type: "include", property: "", value: "" }]);
+	});
+});
+
+const currentAlias = (modal: ProviderSettingsModal) => mockRows.find(r => modal.contentEl.contains(r.settingEl) && r.name === "Frontmatter alias property")!.controls[0];
+const templateButton = (modal: ProviderSettingsModal) => mockRows.find(r => modal.contentEl.contains(r.settingEl) && r.name === "New entity from templates")!.controls[0];
+
+test("detached recursion cannot contaminate a rebuilt modal's next valid edit", async () => {
+	const h = await harness(FolderEntityProvider, { shouldLoadSubFolders: false });
+	const modal = h.open();
+	const retained = mockRows.find(r => modal.contentEl.contains(r.settingEl) && r.name === "Load entities from sub-folders")!.controls[0];
+	modal.display();
+	retained.change(true as unknown as string);
+	expect(h.store.settings.providerSettings[0]).toMatchObject({ shouldLoadSubFolders: false });
+	currentAlias(modal).change("ldap");
+	expect(h.store.settings.providerSettings[0]).toMatchObject({ shouldLoadSubFolders: false, propertyToCreateEntitiesFor: "ldap" });
+});
+
+test("Character advanced settings rebuild isolates retained toggles from the next valid edit", async () => {
+	const h = await harness(CharacterProvider, { suggestEmoji: false, suggestFontAwesome: true });
+	const modal = h.open();
+	const retained = mockRows.find(r => modal.contentEl.contains(r.settingEl) && r.name === "Suggest emoji")!.controls[0];
+	button(modal.contentEl, "Show").click();
+	expect(button(modal.contentEl, "Hide")).toBeDefined();
+	expect(retained.inputEl.isConnected).toBe(false);
+	retained.change(true as unknown as string);
+	expect(h.store.settings.providerSettings[0]).toMatchObject({ suggestEmoji: false, suggestFontAwesome: true });
+	mockRows.find(r => modal.contentEl.contains(r.settingEl) && r.name === "Suggest Font Awesome")!.controls[0].change(false as unknown as string);
+	expect(h.store.settings.providerSettings[0]).toMatchObject({ suggestEmoji: false, suggestFontAwesome: false });
+});
+
+describe.each(types.map(Provider => [Provider.providerTypeID, Provider] as const))("%s stale modal helpers", (_type, Provider) => {
+	test("delayed icon cannot contaminate a rebuilt modal's next valid edit", async () => {
+		const h = await harness(Provider, { icon: "before" });
+		const modal = h.open();
+		let choose!: (icon: string) => void;
+		const result = new Promise<string>(resolve => { choose = resolve; });
+		jest.mocked(IconPickerModal).mockImplementationOnce(() => ({ open() {}, getInput: () => result }) as unknown as IconPickerModal);
+		mockRows.find(r => modal.contentEl.contains(r.settingEl) && r.name === "Icon")!.controls[0].click();
+		modal.display();
+		choose("old-view-choice"); await Promise.resolve();
+		expect(h.store.settings.providerSettings[0].icon).toBe("before");
+		currentAlias(modal).change("ldap");
+		expect(h.store.settings.providerSettings[0]).toMatchObject({ icon: "before", propertyToCreateEntitiesFor: "ldap" });
+	});
+
+	test.each(["close", "rebuild"])("retained icon and template openers do nothing after %s", async mode => {
+		const h = await harness(Provider);
+		const modal = h.open(), retained = templateButton(modal);
+		const icon = mockRows.find(r => modal.contentEl.contains(r.settingEl) && r.name === "Icon")!.controls[0];
+		jest.mocked(IconPickerModal).mockImplementationOnce(() => ({ open() {}, getInput: () => Promise.resolve("stale") }) as unknown as IconPickerModal);
+		if (mode === "close") modal.close(); else modal.display();
+		const count = mockModals.length;
+		const pending = retained.click();
+		icon.click();
+		try {
+			expect(mockModals).toHaveLength(count);
+			expect(IconPickerModal).not.toHaveBeenCalled();
+		} finally {
+			if (mockModals.length > count) mockModals.at(-1)!.close();
+			await pending;
+		}
+		if (mode === "rebuild") {
+			currentAlias(modal).change("ldap");
+			expect(h.store.settings.providerSettings[0]).toMatchObject({ entityCreationTemplates: [], propertyToCreateEntitiesFor: "ldap" });
+		}
+	});
+
+	test("template completion queued before rebuild cannot contaminate the next valid edit", async () => {
+		const h = await harness(Provider);
+		const modal = h.open();
+		const pending = templateButton(modal).click();
+		const child = mockModals.at(-1)!;
+		child.contentEl.querySelector<HTMLInputElement>('[placeholder="Entity name"]')!.value = "Stale recipe";
+		button(child.contentEl, "Save").click();
+		modal.display();
+		await pending;
+		expect(h.store.settings.providerSettings[0].entityCreationTemplates).toEqual([]);
+		currentAlias(modal).change("ldap");
+		expect(h.store.settings.providerSettings[0]).toMatchObject({ entityCreationTemplates: [], propertyToCreateEntitiesFor: "ldap" });
+	});
+
+	test("current template completion preserves unknown fields and recipe tails", async () => {
+		const head = { engine: "templater", templatePath: "Templates/Person.md", folderPath: "People", entityName: "Person", futureField: { preserved: true } };
+		const tail = { engine: "disabled", templatePath: "Tail.md", entityName: "Tail", futureField: [1, 2] };
+		const h = await harness(Provider, { entityCreationTemplates: [head, tail], futureProviderField: { preserved: true } });
+		const modal = h.open();
+		const pending = templateButton(modal).click();
+		const child = mockModals.at(-1)!;
+		child.contentEl.querySelector<HTMLInputElement>('[placeholder="Entity name"]')!.value = "Updated";
+		button(child.contentEl, "Save").click();
+		await pending;
+		modal.display();
+		currentAlias(modal).change("ldap");
+		expect(h.store.settings.providerSettings[0]).toMatchObject({ entityCreationTemplates: [{ ...head, entityName: "Updated" }, tail], futureProviderField: { preserved: true }, propertyToCreateEntitiesFor: "ldap" });
 	});
 });

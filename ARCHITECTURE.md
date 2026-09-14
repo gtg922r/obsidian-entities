@@ -19,7 +19,7 @@ This document explains the overall layout and flow of the **Entities** Obsidian 
 │   │   ├── HelperActionsProvider.ts
 │   │   └── CharacterProvider.ts
 │   ├── ui/             # Reusable UI helpers
-│   │   ├── suggest.ts                   # Base text input suggest (from obsidian-periodic-notes)
+│   │   ├── suggest.ts                   # Owned input popup (retained Periodic Notes navigation)
 │   │   ├── file-suggest.ts              # File/folder suggesters
 │   │   ├── FrontmatterKeySuggest.ts     # Frontmatter key autocomplete
 │   │   └── providerSettingsComponents.ts # Shared settings UI builders
@@ -131,6 +131,15 @@ Shared UI builders eliminating duplication across provider settings:
 - `buildFolderPathSummarySetting()` – Folder path input with existence indicator
   and optional note count.
 - `entityTemplateStatusLabel()` – Human-readable template status string.
+
+### Settings input lifecycle
+
+`ui/inputSuggestLifecycle.ts` owns bounded cleanup for the plugin, each rendered
+settings view/modal, and nested filter editors. Disposing a view closes its owned
+popups and releases input/window listeners and retained save callbacks. Catalogs
+refresh on focus and filter synchronously while typing. The existing navigation
+and Popper positioning remain after verified native `AbstractInputSuggest.close`
+listener-retention defects; see [input suggestions](docs/input-suggestions.md).
 
 ### Creation boundaries
 

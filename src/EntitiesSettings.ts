@@ -11,6 +11,7 @@ import { EntitiesNotice, IconPickerModal } from "./userComponents";
 import { EntityProviderUserSettings } from "./Providers/EntityProvider";
 import { RegisterableEntityProvider } from "./Providers/ProviderRegistry";
 import { cloneSettings } from "./settingsData";
+import { InputSuggestScope } from "./ui/inputSuggestLifecycle";
 
 function updateProviderAndReload(
 	settingsTab: EntitiesSettingTab,
@@ -20,7 +21,7 @@ function updateProviderAndReload(
 ): boolean {
 	if (!settingsTab.plugin.settingsStore.updateProvider(providerInstanceId, providerConfig)) return false;
 	settingsTab.plugin.loadEntityProviders();
-	if (shouldRefreshUI) settingsTab.display();
+	if (shouldRefreshUI) settingsTab.refreshIfDisplayed();
 	return true;
 }
 
@@ -45,7 +46,7 @@ function providerSaveCallback(
 			if (JSON.stringify(canonical[key]) !== JSON.stringify(previous[key]) && JSON.stringify(canonical[key]) !== JSON.stringify(next[key])) {
 				conflicted = true;
 				new EntitiesNotice("This provider changed in another settings view. Your last edit was not applied. Settings have reloaded; reopen the provider and try again.", "alert-triangle", 10000);
-				settingsTab.display();
+				settingsTab.refreshIfDisplayed();
 				return false;
 			}
 			changes[key] = cloneSettings(next[key]);
@@ -58,6 +59,8 @@ function providerSaveCallback(
 export class EntitiesSettingTab extends PluginSettingTab {
 	plugin: Entities;
 	private saveErrorSetting?: Setting;
+	private renderScope?: InputSuggestScope;
+	private displayed = false;
 
 	constructor(app: App, plugin: Entities) {
 		super(app, plugin);
@@ -65,7 +68,14 @@ export class EntitiesSettingTab extends PluginSettingTab {
 	}
 
 	hide(): void {
+		this.displayed = false;
+		this.renderScope?.dispose();
 		void this.plugin.saveSettings();
+	}
+
+	/** A modal may finish after the settings tab has been hidden. */
+	refreshIfDisplayed(): void {
+		if (this.displayed && this.renderScope?.active) this.display();
 	}
 
 	/** Remove only the recovered warning, preserving focused provider inputs. */
@@ -75,7 +85,11 @@ export class EntitiesSettingTab extends PluginSettingTab {
 	}
 
 	display(): void {
+		this.renderScope?.dispose();
+		if (this.plugin.inputSuggestions && !this.plugin.inputSuggestions.active) return;
 		const { containerEl } = this;
+		const view = this.renderScope = new InputSuggestScope(containerEl, this.plugin.inputSuggestions);
+		this.displayed = true;
 		containerEl.empty();
 		this.saveErrorSetting = undefined;
 
@@ -84,10 +98,10 @@ export class EntitiesSettingTab extends PluginSettingTab {
 			new Setting(containerEl)
 				.setName("Settings could not be loaded")
 				.setDesc(`${store.loadError.message} Saved data has not been changed. Fix the saved file or restore a backup, then retry.`)
-				.addButton(button => button.setButtonText("Retry load").onClick(async () => {
+				.addButton(button => button.setButtonText("Retry load").onClick(view.guard(async () => {
 					await this.plugin.loadSettings();
-					this.display();
-				}));
+					if (view.active) this.display();
+				})));
 			return;
 		}
 		if (store.isReadOnly) return;
@@ -95,10 +109,10 @@ export class EntitiesSettingTab extends PluginSettingTab {
 			this.saveErrorSetting = new Setting(containerEl)
 				.setName("Settings have not been saved")
 				.setDesc(`${store.saveError.message} Changes are still in memory.`)
-				.addButton(button => button.setButtonText("Retry save").onClick(async () => {
+				.addButton(button => button.setButtonText("Retry save").onClick(view.guard(async () => {
 					await this.plugin.saveSettings();
-					this.display();
-				}));
+					if (view.active) this.display();
+				})));
 		}
 
 		new Setting(containerEl)
@@ -122,7 +136,7 @@ export class EntitiesSettingTab extends PluginSettingTab {
 				});
 			})
 			.addButton((button) =>
-				button.setIcon("plus").onClick(() => {
+				button.setIcon("plus").onClick(view.guard(() => {
 					const providerTypeID = newProviderDropdown.getValue();
 					if (!providerTypeID) {
 						new EntitiesNotice(
@@ -148,10 +162,10 @@ export class EntitiesSettingTab extends PluginSettingTab {
 						new ProviderSettingsModal(
 							this.app, providerType, providerSettings, this.plugin,
 							providerSaveCallback(this, providerSettings.providerInstanceId, providerSettings),
-							() => this.display()
+							() => this.refreshIfDisplayed()
 						).open();
 					}
-				})
+				}))
 			);
 
 		this.plugin.settings.providerSettings.forEach(
@@ -177,7 +191,7 @@ export class EntitiesSettingTab extends PluginSettingTab {
 				providerType.buildSummarySetting(
 					settingContainer,
 					providerSettings,
-					providerSaveCallback(this, providerInstanceId, providerSettings, false),
+					view.guard(providerSaveCallback(this, providerInstanceId, providerSettings, false)),
 					this.plugin
 				);
 				settingContainer
@@ -185,10 +199,10 @@ export class EntitiesSettingTab extends PluginSettingTab {
 						button
 							.setIcon(providerSettings.icon ?? "box-select")
 							.setDisabled(false)
-							.onClick(() => {
+							.onClick(view.guard(() => {
 								const current = store.settings.providerSettings.find(item => item.providerInstanceId === providerInstanceId);
 								if (!current) return;
-								const saveIcon = providerSaveCallback(this, providerInstanceId, current);
+								const saveIcon = view.guard(providerSaveCallback(this, providerInstanceId, current));
 								const iconPickerModal = new IconPickerModal(
 									this.app
 								);
@@ -198,7 +212,7 @@ export class EntitiesSettingTab extends PluginSettingTab {
 										saveIcon({ ...current, icon: iconName });
 									}
 								});
-							})
+							}))
 					)
 					.addButton((button) => {
 						button.setIcon("settings");
@@ -219,7 +233,7 @@ export class EntitiesSettingTab extends PluginSettingTab {
 						) {
 							button.setDisabled(true);
 						}
-						button.onClick(() => {
+						button.onClick(view.guard(() => {
 							const current = store.settings.providerSettings.find(item => item.providerInstanceId === providerInstanceId);
 							if (!current) return;
 							const modal = new ProviderSettingsModal(
@@ -229,19 +243,19 @@ export class EntitiesSettingTab extends PluginSettingTab {
 								this.plugin,
 								providerSaveCallback(this, providerInstanceId, current),
 								() => {
-									this.display();
+									this.refreshIfDisplayed();
 								}
 							);
 							modal.open();
-						});
+						}));
 					})
 					.addButton((button) =>
-						button.setIcon("trash").onClick(() => {
+						button.setIcon("trash").onClick(view.guard(() => {
 							if (!store.deleteProvider(providerInstanceId)) return;
 							this.plugin.loadEntityProviders();
 							this.display();
 							new EntitiesNotice("Provider removed", "trash-2");
-						})
+						}))
 					);
 			}
 		);
@@ -256,9 +270,9 @@ export class EntitiesSettingTab extends PluginSettingTab {
 					.setTooltip("Debugging only")
 			)
 			.addButton((button) => {
-				button.setButtonText("Reload").onClick(() => {
+				button.setButtonText("Reload").onClick(view.guard(() => {
 					this.plugin.loadEntityProviders();
-				});
+				}));
 			});
 	}
 }
@@ -270,6 +284,8 @@ export class ProviderSettingsModal extends Modal {
 	private saveCallback: (newSettings: EntityProviderUserSettings) => boolean | void;
 	private closeCallback?: () => void;
 	private advancedSettingsOpen = false;
+	private renderScope?: InputSuggestScope;
+	private releaseOwner?: () => void;
 	buttonContainerEl: HTMLElement;
 
 	constructor(
@@ -301,16 +317,27 @@ export class ProviderSettingsModal extends Modal {
 	}
 
 	onOpen() {
+		if (this.plugin.inputSuggestions && !this.plugin.inputSuggestions.active) { this.close(); return; }
 		this.display();
 	}
 
 	onClose() {
+		this.releaseOwner?.();
+		this.releaseOwner = undefined;
+		this.renderScope?.dispose();
 		void this.plugin.saveSettings();
 		this.closeCallback?.();
 	}
 
 	display() {
+		this.renderScope?.dispose();
+		if (this.plugin.inputSuggestions && !this.plugin.inputSuggestions.active) return;
+		// Detached controls may still mutate their captured draft before a guarded save.
+		this.providerSettings = cloneSettings(this.providerSettings);
 		const { contentEl } = this;
+		const view = this.renderScope = new InputSuggestScope(contentEl, this.plugin.inputSuggestions);
+		this.releaseOwner = this.plugin.inputSuggestions?.own(() => this.close());
+		view.own(() => { this.releaseOwner?.(); this.releaseOwner = undefined; });
 		contentEl.empty();
 
 		this.titleEl.setText(`${this.provider.getDescription()} settings`);
@@ -319,10 +346,10 @@ export class ProviderSettingsModal extends Modal {
 			this.provider.buildSimpleSettings(
 				contentEl,
 				this.providerSettings,
-				(newSettings) => {
+				view.guard((newSettings) => {
 					this.providerSettings = newSettings;
 					if (this.saveCallback(newSettings) === false) this.close();
-				},
+				}),
 				this.plugin
 			);
 		} else {
@@ -345,20 +372,20 @@ export class ProviderSettingsModal extends Modal {
 					} else {
 						button.setButtonText("Show");
 					}
-					button.onClick(() => {
+					button.onClick(view.guard(() => {
 						this.advancedSettingsOpen = !this.advancedSettingsOpen;
 						this.display();
-					});
+					}));
 				});
 
 			if (this.advancedSettingsOpen) {
 				this.provider.buildAdvancedSettings?.(
 					contentEl,
 					this.providerSettings,
-					(newSettings) => {
+					view.guard((newSettings) => {
 						this.providerSettings = newSettings;
 						if (this.saveCallback(newSettings) === false) this.close();
-					},
+					}),
 					this.plugin
 				);
 			}

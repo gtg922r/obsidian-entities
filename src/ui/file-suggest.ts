@@ -25,65 +25,45 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 */
 
-import { TAbstractFile, TFile, TFolder } from "obsidian";
-
+import { TFile, TFolder } from "obsidian";
 import { TextInputSuggest } from "./suggest";
 
+/** Pick a Markdown file using its exact vault path. */
 export class FileSuggest extends TextInputSuggest<TFile> {
-  getSuggestions(inputStr: string): TFile[] {
-    const abstractFiles = this.app.vault.getAllLoadedFiles();
-    const files: TFile[] = [];
-    const lowerCaseInputStr = inputStr.toLowerCase();
+	protected getCatalog(): TFile[] {
+		return this.app.vault.getMarkdownFiles();
+	}
 
-    abstractFiles.forEach((file: TAbstractFile) => {
-      if (
-        file instanceof TFile &&
-        file.extension === "md" &&
-        file.path.toLowerCase().contains(lowerCaseInputStr)
-      ) {
-        files.push(file);
-      }
-    });
+	protected filterCatalog(catalog: TFile[], query: string): TFile[] {
+		return catalog.filter(file => file.path.toLowerCase().includes(query.toLowerCase()));
+	}
 
-    return files;
-  }
+	renderSuggestion(file: TFile, el: HTMLElement): void {
+		el.setText(file.path);
+	}
 
-  renderSuggestion(file: TFile, el: HTMLElement): void {
-    el.setText(file.path);
-  }
-
-  selectSuggestion(file: TFile): void {
-    this.inputEl.value = file.path;
-    this.inputEl.trigger("input");
-    this.close();
-  }
+	selectSuggestion(file: TFile): void {
+		this.commitValue(file.path);
+	}
 }
 
+/** Pick a folder, including the canonical vault root, without normalizing paths. */
 export class FolderSuggest extends TextInputSuggest<TFolder> {
-  getSuggestions(inputStr: string): TFolder[] {
-    const abstractFiles = this.app.vault.getAllLoadedFiles();
-    const folders: TFolder[] = [];
-    const lowerCaseInputStr = inputStr.toLowerCase();
+	protected getCatalog(): TFolder[] {
+		const folders = this.app.vault.getAllLoadedFiles().filter((file): file is TFolder => file instanceof TFolder);
+		const root = this.app.vault.getRoot();
+		return folders.includes(root) ? folders : [root, ...folders];
+	}
 
-    abstractFiles.forEach((folder: TAbstractFile) => {
-      if (
-        folder instanceof TFolder &&
-        folder.path.toLowerCase().contains(lowerCaseInputStr)
-      ) {
-        folders.push(folder);
-      }
-    });
+	protected filterCatalog(catalog: TFolder[], query: string): TFolder[] {
+		return catalog.filter(folder => folder.path.toLowerCase().includes(query.toLowerCase()));
+	}
 
-    return folders;
-  }
+	renderSuggestion(folder: TFolder, el: HTMLElement): void {
+		el.setText(folder.path);
+	}
 
-  renderSuggestion(file: TFolder, el: HTMLElement): void {
-    el.setText(file.path);
-  }
-
-  selectSuggestion(file: TFolder): void {
-    this.inputEl.value = file.path;
-    this.inputEl.trigger("input");
-    this.close();
-  }
+	selectSuggestion(folder: TFolder): void {
+		this.commitValue(folder.path);
+	}
 }

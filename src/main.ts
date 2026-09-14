@@ -20,8 +20,10 @@ import { SettingsStore } from "./SettingsStore";
 import { createProviderInstanceId } from "./settingsData";
 import { claimSettingsHandoff } from "./settingsHandoff";
 import { SettingsStorage } from "./SettingsStorage";
+import { InputSuggestScope, runInputCleanups } from "./ui/inputSuggestLifecycle";
 
 export default class Entities extends Plugin {
+	inputSuggestions = new InputSuggestScope();
 	settingsStore!: SettingsStore;
 	private settingsTab?: EntitiesSettingTab;
 	private unloaded = false;
@@ -36,6 +38,7 @@ export default class Entities extends Plugin {
 
 	async onload() {
 		this.unloaded = false;
+		if (!this.inputSuggestions.active) this.inputSuggestions = new InputSuggestScope();
 		this.providerRegistry = ProviderRegistry.initializeRegistry(this);
 		this.registerEntityProviders();
 		this.settingsStorage = new SettingsStorage(this.app, this.manifest);
@@ -45,7 +48,7 @@ export default class Entities extends Plugin {
 			type => this.providerRegistry.getProviderClasses().get(type)?.getDefaultSettings(),
 			error => {
 				new Notice(`Entities settings: ${error.message} Open settings to retry.`, 10000);
-				this.settingsTab?.display();
+				this.settingsTab?.refreshIfDisplayed();
 			},
 			createProviderInstanceId,
 			() => this.settingsTab?.clearSaveError()
@@ -84,9 +87,12 @@ export default class Entities extends Plugin {
 	onunload() {
 		this.unloaded = true;
 		// Obsidian does not await this hook. Start draining immediately and report failures.
-		void this.settingsStore?.close();
-		this.suggestor?.dispose();
-		this.providerRegistry?.resetProviders();
+		runInputCleanups(
+			() => { void this.settingsStore?.close(); },
+			() => this.inputSuggestions.dispose(),
+			() => this.suggestor?.dispose(),
+			() => this.providerRegistry?.resetProviders()
+		);
 	}
 
 	registerEntityProviders() {

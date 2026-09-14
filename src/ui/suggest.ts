@@ -24,211 +24,235 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 */
-// 
-// Additional modifications by Ryan C
-// 2024-05-21: Added `additionalClasses` parameter to constructor
-// 2024-05-23: Added `options` parameter to constructor with `shouldCloseIfNoSuggestions` option
 
 import { createPopper, type Instance as PopperInstance } from "@popperjs/core";
 import { App, type ISuggestOwner, Scope } from "obsidian";
-// import { wrapAround } from "src/settings/utils";
+import { inputSuggestScope, runInputCleanups } from "./inputSuggestLifecycle";
 
-export const wrapAround = (value: number, size: number): number => {
-  return ((value % size) + size) % size;
-};
+const wrapAround = (value: number, size: number): number => ((value % size) + size) % size;
 
+// Retain the original navigation engine; this class owns only its popup listeners.
 class Suggest<T> {
-  private owner: ISuggestOwner<T>;
-  private values!: T[];
-  private suggestions!: HTMLDivElement[];
-  private selectedItem!: number;
-  private containerEl: HTMLElement;
+	private values: T[] = [];
+	private suggestions: HTMLDivElement[] = [];
+	private selectedItem = 0;
+	private readonly onClick = (event: MouseEvent) => {
+		const index = this.itemIndex(event);
+		if (index < 0) return;
+		event.preventDefault();
+		this.setSelectedItem(index, false);
+		this.useSelectedItem(event);
+	};
+	private readonly onMouseover = (event: MouseEvent) => {
+		const index = this.itemIndex(event);
+		if (index >= 0) this.setSelectedItem(index, false);
+	};
 
-  constructor(owner: ISuggestOwner<T>, containerEl: HTMLElement, scope: Scope) {
-    this.owner = owner;
-    this.containerEl = containerEl;
+	constructor(private owner: ISuggestOwner<T>, private containerEl: HTMLElement, scope: Scope) {
+		containerEl.addEventListener("click", this.onClick);
+		containerEl.addEventListener("mousemove", this.onMouseover);
+		scope.register([], "ArrowUp", event => {
+			if (!event.isComposing) { this.setSelectedItem(this.selectedItem - 1, true); return false; }
+		});
+		scope.register([], "ArrowDown", event => {
+			if (!event.isComposing) { this.setSelectedItem(this.selectedItem + 1, true); return false; }
+		});
+		scope.register([], "Enter", event => {
+			if (!event.isComposing) { this.useSelectedItem(event); return false; }
+		});
+	}
 
-    containerEl.on("click", ".suggestion-item", this.onSuggestionClick.bind(this));
-    containerEl.on(
-      "mousemove",
-      ".suggestion-item",
-      this.onSuggestionMouseover.bind(this)
-    );
+	private itemIndex(event: MouseEvent): number {
+		const win = this.containerEl.ownerDocument.defaultView;
+		if (!win || !(event.target instanceof win.Element)) return -1;
+		const el = event.target.closest(".suggestion-item");
+		return this.suggestions.findIndex(item => item === el);
+	}
 
-    scope.register([], "ArrowUp", (event) => {
-      if (!event.isComposing) {
-        this.setSelectedItem(this.selectedItem - 1, true);
-        return false;
-      }
-    });
+	setSuggestions(values: T[]): void {
+		this.containerEl.empty();
+		this.values = values;
+		this.suggestions = values.map(value => {
+			const el = this.containerEl.createDiv("suggestion-item");
+			this.owner.renderSuggestion(value, el);
+			return el;
+		});
+		this.setSelectedItem(0, false);
+	}
 
-    scope.register([], "ArrowDown", (event) => {
-      if (!event.isComposing) {
-        this.setSelectedItem(this.selectedItem + 1, true);
-        return false;
-      }
-    });
+	private useSelectedItem(event: MouseEvent | KeyboardEvent): void {
+		if (this.selectedItem < this.values.length) this.owner.selectSuggestion(this.values[this.selectedItem], event);
+	}
 
-    scope.register([], "Enter", (event) => {
-      if (!event.isComposing) {
-        this.useSelectedItem(event);
-        return false;
-      }
-    });
-  }
+	private setSelectedItem(index: number, scrollIntoView: boolean): void {
+		if (!this.suggestions.length) { this.selectedItem = 0; return; }
+		const normalized = wrapAround(index, this.suggestions.length);
+		this.suggestions[this.selectedItem]?.removeClass("is-selected");
+		const selected = this.suggestions[normalized];
+		selected.addClass("is-selected");
+		this.selectedItem = normalized;
+		if (scrollIntoView) selected.scrollIntoView(false);
+	}
 
-  onSuggestionClick(event: MouseEvent, el: HTMLElement): void {
-    event.preventDefault();
-
-    const item = this.suggestions.indexOf(el as HTMLDivElement);
-    this.setSelectedItem(item, false);
-    this.useSelectedItem(event);
-  }
-
-  onSuggestionMouseover(_event: MouseEvent, el: HTMLElement): void {
-    const item = this.suggestions.indexOf(el as HTMLDivElement);
-    this.setSelectedItem(item, false);
-  }
-
-  setSuggestions(values: T[]) {
-    this.containerEl.empty();
-    const suggestionEls: HTMLDivElement[] = [];
-
-    values.forEach((value) => {
-      const suggestionEl = this.containerEl.createDiv("suggestion-item");
-      this.owner.renderSuggestion(value, suggestionEl);
-      suggestionEls.push(suggestionEl);
-    });
-
-    this.values = values;
-    this.suggestions = suggestionEls;
-    this.setSelectedItem(0, false);
-  }
-
-  useSelectedItem(event: MouseEvent | KeyboardEvent) {
-    const currentValue = this.values[this.selectedItem];
-    if (currentValue) {
-      this.owner.selectSuggestion(currentValue, event);
-    }
-  }
-
-  setSelectedItem(selectedIndex: number, scrollIntoView: boolean) {
-    const normalizedIndex = wrapAround(selectedIndex, this.suggestions.length);
-    const prevSelectedSuggestion = this.suggestions[this.selectedItem];
-    const selectedSuggestion = this.suggestions[normalizedIndex];
-
-    prevSelectedSuggestion?.removeClass("is-selected");
-    selectedSuggestion?.addClass("is-selected");
-
-    this.selectedItem = normalizedIndex;
-
-    if (scrollIntoView) {
-      selectedSuggestion.scrollIntoView(false);
-    }
-  }
+	dispose(): void {
+		this.values = [];
+		this.suggestions = [];
+		runInputCleanups(
+			() => this.containerEl.empty(),
+			() => this.containerEl.removeEventListener("click", this.onClick),
+			() => this.containerEl.removeEventListener("mousemove", this.onMouseover)
+		);
+	}
 }
 
+/** Optional styles for the existing owned popup. */
 export interface TextInputSuggestOptions {
-  shouldCloseIfNoSuggestions: boolean;
-  additionalClasses: string[] | string;
+	additionalClasses?: string[] | string;
 }
 
-const defaultTextInputSuggestOptions: TextInputSuggestOptions = {
-  shouldCloseIfNoSuggestions: false,
-  additionalClasses: [],
-};
-
+/** Owned settings autocomplete; catalogs refresh once per focus, never per keystroke. */
 export abstract class TextInputSuggest<T> implements ISuggestOwner<T> {
-  protected app: App;
-  protected inputEl: HTMLInputElement;
+	private catalog: T[] = [];
+	private popper?: PopperInstance;
+	private readonly scope: Scope;
+	private readonly suggestEl: HTMLElement;
+	private readonly suggest: Suggest<T>;
+	private readonly attachedDocument: Document;
+	private readonly attachedWindow: Document["defaultView"];
+	private opened = false;
+	private disposed = false;
+	private committing = false;
+	private releaseOwner?: () => void;
+	private readonly onFocus = () => {
+		if (!this.usable()) return;
+		let catalog: T[];
+		try { catalog = this.getCatalog(); } catch { catalog = []; }
+		// Build locally: reentrant teardown/focus loss cannot publish a late catalog.
+		if (!this.usable() || this.attachedDocument.activeElement !== this.inputEl) return;
+		this.catalog = catalog;
+		this.onInput();
+	};
+	private readonly onInput = () => {
+		if (!this.usable() || this.committing || this.attachedDocument.activeElement !== this.inputEl) return;
+		const values = this.getSuggestions(this.inputEl.value);
+		if (!values.length) { this.close(); return; }
+		this.suggest.setSuggestions(values);
+		this.open();
+	};
+	private readonly onBlur = () => {
+		if (this.inputEl.ownerDocument !== this.attachedDocument) this.dispose();
+		else this.close();
+	};
+	private readonly onPageHide = () => this.dispose();
+	private readonly preventBlur = (event: MouseEvent) => event.preventDefault();
 
-  private popper!: PopperInstance;
-  private scope: Scope;
-  private suggestEl: HTMLElement;
-  private suggest: Suggest<T>;
-  private options: TextInputSuggestOptions;
+	constructor(protected app: App, protected inputEl: HTMLInputElement, options: TextInputSuggestOptions = {}) {
+		this.attachedDocument = inputEl.ownerDocument;
+		this.attachedWindow = this.attachedDocument.defaultView;
+		this.scope = new Scope();
+		this.suggestEl = this.attachedDocument.createElement("div");
+		this.suggestEl.classList.add("suggestion-container", "popover");
+		const classes = options.additionalClasses ?? [];
+		this.suggestEl.addClass(...(Array.isArray(classes) ? classes : classes.split(/\s+/).filter(Boolean)));
+		this.suggest = new Suggest(this, this.suggestEl.createDiv("suggestion"), this.scope);
+		this.scope.register([], "Escape", event => {
+			if (!event.isComposing) { this.close(); return false; }
+		});
+		inputEl.addEventListener("focus", this.onFocus);
+		inputEl.addEventListener("input", this.onInput);
+		inputEl.addEventListener("blur", this.onBlur);
+		this.suggestEl.addEventListener("mousedown", this.preventBlur);
+		this.attachedWindow?.addEventListener("blur", this.onBlur);
+		this.attachedWindow?.addEventListener("pagehide", this.onPageHide);
+		this.releaseOwner = inputSuggestScope(inputEl)?.own(() => this.dispose());
+	}
 
-  constructor(
-    app: App,
-    inputEl: HTMLInputElement,
-    options?: Partial<TextInputSuggestOptions>,
-  ) {
-    this.app = app;
-    this.inputEl = inputEl;
-    this.options = {...defaultTextInputSuggestOptions, ...options};
-    this.scope = new Scope();
+	private usable(): boolean {
+		// An adopted input needs a new owner; never move a live popup across documents.
+		if (this.inputEl.ownerDocument !== this.attachedDocument) this.dispose();
+		return !this.disposed && this.inputEl.isConnected && !this.inputEl.disabled;
+	}
 
-	this.suggestEl = createDiv("suggestion-container");
-	this.suggestEl.addClass(
-		"popover",
-		...(Array.isArray(this.options.additionalClasses) ? this.options.additionalClasses : [this.options.additionalClasses])
-	);
-    const suggestion = this.suggestEl.createDiv("suggestion");
-    this.suggest = new Suggest(this, suggestion, this.scope);
+	getSuggestions(query: string): T[] {
+		return this.usable() ? this.filterCatalog(this.catalog, query) : [];
+	}
 
-    this.scope.register([], "Escape", this.close.bind(this));
+	open(): void {
+		if (!this.usable() || this.committing || this.attachedDocument.activeElement !== this.inputEl) return;
+		if (this.opened) { void this.popper?.update(); return; }
+		this.opened = true;
+		this.app.keymap.pushScope(this.scope);
+		this.attachedDocument.body.appendChild(this.suggestEl);
+		try {
+			// Native 1.12.7/1.13.4/1.14.1 close leaks a capture-scroll listener; see docs/input-suggestions.md.
+			// eslint-disable-next-line obsidianmd/prefer-abstract-input-suggest -- Retain owned lifecycle until native public disposal is corrected and verified.
+			this.popper = createPopper(this.inputEl, this.suggestEl, {
+				placement: "bottom-start",
+				modifiers: [{
+					name: "sameWidth", enabled: true, phase: "beforeWrite", requires: ["computeStyles"],
+					fn: ({ state, instance }) => {
+						const width = `${state.rects.reference.width}px`;
+						if (state.styles.popper.width === width) return;
+						state.styles.popper.width = width;
+						void instance.update();
+					},
+				}],
+			});
+		} catch {
+			this.close();
+		}
+	}
 
-    this.inputEl.addEventListener("input", this.onInputChanged.bind(this));
-    this.inputEl.addEventListener("focus", this.onInputChanged.bind(this));
-    this.inputEl.addEventListener("blur", this.close.bind(this));
-    this.suggestEl.on("mousedown", ".suggestion-container", (event: MouseEvent) => {
-      event.preventDefault();
-    });
-  }
+	close(): void {
+		const opened = this.opened;
+		const popper = this.popper;
+		this.opened = false;
+		this.popper = undefined;
+		runInputCleanups(
+			() => { if (opened) this.app.keymap.popScope(this.scope); },
+			() => popper?.destroy(),
+			() => this.suggest.setSuggestions([]),
+			() => this.suggestEl.remove()
+		);
+	}
 
-  onInputChanged(): void {
-    const inputStr = this.inputEl.value;
-    const suggestions = this.getSuggestions(inputStr);
+	/** Commit exact text once using the input's own window, without reopening. */
+	protected commitValue(value: string): void {
+		if (!this.usable() || !this.opened || this.committing) return;
+		const win = this.attachedWindow;
+		if (!win) return;
+		this.committing = true;
+		this.close();
+		try {
+			this.inputEl.value = value;
+			this.inputEl.dispatchEvent(new win.Event("input", { bubbles: true }));
+		} finally {
+			this.committing = false;
+		}
+	}
 
-    if (suggestions.length > 0) {
-      this.suggest.setSuggestions(suggestions);
-      this.open((<any>this.app).dom.appContainerEl, this.inputEl);
-    } else {
-      if (this.options.shouldCloseIfNoSuggestions) {
-        this.close();
-      }
-    }
-  }
+	/** Idempotently release every listener, popup, catalog and owner registration. */
+	dispose(): void {
+		if (this.disposed) return;
+		this.disposed = true;
+		this.catalog = [];
+		const releaseOwner = this.releaseOwner;
+		this.releaseOwner = undefined;
+		runInputCleanups(
+			() => this.close(),
+			() => this.suggest.dispose(),
+			() => this.inputEl.removeEventListener("focus", this.onFocus),
+			() => this.inputEl.removeEventListener("input", this.onInput),
+			() => this.inputEl.removeEventListener("blur", this.onBlur),
+			() => this.suggestEl.removeEventListener("mousedown", this.preventBlur),
+			() => this.attachedWindow?.removeEventListener("blur", this.onBlur),
+			() => this.attachedWindow?.removeEventListener("pagehide", this.onPageHide),
+			() => releaseOwner?.()
+		);
+	}
 
-  open(container: HTMLElement, inputEl: HTMLElement): void {
-    (<any>this.app).keymap.pushScope(this.scope);
-
-    container.appendChild(this.suggestEl);
-    // eslint-disable-next-line obsidianmd/prefer-abstract-input-suggest -- This custom suggest preserves caller-controlled no-suggestion closing and additional popover classes, which AbstractInputSuggest does not expose in the installed API.
-    this.popper = createPopper(inputEl, this.suggestEl, {
-      placement: "bottom-start",
-      modifiers: [
-        {
-          name: "sameWidth",
-          enabled: true,
-          fn: ({ state, instance }) => {
-            // Note: positioning needs to be calculated twice -
-            // first pass - positioning it according to the width of the popper
-            // second pass - position it with the width bound to the reference element
-            // we need to early exit to avoid an infinite loop
-            const targetWidth = `${state.rects.reference.width}px`;
-            if (state.styles.popper.width === targetWidth) {
-              return;
-            }
-            state.styles.popper.width = targetWidth;
-            instance.update();
-          },
-          phase: "beforeWrite",
-          requires: ["computeStyles"],
-        },
-      ],
-    });
-  }
-
-  close(): void {
-    (<any>this.app).keymap.popScope(this.scope);
-
-    this.suggest.setSuggestions([]);
-    this.popper.destroy();
-    this.suggestEl.detach();
-  }
-
-  abstract getSuggestions(inputStr: string): T[];
-  abstract renderSuggestion(item: T, el: HTMLElement): void;
-  abstract selectSuggestion(item: T): void;
+	protected abstract getCatalog(): T[];
+	protected abstract filterCatalog(catalog: T[], query: string): T[];
+	abstract renderSuggestion(value: T, el: HTMLElement): void;
+	abstract selectSuggestion(value: T, event?: MouseEvent | KeyboardEvent): void;
 }

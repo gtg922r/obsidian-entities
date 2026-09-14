@@ -4,13 +4,12 @@ import {
 	getAllTags,
 	Plugin,
 	Setting,
-	TAbstractFile,
 	TFile,
 	TFolder,
 } from "obsidian";
 import { EntitySuggestionItem } from "src/suggestion.types";
 import { EntityProvider, EntityProviderUserSettings } from "./EntityProvider";
-import { TextInputSuggest, TextInputSuggestOptions } from "src/ui/suggest";
+import { TextInputSuggest } from "src/ui/suggest";
 import { AppWithPlugins, EntityFilter } from "src/entities.types";
 import { buildIconPickerSetting, buildTemplateCreationSetting } from "src/ui/providerSettingsComponents";
 import { fileAliasSuggestions } from "./fileAliases";
@@ -112,7 +111,7 @@ export class DataviewEntityProvider extends EntityProvider<DataviewProviderUserS
 			label: "Dataview source", placeholder: "Dataview source", value: settings.query,
 			onChange: value => { settings.query = value; save(settings); },
 			evaluate: () => this.evaluateSource(settings, plugin),
-			suggest: input => { new DataviewSourceSuggest(plugin.app, input, { shouldCloseIfNoSuggestions: true }); },
+			suggest: input => { new DataviewSourceSuggest(plugin.app, input); },
 		});
 	}
 
@@ -151,36 +150,25 @@ export class DataviewEntityProvider extends EntityProvider<DataviewProviderUserS
 	}
 }
 
+/** Complete only the trailing folder/tag term of a Dataview source expression. */
 export class DataviewSourceSuggest extends TextInputSuggest<string> {
-	private suggestions: Set<string> = new Set();
-
-	constructor(app: App, inputEl: HTMLInputElement, options?: Partial<TextInputSuggestOptions>) {
-		super(app, inputEl, options);
-		this.initialize();
-	}
-
-	private initialize() {
-		const abstractFiles = this.app.vault.getAllLoadedFiles();
-
-		abstractFiles.forEach((fileOrFolder: TAbstractFile) => {
-			if (fileOrFolder instanceof TFolder) {
-				this.suggestions.add(fileOrFolder.path);
-			} else if (fileOrFolder instanceof TFile) {
-				const metadata = this.app.metadataCache.getFileCache(fileOrFolder);
-				if (metadata) {
-					getAllTags(metadata)?.forEach((tag) => {
-						this.suggestions.add(tag);
-					});
-				}
+	protected getCatalog(): string[] {
+		const suggestions = new Set<string>();
+		for (const file of this.app.vault.getAllLoadedFiles()) {
+			if (file instanceof TFolder) {
+				suggestions.add(`"${file.path}"`);
+			} else if (file instanceof TFile) {
+				const metadata = this.app.metadataCache.getFileCache(file);
+				if (metadata) getAllTags(metadata)?.forEach(tag => suggestions.add(tag));
 			}
-		});
+		}
+		return Array.from(suggestions);
 	}
 
-	getSuggestions(inputStr: string): string[] {
-		const lowerCaseInputStr = inputStr.toLowerCase();
-		return Array.from(this.suggestions).filter(suggestion =>
-			suggestion.toLowerCase().includes(lowerCaseInputStr)
-		);
+	protected filterCatalog(catalog: string[], query: string): string[] {
+		const term = sourceTerm(query);
+		if (!term) return [];
+		return catalog.filter(item => (!term.kind || item.startsWith(term.kind)) && item.toLowerCase().includes(term.text.toLowerCase()));
 	}
 
 	renderSuggestion(query: string, el: HTMLElement): void {
@@ -188,24 +176,20 @@ export class DataviewSourceSuggest extends TextInputSuggest<string> {
 	}
 
 	selectSuggestion(query: string): void {
-		const inputStr = this.inputEl.value;
-		const tagMatch = inputStr.match(/#\S*$/);
-		const folderMatch = inputStr.match(/"\S*$/);
-		const searchStr = tagMatch
-			? tagMatch[0]
-			: folderMatch
-			? folderMatch[0].slice(1)
-			: inputStr;
-
-		const replaceStr = tagMatch
-			? query
-			: folderMatch
-			? query + '"'
-			: inputStr;
-
-		// Replace only the current search term
-		this.inputEl.value = inputStr.replace(searchStr, replaceStr);
-		this.inputEl.trigger("input");
-		this.close();
+		const input = this.inputEl.value;
+		const term = sourceTerm(input);
+		if (term) this.commitValue(input.slice(0, term.start) + query);
 	}
+}
+
+// Recognize a trailing term only; this is not a Dataview expression parser.
+function sourceTerm(input: string): { kind?: '"' | "#"; text: string; start: number } | undefined {
+	const folder = /"[^"]*$/.exec(input);
+	if (folder && (input.match(/"/g)?.length ?? 0) % 2 === 1) {
+		return { kind: '"', text: folder[0], start: folder.index };
+	}
+	const tag = /#[^\s"()]*$/.exec(input);
+	if (tag) return { kind: "#", text: tag[0], start: tag.index };
+	if (input.trim() === "") return { text: "", start: input.length };
+	return undefined;
 }
