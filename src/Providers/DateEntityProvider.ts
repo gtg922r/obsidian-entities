@@ -15,7 +15,7 @@ import { EntitiesNotice } from "src/userComponents";
 import { RefreshBehavior } from "./EntityProvider";
 import { IconPickerModal } from "src/userComponents";
 import { setValidationStatus } from "src/ui/validationStatus";
-import { capturePeriodicRoute, getPeriodicLookupDate, lookupPeriodicFile, PeriodicRoute, PeriodicRouteSnapshot, periodicLinkpath } from "../periodicNotes";
+import { captureDateRoute, dateLinkpath, DateRoute, DateRouteSnapshot, getDateRouteStatus, lookupDateFile } from "../dateNotes";
 import { classifyExplicitWeek } from "./explicitWeek";
 
 const dateProviderTypeID = "nlDates";
@@ -59,7 +59,7 @@ const defaultDatesProviderUserSettings: DatesProviderUserSettings = {
 	entityCreationTemplates: [],
 };
 
-/** Synchronous date interpretation and current calendar-set targets. */
+/** Synchronous date interpretation and current calendar or Core daily targets. */
 export class DateEntityProvider extends EntityProvider<DatesProviderUserSettings> {
 	static readonly providerTypeID: string = dateProviderTypeID;
 
@@ -90,11 +90,11 @@ export class DateEntityProvider extends EntityProvider<DatesProviderUserSettings
 		} catch { return []; }
 
 		// Route reads belong to this evaluation, never a provider-wide cache or a preset row.
-		const routes = new Map<PeriodicNotesGranularity, PeriodicRoute>();
-		const getRoute = (granularity: PeriodicNotesGranularity): PeriodicRoute => {
+		const routes = new Map<PeriodicNotesGranularity, DateRoute>();
+		const getRoute = (granularity: PeriodicNotesGranularity): DateRoute => {
 			let route = routes.get(granularity);
 			if (!route) {
-				route = capturePeriodicRoute(this.plugin.app, granularity);
+				route = captureDateRoute(this.plugin.app, granularity);
 				routes.set(granularity, route);
 			}
 			return route;
@@ -141,7 +141,7 @@ export class DateEntityProvider extends EntityProvider<DatesProviderUserSettings
 		return dates;
 	}
 
-	private buildDateSuggestion(candidate: DateSuggestionCandidate, route: PeriodicRoute): EntitySuggestionItem | undefined {
+	private buildDateSuggestion(candidate: DateSuggestionCandidate, route: DateRoute): EntitySuggestionItem | undefined {
 		if (route.kind === "unavailable") return undefined;
 		const suggestion: EntitySuggestionItem = {
 			suggestionText: candidate.suggestionText, noteText: candidate.noteText, icon: candidate.icon,
@@ -150,10 +150,11 @@ export class DateEntityProvider extends EntityProvider<DatesProviderUserSettings
 		if (route.kind === "none") return suggestion;
 		try {
 			const snapshot = route.snapshot;
-			const title = candidate.date.format(snapshot.format);
-			const linkpath = periodicLinkpath(snapshot, candidate.date);
+			const formattedTitle = candidate.date.format(snapshot.format);
+			const title = snapshot.engine === "core-daily" ? formattedTitle.trim() : formattedTitle;
+			const linkpath = dateLinkpath(snapshot, candidate.date);
 			suggestion.noteText = candidate.alias ? `${title} (Wk of ${candidate.date.format("M/D")})` : title;
-			const existing = lookupPeriodicFile(this.plugin.app, snapshot, candidate.date);
+			const existing = lookupDateFile(this.plugin.app, snapshot, candidate.date);
 			if (existing != null) {
 				suggestion.target = { kind: "file", file: existing, alias: candidate.suggestionText };
 			} else if (this.settings.shouldCreateIfNotExists && snapshot.create) {
@@ -170,7 +171,7 @@ export class DateEntityProvider extends EntityProvider<DatesProviderUserSettings
 	}
 
 	private async createOrLinkPeriodicNote(
-		candidate: DateSuggestionCandidate, expectedRoute: PeriodicRouteSnapshot, context: ActionContext
+		candidate: DateSuggestionCandidate, expectedRoute: DateRouteSnapshot, context: ActionContext
 	): Promise<ActionResult> {
 		const result = await createOrReusePeriodicNote(this.plugin.app, candidate.granularity, candidate.date,
 			{ expectedRoute, canStartWork: context.canStartWork });
@@ -194,10 +195,10 @@ export class DateEntityProvider extends EntityProvider<DatesProviderUserSettings
 			nlpPlugin?.settings?.autocompleteTriggerPhrase === "@" &&
 			nlpPlugin?.settings?.isAutosuggestEnabled === true;
 		const granularities: PeriodicNotesGranularity[] = settings.includeWeekSuggestions ? ["day", "week"] : ["day"];
-		const routes = granularities.map(granularity => ({ granularity, route: capturePeriodicRoute(plugin.app, granularity) }));
-		const unavailableGranularity = routes.find(({ route }) => route.kind === "unavailable")?.granularity;
 		const now = moment();
-		const limitedRoute = routes.find(({ route }) => route.kind === "ready" && !getPeriodicLookupDate(route.snapshot.format, now))?.route;
+		const statuses = granularities.map(granularity => ({ granularity, status: getDateRouteStatus(captureDateRoute(plugin.app, granularity), now) }));
+		const unavailable = statuses.find(({ status }) => status.kind === "unavailable");
+		const limited = statuses.find(({ status }) => status.kind === "ready" && status.limitation)?.status;
 
 		settingContainer.addExtraButton((button) => {
 			if (!pluginIsConfigured) {
@@ -223,11 +224,19 @@ export class DateEntityProvider extends EntityProvider<DatesProviderUserSettings
 					);
 				});
 				return;
-			} else if (unavailableGranularity) {
-				setValidationStatus(button, "package-x", `Periodic Notes ${unavailableGranularity} calendar unavailable; check its active configuration`, "error");
-			} else if (limitedRoute?.kind === "ready") {
-				const { granularity, format } = limitedRoute.snapshot;
-				setValidationStatus(button, "alert-triangle", `Periodic Notes ${granularity} format cannot resolve ${now.format(format)} without an existing note at its configured path. Check the format in Periodic Notes.`, "warning");
+			} else if (unavailable?.status.kind === "unavailable") {
+				const { status, granularity } = unavailable;
+				const message = status.engine === "core-daily" ?
+					`Daily Notes ${status.reason === "folder" ? "folder" : "configuration or capability"} unavailable; check Daily Notes settings` :
+					status.reason === "flat-active" ? `Periodic Notes ${granularity} flat configuration is unsupported; use a compatible calendar-set configuration` :
+						`Periodic Notes ${granularity} calendar unavailable; check its active configuration`;
+				setValidationStatus(button, "package-x", message, "error");
+			} else if (limited?.kind === "ready" && limited.limitation) {
+				const { reason, granularity, title } = limited.limitation;
+				const message = reason === "title-path" ?
+					`Daily Notes cannot resolve missing notes for ${JSON.stringify(title)}. Use a nonblank date format without an .md suffix or characters that change the filename in Daily Notes settings.` :
+					`Periodic Notes ${granularity} format cannot resolve ${title} without an existing note at its configured path. Check the format in Periodic Notes.`;
+				setValidationStatus(button, "alert-triangle", message, "warning");
 			} else {
 				setValidationStatus(
 					button,
