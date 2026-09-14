@@ -1,4 +1,4 @@
-import { App, Plugin, Setting, TFile, TFolder } from "obsidian";
+import { App, Plugin, Setting, TFile, TFolder, moment } from "obsidian";
 import { EntityProvider, EntityProviderUserSettings } from "../src/Providers/EntityProvider";
 import { TemplateEntityProvider } from "../src/Providers/TemplateProvider";
 import { MetadataMenuProvider } from "../src/Providers/MetadataMenuProvider";
@@ -19,6 +19,7 @@ jest.mock("obsidian", () => {
 		});
 	}
 	return {
+		moment: jest.requireActual("moment"),
 		Plugin: class {}, TFile: class {}, TFolder: class {},
 		normalizePath: (path: string) => path.replace(/\/{2,}/g, "/").replace(/\/$/, ""),
 		Modal: class {
@@ -324,16 +325,99 @@ test("closing and submitting the modal settles once", async () => {
 	expect(settled).toHaveBeenCalledTimes(1); expect(settled).toHaveBeenCalledWith(undefined);
 });
 test("periodic creation reuses a live target without requiring create capability", async () => {
-	const h = fixture(); h.integrations["periodic-notes"] = { getPeriodicNote: () => h.template };
-	expect(await createOrReusePeriodicNote(h.app, "day", {} as never)).toEqual({ status: "existing", file: h.template });
+	const h = fixture(); h.integrations["periodic-notes"] = { calendarSetManager: periodicManager(), getPeriodicNote: () => h.template };
+	expect(await createOrReusePeriodicNote(h.app, "day", moment("2026-05-20"))).toEqual({ status: "existing", file: h.template });
 });
 test("periodic creation rechecks lookup at execution and returns actual created file", async () => {
 	const h = fixture(), target = file("Calendar/Renamed.md");
 	const create = jest.fn(async () => { h.files.set(target.path, target); return target; });
-	h.integrations["periodic-notes"] = { getPeriodicNote: () => h.files.get(target.path), createPeriodicNote: create };
-	expect(await createOrReusePeriodicNote(h.app, "day", {} as never)).toEqual({ status: "created", file: target });
-	expect(await createOrReusePeriodicNote(h.app, "day", {} as never)).toEqual({ status: "existing", file: target });
+	h.integrations["periodic-notes"] = { calendarSetManager: periodicManager(), getPeriodicNote: () => h.files.get(target.path), createPeriodicNote: create };
+	expect(await createOrReusePeriodicNote(h.app, "day", moment("2026-05-20"))).toEqual({ status: "created", file: target });
+	expect(await createOrReusePeriodicNote(h.app, "day", moment("2026-05-20"))).toEqual({ status: "existing", file: target });
 	expect(create).toHaveBeenCalledTimes(1);
+});
+
+// beta.3's manager reads the active set and returns its native config object.
+function periodicManager() {
+	const config = { enabled: true, format: "YYYY-MM-DD", folder: "Calendar", templatePath: "" };
+	return { getActiveId: () => "Work", getActiveConfig: () => config,
+		getActiveGranularities: () => ["day", "week"], getFormat: () => config.format };
+}
+
+test("periodic lookup and creation receive independent Moment clones", async () => {
+	const h = fixture(), target = file("Calendar/2026-05-20.md"), requested = moment("2026-05-20");
+	const dates: string[] = [];
+	const getPeriodicNote = jest.fn((_granularity, date: moment.Moment) => {
+		dates.push(date.format("YYYY-MM-DD")); date.weekday(0); return null;
+	});
+	const createPeriodicNote = jest.fn(async (_granularity, date: moment.Moment) => {
+		dates.push(date.format("YYYY-MM-DD")); date.weekday(0);
+		h.files.set(target.path, target); return target;
+	});
+	h.integrations["periodic-notes"] = { calendarSetManager: periodicManager(), getPeriodicNote, createPeriodicNote };
+	expect(await createOrReusePeriodicNote(h.app, "week", requested)).toEqual({ status: "created", file: target });
+	expect(dates).toEqual(["2026-05-20", "2026-05-20"]);
+	expect(requested.format("YYYY-MM-DD")).toBe("2026-05-20");
+	expect(getPeriodicNote.mock.calls[0][1]).not.toBe(requested);
+	expect(createPeriodicNote.mock.calls[0][1]).not.toBe(requested);
+	expect(createPeriodicNote.mock.calls[0][1]).not.toBe(getPeriodicNote.mock.calls[0][1]);
+});
+
+test("periodic lookup cannot redirect creation by mutating the active config", async () => {
+	const h = fixture(), manager = periodicManager(), createPeriodicNote = jest.fn();
+	h.integrations["periodic-notes"] = { calendarSetManager: manager,
+		getPeriodicNote: () => { manager.getActiveConfig().folder = "Other"; return null; }, createPeriodicNote };
+	expect(await createOrReusePeriodicNote(h.app, "day", moment("2026-05-20"))).toMatchObject({ status: "failed" });
+	expect(createPeriodicNote).not.toHaveBeenCalled();
+});
+
+test.each(["undefined", "fabricated", "deleted", "throw"])("periodic %s result never guesses a successful file", async outcome => {
+	const h = fixture(), target = file("Calendar/Actual.md");
+	const createPeriodicNote = jest.fn(async () => {
+		if (outcome === "throw") { h.files.set(target.path, target); throw Error("failure after write"); }
+		if (outcome === "undefined") return undefined;
+		if (outcome === "fabricated") return { path: target.path };
+		h.files.set(target.path, target); h.files.delete(target.path);
+		return target;
+	});
+	h.integrations["periodic-notes"] = { calendarSetManager: periodicManager(), getPeriodicNote: () => null, createPeriodicNote };
+	expect(await createOrReusePeriodicNote(h.app, "day", moment("2026-05-20"))).toMatchObject({ status: "failed" });
+	if (outcome === "throw") expect(h.files.get(target.path)).toBe(target);
+	expect(h.generate).not.toHaveBeenCalled(); expect(EntitiesNotice).not.toHaveBeenCalled();
+});
+
+test("periodic lookup rejects a deleted or fabricated existing result without creation", async () => {
+	const h = fixture(), createPeriodicNote = jest.fn();
+	for (const existing of [file("Deleted.md"), { path: h.template.path }]) {
+		h.integrations["periodic-notes"] = { calendarSetManager: periodicManager(), getPeriodicNote: () => existing, createPeriodicNote };
+		expect(await createOrReusePeriodicNote(h.app, "day", moment("2026-05-20"))).toMatchObject({ status: "failed" });
+	}
+	expect(createPeriodicNote).not.toHaveBeenCalled();
+});
+
+test.each(["entry", "after lookup"])("periodic coordinator cancellation at %s prevents native creation", async when => {
+	const h = fixture(), createPeriodicNote = jest.fn();
+	let valid = when !== "entry";
+	const getPeriodicNote = jest.fn(() => { valid = false; return null; });
+	h.integrations["periodic-notes"] = { calendarSetManager: periodicManager(), getPeriodicNote, createPeriodicNote };
+	expect(await createOrReusePeriodicNote(h.app, "day", moment("2026-05-20"), { canStartWork: () => valid }))
+		.toEqual({ status: "cancelled" });
+	if (when === "entry") expect(getPeriodicNote).not.toHaveBeenCalled();
+	else expect(getPeriodicNote).toHaveBeenCalledTimes(1);
+	expect(createPeriodicNote).not.toHaveBeenCalled();
+	expect(h.generate).not.toHaveBeenCalled(); expect(EntitiesNotice).not.toHaveBeenCalled();
+});
+
+test("periodic native work already started retains the actual outcome after an await", async () => {
+	const h = fixture(), gate = deferred<TFile>(), target = file("Changed/Native result.md");
+	let valid = true;
+	const createPeriodicNote = jest.fn(() => gate.promise);
+	h.integrations["periodic-notes"] = { calendarSetManager: periodicManager(), getPeriodicNote: () => null, createPeriodicNote };
+	const pending = createOrReusePeriodicNote(h.app, "day", moment("2026-05-20"), { canStartWork: () => valid });
+	expect(createPeriodicNote).toHaveBeenCalledTimes(1);
+	valid = false; h.files.set(target.path, target); gate.resolve(target);
+	expect(await pending).toEqual({ status: "created", file: target });
+	expect(h.generate).not.toHaveBeenCalled(); expect(EntitiesNotice).not.toHaveBeenCalled();
 });
 test("Metadata Menu creation captures default source and awaits actual output", async () => {
 	const h = fixture("Templates/Drawing.canvas"), gate = deferred<TFile>(); h.create.mockImplementation(() => gate.promise);

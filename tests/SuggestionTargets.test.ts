@@ -19,6 +19,7 @@ jest.mock("obsidian", () => ({
 	...jest.requireActual("./__mocks__/obsidian"),
 	EditorSuggest: class { context: EditorSuggestContext | null = null; close() { this.context = null; } },
 	Notice: jest.fn(),
+	normalizePath: (path: string) => path.replace(/\\/g, "/").replace(/\/+/g, "/").replace(/^\/|\/$/g, ""),
 	moment: jest.requireActual("moment"),
 	prepareFuzzySearch: jest.fn(),
 	setIcon: jest.fn(),
@@ -304,27 +305,33 @@ test("real-file rows show the current vault-relative path alongside existing exp
 });
 
 
-test("Date actions keep distinct operative output aliases for the same date", async () => {
+test.each([false, true])("Date existing files retain distinct source-relative phrase aliases with creation=%s", (shouldCreateIfNotExists) => {
 	const h = harness(), f = file("Calendar/2026-09-13.md");
 	h.files.set(f.path, f);
 	h.integrations["nldates-obsidian"] = { parseDate: () => {
 		const date = moment("2026-09-13"); return { date: date.toDate(), moment: date, formattedString: "2026-09-13" };
 	} };
 	const getPeriodicNote = jest.fn(() => f);
-	h.integrations["periodic-notes"] = { getPeriodicNote, createPeriodicNote: jest.fn(), calendarSetManager: { getActiveGranularities: () => ["day"] } };
-	const provider = new DateEntityProvider(h.plugin, { providerInstanceId: "dates", includeWeekSuggestions: false });
+	const createPeriodicNote = jest.fn();
+	h.integrations["periodic-notes"] = { getPeriodicNote, createPeriodicNote, calendarSetManager: {
+		getActiveId: () => "Work",
+		getActiveGranularities: () => ["day"],
+		getActiveConfig: () => ({ enabled: true, folder: "Calendar", format: "YYYY-MM-DD", templatePath: "" }),
+		getFormat: () => "YYYY-MM-DD",
+	} };
+	const provider = new DateEntityProvider(h.plugin, { providerInstanceId: "dates", includeWeekSuggestions: false, shouldCreateIfNotExists });
 	h.use(provider);
 	jest.mocked(prepareFuzzySearch).mockImplementation(() => () => ({ score: 10, matches: [] }));
 	for (const alias of ["today", "this sunday"]) {
 		const ctx = context("@today"), rows = h.suggestor.getSuggestions(ctx);
 		expect(rows.filter(r => r.suggestionText === "today")).toHaveLength(1);
 		const selected = rows.find(r => r.suggestionText === alias)!;
-		expect(selected.target.kind).toBe("action");
+		expect(selected.target).toEqual({ kind: "file", file: f, alias });
 		h.suggestor.selectSuggestion(selected, {} as MouseEvent);
-		for (let i = 0; i < 5; i++) await Promise.resolve();
 		expect(h.generate).toHaveBeenLastCalledWith(f, ctx.file.path, undefined, alias);
 	}
-	expect(getPeriodicNote).toHaveBeenCalledTimes(2);
+	expect(getPeriodicNote).toHaveBeenCalled();
+	expect(createPeriodicNote).not.toHaveBeenCalled();
 });
 
 test.each(["undefined", "reject", "missing-template"])("real recipe selection leaves the sentence untouched on %s creation", async failure => {
@@ -442,4 +449,44 @@ test.each([
 	expect(results[1].target.kind).toBe("action");
 	expect(provider.isEnabled).toBe(true);
 	expect(engine).not.toHaveBeenCalled();
+});
+
+
+test("unchanged Date route remains selectable after native index invalidation", async () => {
+	const h = harness(), created = file("Calendar/2026-09-13.md");
+	const date = moment("2026-09-13");
+	h.integrations["nldates-obsidian"] = { parseDate: () => ({ date: date.toDate(), moment: date, formattedString: "2026-09-13" }) };
+	const createPeriodicNote = jest.fn(async () => { h.files.set(created.path, created); return created; });
+	h.integrations["periodic-notes"] = {
+		getPeriodicNote: jest.fn(() => null), createPeriodicNote,
+		calendarSetManager: {
+			getActiveId: () => "Work", getActiveGranularities: () => ["day"],
+			getActiveConfig: () => ({ enabled: true, format: "YYYY-MM-DD", folder: "Calendar", templatePath: "" }),
+			getFormat: () => "YYYY-MM-DD",
+		},
+	};
+	h.use(new DateEntityProvider(h.plugin, { providerInstanceId: "dates", includeWeekSuggestions: false }));
+	jest.mocked(prepareFuzzySearch).mockImplementation(() => () => ({ score: 10, matches: [] }));
+	const ctx = context("@today"), row = h.suggestor.getSuggestions(ctx).find(row => row.suggestionText === "today")!;
+	expect(row.target.kind).toBe("action");
+	h.suggestor.invalidateData();
+	h.suggestor.selectSuggestion(row, {} as MouseEvent);
+	for (let i = 0; i < 8; i++) await Promise.resolve();
+	expect(createPeriodicNote).toHaveBeenCalledTimes(1);
+	expect(h.generate).toHaveBeenCalledWith(created, ctx.file.path, undefined, "today");
+	expect(ctx.editor.transaction).toHaveBeenCalledTimes(1);
+});
+
+test.each(["NLP", "Periodic"])("unavailable %s date integration preserves unrelated provider rows", failing => {
+	const h = harness();
+	const date = moment("2026-09-13");
+	h.integrations["nldates-obsidian"] = { parseDate: () => {
+		if (failing === "NLP") throw new Error("parser unavailable");
+		return { date: date.toDate(), moment: date, formattedString: "2026-09-13" };
+	} };
+	if (failing === "Periodic") h.integrations["periodic-notes"] = { settings: { daily: { enabled: true } } };
+	h.use(new DateEntityProvider(h.plugin, { providerInstanceId: "dates", includeWeekSuggestions: false }), h.source("peer", [item({ kind: "text", text: "Peer" }, "today peer")]));
+	const error = jest.spyOn(console, "error").mockImplementation(() => {});
+	expect(h.suggestor.getSuggestions(context("@today")).map(row => row.suggestionText)).toEqual(["today peer"]);
+	error.mockRestore();
 });

@@ -13,6 +13,7 @@ jest.mock("obsidian", () => ({
 	},
 	Setting: class {},
 	TFile: class {},
+	normalizePath: (path: string) => path.replace(/\\/g, "/").replace(/\/+/g, "/").replace(/^\/|\/$/g, ""),
 	moment,
 }));
 
@@ -20,6 +21,32 @@ jest.mock("../../src/userComponents", () => ({
 	EntitiesNotice: jest.fn(),
 	IconPickerModal: jest.fn(),
 }));
+
+type Granularity = "day" | "week";
+interface CalendarConfig {
+	enabled: boolean;
+	format: string;
+	folder?: string;
+	templatePath?: string;
+}
+
+// Current beta manager methods read the active set and return its per-granularity config.
+function createCalendarManager(active: Granularity[] = ["week"], weekFormat = "gggg-[W]ww") {
+	const state = {
+		activeId: "Work",
+		configs: {
+			day: { enabled: active.includes("day"), format: "YYYY-MM-DD", folder: "Periodic/Days", templatePath: "Templates/Day.md" },
+			week: { enabled: active.includes("week"), format: weekFormat, folder: "Periodic/Weeks", templatePath: "Templates/Week.md" },
+		} satisfies Record<Granularity, CalendarConfig>,
+	};
+	return {
+		state,
+		getActiveId: jest.fn(() => state.activeId),
+		getActiveConfig: jest.fn((granularity: Granularity): CalendarConfig => state.configs[granularity]),
+		getFormat: jest.fn((granularity: Granularity) => state.configs[granularity].format || (granularity === "day" ? "YYYY-MM-DD" : "gggg-[W]ww")),
+		getActiveGranularities: jest.fn(() => (["day", "week"] as const).filter(granularity => state.configs[granularity].enabled)),
+	};
+}
 
 function createPluginWithPlugins(
 	pluginsById: Record<string, unknown>,
@@ -96,23 +123,14 @@ describe("DateEntityProvider", () => {
 		expect(provider.getEntityList("today")).toEqual([]);
 	});
 
-	test("returns an action that links an existing weekly periodic note", async () => {
+	test.each([false, true])("returns an existing weekly file with creation=%s", (shouldCreateIfNotExists) => {
 		freezeMomentNow("2026-05-18");
 		const weeklyFile = Object.assign(new TFile(), { path: "Periodic/Weeks/2026-W21.md" });
 		const generateMarkdownLink = jest
 			.fn()
 			.mockReturnValue("[[Periodic/Weeks/2026-W21|this week]]");
 		const periodicNotes = {
-			calendarSetManager: {
-				getActiveGranularities: jest.fn(() => ["week"]),
-				getActiveConfig: jest.fn(() => ({
-					enabled: true,
-					openAtStartup: false,
-					format: "gggg-[W]ww",
-					folder: "Periodic/Weeks",
-				})),
-				getFormat: jest.fn(() => "gggg-[W]ww"),
-			},
+			calendarSetManager: createCalendarManager(["week"]),
 			getPeriodicNote: jest.fn(() => weeklyFile),
 			createPeriodicNote: jest.fn(),
 		};
@@ -126,14 +144,13 @@ describe("DateEntityProvider", () => {
 
 		const provider = new DateEntityProvider(plugin, {
 			providerInstanceId: "test-instance",
-			shouldCreateIfNotExists: true,
+			shouldCreateIfNotExists,
 		});
 		const suggestion = provider
 			.getEntityList("this week")
 			.find((item) => item.suggestionText === "this week");
 
-		expect(getAction(suggestion)).toBeDefined();
-		await expect(getAction(suggestion)?.(actionContext())).resolves.toEqual({ status: "existing", file: weeklyFile, alias: "this week" });
+		expect(suggestion?.target).toEqual({ kind: "file", file: weeklyFile, alias: "this week" });
 		expect(periodicNotes.getPeriodicNote).toHaveBeenCalledWith(
 			"week",
 			expect.objectContaining({})
@@ -145,23 +162,14 @@ describe("DateEntityProvider", () => {
 		expect(generateMarkdownLink).not.toHaveBeenCalled();
 	});
 
-	test("passes the semantic week date to Periodic Notes on locale week boundaries", async () => {
+	test("passes the semantic week date to Periodic Notes on locale week boundaries", () => {
 		freezeMomentNow("2026-05-17");
 		const weeklyFile = Object.assign(new TFile(), { path: "Periodic/Weeks/2026-W21.md" });
 		const generateMarkdownLink = jest
 			.fn()
 			.mockReturnValue("[[Periodic/Weeks/2026-W21|this week]]");
 		const periodicNotes = {
-			calendarSetManager: {
-				getActiveGranularities: jest.fn(() => ["week"]),
-				getActiveConfig: jest.fn(() => ({
-					enabled: true,
-					openAtStartup: false,
-					format: "gggg-[W]ww",
-					folder: "Periodic/Weeks",
-				})),
-				getFormat: jest.fn(() => "gggg-[W]ww"),
-			},
+			calendarSetManager: createCalendarManager(["week"]),
 			getPeriodicNote: jest.fn(() => weeklyFile),
 			createPeriodicNote: jest.fn(),
 		};
@@ -186,8 +194,7 @@ describe("DateEntityProvider", () => {
 			"2026-W20"
 		);
 		expect(suggestion?.noteText).toBe("2026-W21");
-		expect(getAction(suggestion)).toBeDefined();
-		await expect(getAction(suggestion)?.(actionContext())).resolves.toEqual({ status: "existing", file: weeklyFile, alias: "this week" });
+		expect(suggestion?.target).toEqual({ kind: "file", file: weeklyFile, alias: "this week" });
 		expect(periodicNotes.getPeriodicNote).toHaveBeenCalledWith(
 			"week",
 			expect.objectContaining({})
@@ -205,16 +212,7 @@ describe("DateEntityProvider", () => {
 			.fn()
 			.mockReturnValue("[[Periodic/Weeks/2026-W22|next week]]");
 		const periodicNotes = {
-			calendarSetManager: {
-				getActiveGranularities: jest.fn(() => ["week"]),
-				getActiveConfig: jest.fn(() => ({
-					enabled: true,
-					openAtStartup: false,
-					format: "gggg-[W]ww",
-					folder: "Periodic/Weeks",
-				})),
-				getFormat: jest.fn(() => "gggg-[W]ww"),
-			},
+			calendarSetManager: createCalendarManager(["week"]),
 			getPeriodicNote: jest.fn(() => null),
 			createPeriodicNote: jest.fn(async () => weeklyFile),
 		};
@@ -252,16 +250,7 @@ describe("DateEntityProvider", () => {
 			.fn()
 			.mockReturnValue("[[Periodic/Weeks/2026-W21|week 21]]");
 		const periodicNotes = {
-			calendarSetManager: {
-				getActiveGranularities: jest.fn(() => ["week"]),
-				getActiveConfig: jest.fn(() => ({
-					enabled: true,
-					openAtStartup: false,
-					format: "gggg-[W]ww",
-					folder: "Periodic/Weeks",
-				})),
-				getFormat: jest.fn(() => "gggg-[W]ww"),
-			},
+			calendarSetManager: createCalendarManager(["week"]),
 			getPeriodicNote: jest.fn(() => null),
 			createPeriodicNote: jest.fn(async () => weeklyFile),
 		};
@@ -288,7 +277,7 @@ describe("DateEntityProvider", () => {
 			"week",
 			expect.objectContaining({})
 		);
-		const getPeriodicNoteDate = periodicNotes.getPeriodicNote.mock.calls[0][1];
+		const getPeriodicNoteDate = periodicNotes.getPeriodicNote.mock.calls[periodicNotes.getPeriodicNote.mock.calls.length - 1][1];
 		expect(getPeriodicNoteDate.format("YYYY-MM-DD")).toBe("2026-05-18");
 		expect(periodicNotes.createPeriodicNote).toHaveBeenCalledWith(
 			"week",
@@ -306,16 +295,7 @@ describe("DateEntityProvider", () => {
 			.fn()
 			.mockReturnValue("[[Periodic/Days/2026-05-18|today]]");
 		const periodicNotes = {
-			calendarSetManager: {
-				getActiveGranularities: jest.fn(() => ["day"]),
-				getActiveConfig: jest.fn(() => ({
-					enabled: true,
-					openAtStartup: false,
-					format: "YYYY-MM-DD",
-					folder: "Periodic/Days",
-				})),
-				getFormat: jest.fn(() => "YYYY-MM-DD"),
-			},
+			calendarSetManager: createCalendarManager(["day"]),
 			getPeriodicNote: jest.fn(() => null),
 			createPeriodicNote: jest.fn(async () => dailyFile),
 		};
@@ -362,9 +342,7 @@ describe("DateEntityProvider", () => {
 	test("returns no replacement when periodic note creation does not return a file", async () => {
 		freezeMomentNow("2026-05-18");
 		const periodicNotes = {
-			calendarSetManager: {
-				getActiveGranularities: jest.fn(() => ["week"]),
-			},
+			calendarSetManager: createCalendarManager(["week"]),
 			getPeriodicNote: jest.fn(() => null),
 			createPeriodicNote: jest.fn(() => Promise.resolve(undefined)),
 		};
@@ -385,12 +363,10 @@ describe("DateEntityProvider", () => {
 		await expect(getAction(suggestion)?.(actionContext())).resolves.toMatchObject({ status: "failed" });
 	});
 
-	test("does not add an action when periodic note creation setting is disabled", () => {
+	test("looks up configured missing notes with creation disabled", () => {
 		freezeMomentNow("2026-05-18");
 		const periodicNotes = {
-			calendarSetManager: {
-				getActiveGranularities: jest.fn(() => ["week"]),
-			},
+			calendarSetManager: createCalendarManager(["week"]),
 			getPeriodicNote: jest.fn(() => null),
 			createPeriodicNote: jest.fn(),
 		};
@@ -408,17 +384,15 @@ describe("DateEntityProvider", () => {
 			.find((item) => item.suggestionText === "this week");
 
 		expect(getAction(suggestion)).toBeUndefined();
-		expect(suggestion?.target).toEqual({ kind: "unresolved-link", linkpath: "2026-W21" });
-		expect(periodicNotes.getPeriodicNote).not.toHaveBeenCalled();
+		expect(suggestion?.target).toEqual({ kind: "unresolved-link", linkpath: "Periodic/Weeks/2026-W21", alias: "this week" });
+		expect(periodicNotes.getPeriodicNote).toHaveBeenCalled();
 		expect(periodicNotes.createPeriodicNote).not.toHaveBeenCalled();
 	});
 
 	test("does not add an action when week granularity is inactive", () => {
 		freezeMomentNow("2026-05-18");
 		const periodicNotes = {
-			calendarSetManager: {
-				getActiveGranularities: jest.fn(() => ["day"]),
-			},
+			calendarSetManager: createCalendarManager(["day"]),
 			getPeriodicNote: jest.fn(() => null),
 			createPeriodicNote: jest.fn(),
 		};
@@ -437,7 +411,7 @@ describe("DateEntityProvider", () => {
 
 		expect(getAction(suggestion)).toBeUndefined();
 		expect(suggestion?.target).toEqual({ kind: "unresolved-link", linkpath: "2026-W21" });
-		expect(periodicNotes.getPeriodicNote).not.toHaveBeenCalled();
+		expect(periodicNotes.getPeriodicNote).not.toHaveBeenCalledWith("week", expect.anything());
 		expect(periodicNotes.createPeriodicNote).not.toHaveBeenCalled();
 	});
 
@@ -448,9 +422,7 @@ describe("DateEntityProvider", () => {
 			.spyOn(console, "error")
 			.mockImplementation(() => undefined);
 		const periodicNotes = {
-			calendarSetManager: {
-				getActiveGranularities: jest.fn(() => ["week"]),
-			},
+			calendarSetManager: createCalendarManager(["week"]),
 			getPeriodicNote: jest.fn(() => null),
 			createPeriodicNote: jest.fn(async () => {
 				throw error;
@@ -480,10 +452,7 @@ describe("DateEntityProvider", () => {
 	test("does not turn a failed semantic week creation into an unresolved link", async () => {
 		freezeMomentNow("2026-05-17");
 		const periodicNotes = {
-			calendarSetManager: {
-				getActiveGranularities: jest.fn(() => ["week"]),
-				getFormat: jest.fn(() => "gggg-[W]ww"),
-			},
+			calendarSetManager: createCalendarManager(["week"]),
 			getPeriodicNote: jest.fn(() => null),
 			createPeriodicNote: jest.fn(async () => undefined),
 		};
@@ -530,9 +499,7 @@ describe("DateEntityProvider", () => {
 
 	test("does not add an action when Periodic Notes lacks creation APIs", () => {
 		const periodicNotes = {
-			calendarSetManager: {
-				getActiveGranularities: jest.fn(() => ["week"]),
-			},
+			calendarSetManager: createCalendarManager(["week"]),
 		};
 		const plugin = createPluginWithPlugins({
 			"nldates-obsidian": createNlDatesPlugin(),
@@ -559,7 +526,7 @@ test("re-resolves NLP and Periodic Notes capabilities on each evaluation", () =>
 	integrations["nldates-obsidian"] = nlp;
 	expect(provider.getEntityList("today").find(item => item.suggestionText === "today")?.noteText).toBe("2026-05-17");
 	const periodic = (format: string) => ({
-		calendarSetManager: { getActiveGranularities: () => ["week"], getFormat: () => format },
+		calendarSetManager: createCalendarManager(["week"], format),
 		getPeriodicNote: jest.fn(), createPeriodicNote: jest.fn(),
 	});
 	integrations["periodic-notes"] = periodic("[First week]");
@@ -569,8 +536,7 @@ test("re-resolves NLP and Periodic Notes capabilities on each evaluation", () =>
 	week = provider.getEntityList("today").find(item => item.suggestionText === "this week")!;
 	expect(week.noteText).toBe("Replacement week");
 	integrations["periodic-notes"] = {}; // Partial API is unavailable.
-	week = provider.getEntityList("today").find(item => item.suggestionText === "this week")!;
-	expect(getAction(week)).toBeUndefined(); expect(week.noteText).not.toBe("Replacement week");
+	expect(provider.getEntityList("today").find(item => item.suggestionText === "this week")).toBeUndefined();
 	const replacementNlp = createNlDatesPlugin();
 	integrations["nldates-obsidian"] = replacementNlp;
 	nlp.parseDate.mockClear();
@@ -578,4 +544,227 @@ test("re-resolves NLP and Periodic Notes capabilities on each evaluation", () =>
 	expect(nlp.parseDate).not.toHaveBeenCalled(); expect(replacementNlp.parseDate).toHaveBeenCalled();
 	delete integrations["nldates-obsidian"];
 	expect(provider.getEntityList("today")).toEqual([]);
+});
+
+describe("current periodic date route regressions", () => {
+	const originalMomentNow = moment.now;
+	const originalLocale = moment.locale();
+
+	beforeEach(() => {
+		freezeMomentNow("2026-05-17");
+		moment.locale("en");
+	});
+	afterEach(() => {
+		moment.now = originalMomentNow;
+		moment.locale(originalLocale);
+		jest.restoreAllMocks();
+		jest.clearAllMocks();
+	});
+
+	function routeFixture(active: Granularity[] = ["day", "week"]) {
+		const calendarSetManager = createCalendarManager(active, "GGGG-[W]WW");
+		const createdFile = Object.assign(new TFile(), { path: "Periodic/Weeks/2026-W20.md" });
+		const periodicNotes = {
+			calendarSetManager,
+			getPeriodicNote: jest.fn((_granularity: Granularity, _date: moment.Moment): TFile | null => null),
+			createPeriodicNote: jest.fn(async (_granularity: Granularity, _date: moment.Moment) => createdFile),
+		};
+		const nlp = createNlDatesPlugin();
+		const integrations: Record<string, unknown> = { "nldates-obsidian": nlp, "periodic-notes": periodicNotes };
+		const plugin = createPluginWithPlugins(integrations);
+		const provider = new DateEntityProvider(plugin, { providerInstanceId: "routes" });
+		return { periodicNotes, nlp, integrations, plugin, provider, createdFile };
+	}
+
+	const explicitWeeks = [
+		["2021-01-01", "2021-W01", "2021-01-04"],
+		["2024-12-31", "2024-W01", "2024-01-01"],
+		["2026-05-17", "2020-W53", "2020-12-28"],
+		["2026-05-17", "20-W53", "2020-12-28"],
+		["2026-05-17", "W15", "2027-04-12"],
+		["2026-05-17", "W16", "2026-04-13"],
+		["2021-01-01", "W52", "2020-12-21"],
+		["2024-12-31", "W01", "2024-12-30"],
+		["2026-05-17", "2026 week 1", "2025-12-29"],
+		["2026-05-17", "2026wk1", "2025-12-29"],
+		["2026-05-17", "26 WK 01", "2025-12-29"],
+		["2026-05-17", "  2026-W01  ", "2025-12-29"],
+	];
+
+	test.each(explicitWeeks.flatMap(row => ["en", "en-gb"].map(locale => [locale, ...row])))(
+		"explicit ISO week in %s on %s parses %s as Monday %s without NLP",
+		async (locale, now, query, expected) => {
+			moment.locale(locale);
+			freezeMomentNow(now);
+			const h = routeFixture(["week"]);
+			const rows = h.provider.getEntityList(query).filter(row => row.suggestionText.trim() === query.trim());
+			expect(getAction(rows[0])).toBeDefined();
+			await getAction(rows[0])!(actionContext());
+			const requested = h.periodicNotes.getPeriodicNote.mock.calls.filter(([granularity]) => granularity === "week").pop()?.[1];
+			expect(requested?.format("YYYY-MM-DD")).toBe(expected);
+			expect(requested?.isoWeekday()).toBe(1);
+			expect(rows).toHaveLength(1);
+			expect(h.nlp.parseDate.mock.calls.some(([value]) => value.trim() === query.trim())).toBe(false);
+		}
+	);
+
+	test.each([
+		"W00", "2021-W53", "2026-W54", "2026-W100", "2026-W01garbage",
+		"prefix2026-W01", "2026-W01-W02", "w", "WK", "week", "2026-W", "26 wk", "2026-week",
+	])("recognized invalid numeric week %s cannot recover through a successful NLP parser", query => {
+		const h = routeFixture();
+		const rows = h.provider.getEntityList(query);
+		expect(rows.find(row => row.suggestionText === query)).toBeUndefined();
+		expect(h.nlp.parseDate).not.toHaveBeenCalledWith(query);
+	});
+
+	test.each(["2026-W01", "week 21", "W00", "2026-W100"])("disabled week suggestions do not route %s through NLP", query => {
+		const h = routeFixture();
+		const provider = new DateEntityProvider(h.plugin, { providerInstanceId: "no-weeks", includeWeekSuggestions: false });
+		expect(provider.getEntityList(query).find(row => row.suggestionText === query)).toBeUndefined();
+		expect(h.nlp.parseDate).not.toHaveBeenCalledWith(query);
+		expect(h.periodicNotes.getPeriodicNote).not.toHaveBeenCalledWith("week", expect.anything());
+	});
+
+	test.each(["this week", "last week", "next week", "this monday", "tomorrow", "in two weeks", "2024-02-29", "tomorrow 2026", "May 2026"])(
+		"ordinary natural query %s remains outside the numeric-week rejection category", query => {
+			const h = routeFixture();
+			expect(h.provider.getEntityList(query).find(row => row.suggestionText === query)).toBeDefined();
+			if (!/^(this|last|next) week$/.test(query)) expect(h.nlp.parseDate).toHaveBeenCalledWith(query);
+		}
+	);
+
+	test.each(["2024-02-29T12:34:56-08:00", "2024-03-10T12:34:56-07:00"])("preserves the NLP leap-day/DST Moment %s", iso => {
+		const h = routeFixture(["day"]);
+		const parsed = moment.parseZone(iso);
+		h.nlp.parseDate.mockReturnValue({ date: parsed.toDate(), moment: parsed, formattedString: "NLP display" });
+		h.provider.getEntityList("a natural date");
+		expect(h.periodicNotes.getPeriodicNote).toHaveBeenCalled();
+		expect(h.periodicNotes.getPeriodicNote.mock.calls.every(([, date]) => date.valueOf() === parsed.valueOf())).toBe(true);
+		expect(parsed.format()).toBe(iso);
+	});
+
+	test("rejects an invalid parsed Moment before lookup", () => {
+		const h = routeFixture();
+		h.nlp.parseDate.mockReturnValue({ date: new Date("2026-05-17"), moment: moment.invalid(), formattedString: "Invalid date" });
+		expect(h.provider.getEntityList("broken parse").find(row => row.suggestionText === "broken parse")).toBeUndefined();
+		expect(h.periodicNotes.getPeriodicNote).not.toHaveBeenCalledWith("day", expect.anything());
+	});
+
+	test.each([false, true].flatMap(shouldCreateIfNotExists => [undefined, null, 42].map(createCapability => [shouldCreateIfNotExists, createCapability] as const)))("lookup-only resolves existing files with creation=%s and create capability=%s", (shouldCreateIfNotExists, createCapability) => {
+		const h = routeFixture();
+		const files = {
+			day: Object.assign(new TFile(), { path: "Real daily.md" }),
+			week: Object.assign(new TFile(), { path: "Real weekly.md" }),
+		};
+		Object.assign(h.plugin.app.vault, { getAbstractFileByPath: (path: string) => Object.values(files).find(file => file.path === path) });
+		h.periodicNotes.getPeriodicNote.mockImplementation(granularity => files[granularity]);
+		Reflect.set(h.periodicNotes, "createPeriodicNote", createCapability);
+		const provider = new DateEntityProvider(h.plugin, { providerInstanceId: "lookup-only", shouldCreateIfNotExists });
+		const rows = provider.getEntityList("today");
+		expect(rows.find(row => row.suggestionText === "today")?.target).toEqual({ kind: "file", file: files.day, alias: "today" });
+		expect(rows.find(row => row.suggestionText === "this week")?.target).toEqual({ kind: "file", file: files.week, alias: "this week" });
+	});
+
+	test.each([undefined, null, 42])("lookup-only missing note with create capability=%s retains literal configured path and phrase alias", createCapability => {
+		const h = routeFixture();
+		h.periodicNotes.calendarSetManager.state.configs.day.folder = " Periodic / Days ";
+		h.periodicNotes.calendarSetManager.state.configs.day.format = "[ date ]YYYY-MM-DD[ ]";
+		Reflect.set(h.periodicNotes, "createPeriodicNote", createCapability);
+		const row = h.provider.getEntityList("today").find(row => row.suggestionText === "today");
+		expect(row?.target).toEqual({ kind: "unresolved-link", linkpath: " Periodic / Days / date 2026-05-17 ", alias: "today" });
+	});
+
+	test.each(["missing", "empty"])("native %s folder/template defaults preserve the configured root route", defaults => {
+		const h = routeFixture(["day"]);
+		const config = h.periodicNotes.calendarSetManager.state.configs.day;
+		for (const field of ["folder", "templatePath", "format"] as const) {
+			if (defaults === "missing") Reflect.deleteProperty(config, field);
+			else config[field] = "";
+		}
+		Reflect.deleteProperty(h.periodicNotes, "createPeriodicNote");
+		const row = h.provider.getEntityList("today").find(row => row.suggestionText === "today");
+		expect(row?.target).toEqual({ kind: "unresolved-link", linkpath: "2026-05-17", alias: "today" });
+	});
+
+	test("an equal replacement config object does not disable the retained route", async () => {
+		const h = routeFixture(["week"]);
+		const row = h.provider.getEntityList("2026-W21").find(row => row.suggestionText === "2026-W21");
+		const state = h.periodicNotes.calendarSetManager.state;
+		state.configs.week = { ...state.configs.week };
+		await expect(getAction(row)!(actionContext())).resolves.toMatchObject({ status: "created", file: h.createdFile });
+		expect(h.periodicNotes.createPeriodicNote).toHaveBeenCalledTimes(1);
+	});
+
+	test("captures effective config once per used granularity in an evaluation", () => {
+		const h = routeFixture();
+		h.provider.getEntityList("today");
+		for (const granularity of ["day", "week"] as const) {
+			expect(h.periodicNotes.calendarSetManager.getActiveConfig.mock.calls.filter(([value]) => value === granularity)).toHaveLength(1);
+			expect(h.periodicNotes.calendarSetManager.getFormat.mock.calls.filter(([value]) => value === granularity)).toHaveLength(1);
+		}
+	});
+
+	test.each([
+		"plugin", "manager", "lookup method", "create method", "config method", "format method", "active ID method", "granularities method",
+		"active ID", "folder", "format", "template", "disabled", "lookup throws",
+	])("retained missing-note action refuses changed %s before native creation", async change => {
+		const h = routeFixture();
+		const row = h.provider.getEntityList("2026-W21").find(row => row.suggestionText === "2026-W21");
+		const action = getAction(row);
+		expect(action).toBeDefined();
+		const manager = h.periodicNotes.calendarSetManager;
+		const create = h.periodicNotes.createPeriodicNote;
+		if (change === "plugin") h.integrations["periodic-notes"] = { ...h.periodicNotes };
+		if (change === "manager") h.periodicNotes.calendarSetManager = createCalendarManager(["day", "week"], "GGGG-[W]WW");
+		if (change === "lookup method") h.periodicNotes.getPeriodicNote = jest.fn(() => null);
+		if (change === "create method") h.periodicNotes.createPeriodicNote = jest.fn(async () => h.createdFile);
+		if (change === "config method") manager.getActiveConfig = jest.fn(granularity => manager.state.configs[granularity]);
+		if (change === "format method") manager.getFormat = jest.fn(granularity => manager.state.configs[granularity].format);
+		if (change === "active ID method") manager.getActiveId = jest.fn(() => manager.state.activeId);
+		if (change === "granularities method") manager.getActiveGranularities = jest.fn(() => ["day", "week"]);
+		if (change === "active ID") manager.state.activeId = "Home";
+		if (change === "folder") manager.state.configs.week.folder = "Changed/Weeks";
+		if (change === "format") manager.state.configs.week.format = "[Changed-]GGGG-[W]WW";
+		if (change === "template") manager.state.configs.week.templatePath = "Templates/Changed.md";
+		if (change === "disabled") manager.state.configs.week.enabled = false;
+		if (change === "lookup throws") h.periodicNotes.getPeriodicNote.mockImplementation(() => { throw new Error("index unavailable"); });
+		const result = await action!(actionContext());
+		expect(result.status).toMatch(/^(unavailable|failed)$/);
+		expect(create).not.toHaveBeenCalled();
+		expect(h.periodicNotes.createPeriodicNote).not.toHaveBeenCalled();
+		const fresh = h.provider.getEntityList("2026-W21").find(row => row.suggestionText === "2026-W21");
+		if (change === "disabled") expect(fresh?.target.kind).toBe("unresolved-link");
+		else if (change === "lookup throws") expect(getAction(fresh)).toBeUndefined();
+		else expect(getAction(fresh)).toBeDefined();
+	});
+
+	test.each(["folder", "format", "templatePath", "enabled"])("malformed weekly %s leaves a valid daily route available", field => {
+		const h = routeFixture();
+		Reflect.set(h.periodicNotes.calendarSetManager.state.configs.week, field, 42);
+		const rows = h.provider.getEntityList("2026-W21");
+		expect(rows.find(row => row.suggestionText === "2026-W21")).toBeUndefined();
+		expect(rows.find(row => row.suggestionText === "this week")).toBeUndefined();
+		expect(getAction(rows.find(row => row.suggestionText === "today"))).toBeDefined();
+		expect(h.periodicNotes.getPeriodicNote).not.toHaveBeenCalledWith("week", expect.anything());
+	});
+
+	test("throwing weekly config leaves a valid daily route available", () => {
+		const h = routeFixture();
+		h.periodicNotes.calendarSetManager.getActiveConfig.mockImplementation(granularity => {
+			if (granularity === "week") throw new Error("bad week config");
+			return h.periodicNotes.calendarSetManager.state.configs.day;
+		});
+		const rows = h.provider.getEntityList("2026-W21");
+		expect(rows.find(row => row.suggestionText === "2026-W21")).toBeUndefined();
+		expect(getAction(rows.find(row => row.suggestionText === "today"))).toBeDefined();
+	});
+
+	test("lookup mutation cannot change a retained explicit-week creation date", async () => {
+		const h = routeFixture(["week"]);
+		h.periodicNotes.getPeriodicNote.mockImplementation((_granularity, date) => { date.add(10, "weeks"); return null; });
+		const row = h.provider.getEntityList("2026-W21").find(row => row.suggestionText === "2026-W21");
+		await expect(getAction(row)!(actionContext())).resolves.toMatchObject({ status: "created", file: h.createdFile, alias: "2026-W21" });
+		expect(h.periodicNotes.createPeriodicNote.mock.calls[0][1].format("YYYY-MM-DD")).toBe("2026-05-18");
+	});
 });
