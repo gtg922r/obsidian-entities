@@ -65,6 +65,7 @@ export class EntitiesSuggestor extends EditorSuggest<EntitySuggestionItem> {
 
 	private liveTrigger?: TriggerSession;
 	private dismissed?: TriggerSession;
+	private displayedBinding?: EditorBindingSnapshot;
 	private readonly removeBindingListener: () => void;
 
 	private lastSuggestionCount = 0;
@@ -80,7 +81,15 @@ export class EntitiesSuggestor extends EditorSuggest<EntitySuggestionItem> {
 		// before native close clears context; every other key retains the native parent.
 		this.scope = new Scope(this.scope);
 		this.scope.register([], "Escape", event => {
-			if (event.isComposing || this.liveTrigger?.binding.binding.view.composing) return;
+			if (event.isComposing) return;
+			const binding = this.liveTrigger?.binding ?? this.displayedBinding, context = this.context;
+			if (!binding || !context || context.editor !== binding.binding.editor || context.file !== binding.binding.file ||
+				!this.bindings.isSessionCurrent(binding)) {
+				this.close();
+				return;
+			}
+			// Eligibility may already be gone while the native menu awaits its delayed close.
+			if (binding.binding.view.composing) return;
 			this.dismissByEscape();
 			this.close();
 			return false;
@@ -303,6 +312,9 @@ export class EntitiesSuggestor extends EditorSuggest<EntitySuggestionItem> {
 			(a, b) => (b.match?.score ?? -10) - (a.match?.score ?? -10)
 		);
 		this.lastSuggestionCount = sortedSuggestions.length;
+		const session = this.liveTrigger;
+		this.displayedBinding = sortedSuggestions.length && session && context.editor === session.context.editor &&
+			context.file === session.context.file ? session.binding : undefined;
 		return sortedSuggestions;
 	}
 
@@ -351,6 +363,7 @@ export class EntitiesSuggestor extends EditorSuggest<EntitySuggestionItem> {
 
 	close(): void {
 		this.liveTrigger = undefined;
+		this.displayedBinding = undefined;
 		this.lastSuggestionCount = 0;
 		super.close();
 	}

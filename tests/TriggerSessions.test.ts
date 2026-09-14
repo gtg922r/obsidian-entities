@@ -230,3 +230,33 @@ test("closing an unsaved fence makes following prose eligible on the next reques
 	r.view.dispatch({ changes: { from: 0, to: open.doc.length, insert: closed.doc }, selection: { anchor: closed.doc.length } });
 	expect(r.trigger()?.query).toBe("@Alice");
 });
+
+test("composing Escape preserves a visible menu after its trigger becomes ineligible before native close", () => {
+	const r = setup(":cat"); r.show();
+	const context = r.suggestor.context;
+	Object.defineProperty(r.view, "composing", { configurable: true, value: true });
+	r.append(" "); // Existing ViewPlugin invalidates the trigger before the host's delayed menu request.
+	const close = jest.spyOn(r.suggestor, "close");
+	expect(r.escape()).toBeUndefined(); // The Escape event itself need not report composition.
+	expect(close).not.toHaveBeenCalled();
+	expect(r.suggestor.context).toBe(context);
+	Object.defineProperty(r.view, "composing", { configurable: true, value: false });
+	r.view.dispatch({ changes: { from: 4, to: 5 }, selection: { anchor: 4 } });
+	expect(r.trigger()?.query).toBe(":cat");
+});
+
+test.each(["activation", "superseded", "missing-info", "detach"])("a stale displayed context after %s does not consume unrelated Escape", reason => {
+	const r = setup(":cat"); r.show();
+	Object.defineProperty(r.view, "composing", { configurable: true, value: true });
+	if (reason === "activation") r.workspace.trigger("active-leaf-change");
+	if (reason === "superseded") {
+		const second = mountTestEditor(r.app, r.bindings, r.file, ":cat", ":cat", r.editor);
+		Object.defineProperty(second.view, "composing", { configurable: true, value: true });
+		r.view.dispatch({ effects: StateEffect.appendConfig.of([]) });
+		r.view.contentDOM.dispatchEvent(new FocusEvent("focus"));
+	}
+	if (reason === "missing-info") r.setInfo(undefined);
+	if (reason === "detach") r.view.dom.remove();
+	expect(r.escape()).toBeUndefined();
+	expect(r.suggestor.context).toBeNull(); // Cleanup may close the obsolete popup without consuming this key.
+});
