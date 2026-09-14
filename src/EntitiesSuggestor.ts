@@ -48,6 +48,12 @@ interface SuggestionProvenance {
 	sourcePath: string;
 }
 
+interface SuggestionCandidate {
+	item: EntitySuggestionItem;
+	provider: Provider;
+	match: EntitySuggestionItem["match"];
+}
+
 /** Collects synchronous provider results and guards selection against runtime replacement. */
 export class EntitiesSuggestor extends EditorSuggest<EntitySuggestionItem> {
 	plugin: Entities;
@@ -250,14 +256,9 @@ export class EntitiesSuggestor extends EditorSuggest<EntitySuggestionItem> {
 		const trigger = (context.query.charAt(0) as TriggerCharacter) || TriggerCharacter.At;
 		const searchQuery = context.query.slice(1);
 		const fuzzyMatch = prepareFuzzySearch(searchQuery);
-		const ordinary: EntitySuggestionItem[] = [];
-		const creation: EntitySuggestionItem[] = [];
+		const ordinary: SuggestionCandidate[] = [];
+		const creation: SuggestionCandidate[] = [];
 		const providers = this.providerRegistry.getProvidersForTrigger(trigger);
-		const remember = (item: EntitySuggestionItem, provider: Provider): EntitySuggestionItem => {
-			const copy = { ...item, target: { ...item.target } };
-			this.provenance.set(copy, { provider, registryRevision, epoch, context: capturedContext, sourcePath });
-			return copy;
-		};
 
 		for (const provider of providers) {
 			const key = JSON.stringify([provider.providerInstanceId, trigger]);
@@ -283,7 +284,7 @@ export class EntitiesSuggestor extends EditorSuggest<EntitySuggestionItem> {
 					}
 					for (const item of cached.items) {
 						const match = fuzzyMatch(item.suggestionText);
-						if (match) ordinary.push(remember({ ...item, match }, provider));
+						if (match) ordinary.push({ item, provider, match });
 					}
 				} catch (error) {
 					this.providerSuggestions.delete(key);
@@ -294,24 +295,26 @@ export class EntitiesSuggestor extends EditorSuggest<EntitySuggestionItem> {
 			if (trigger === TriggerCharacter.At) {
 				try {
 					const { items } = this.readItems(provider.getTemplateCreationSuggestions(searchQuery), provider);
-					creation.push(...items.map(item => remember(item, provider)));
+					for (const item of items) creation.push({ item, provider, match: item.match });
 				} catch (error) {
 					this.reportFailure(provider, "creation", error);
 				}
 			}
 		}
 
-		const uniqueSuggestions = new Map<string, EntitySuggestionItem>();
+		const uniqueSuggestions = new Map<string, SuggestionCandidate>();
 		const fileIds = new Map<TFile, number>();
-		for (const result of [...ordinary, ...creation]) {
-			const source = this.provenance.get(result)!;
-			const key = suggestionTargetKey(result.target, source.provider.providerInstanceId, fileIds);
+		const deduplicate = (result: SuggestionCandidate) => {
+			const key = suggestionTargetKey(result.item.target, result.provider.providerInstanceId, fileIds);
 			const previous = uniqueSuggestions.get(key);
 			if (!previous || (result.match?.score ?? -10) > (previous.match?.score ?? -10)) {
-				// Keep the winning result and its existing R2 provenance, including source context.
+				// Replacement keeps the key's first encounter position for stable score ties.
 				uniqueSuggestions.set(key, result);
 			}
-		}
+		};
+		// Keys observe live files after every provider call, with all ordinary rows first.
+		for (const result of ordinary) deduplicate(result);
+		for (const result of creation) deduplicate(result);
 		const sortedSuggestions = Array.from(uniqueSuggestions.values()).sort(
 			(a, b) => (b.match?.score ?? -10) - (a.match?.score ?? -10)
 		);
@@ -319,7 +322,15 @@ export class EntitiesSuggestor extends EditorSuggest<EntitySuggestionItem> {
 		const session = this.liveTrigger;
 		this.displayedBinding = sortedSuggestions.length && session && context.editor === session.context.editor &&
 			context.file === session.context.file ? session.binding : undefined;
-		return sortedSuggestions;
+		const limit = this.limit;
+		const visible = Number.isSafeInteger(limit) && limit > 0 ? sortedSuggestions.slice(0, limit) : sortedSuggestions;
+		return visible.map(({ item, provider, match }) => {
+			const copy = { ...item, target: { ...item.target } };
+			// Preserve creation rows' absent/explicit undefined match property.
+			if (match) copy.match = match;
+			this.provenance.set(copy, { provider, registryRevision, epoch, context: capturedContext, sourcePath });
+			return copy;
+		});
 	}
 
 	renderSuggestion(value: EntitySuggestionItem, el: HTMLElement): void {
