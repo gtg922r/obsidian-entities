@@ -757,22 +757,28 @@ describe("explicit external settings recovery choices", () => {
 });
 
 describe("reconciliation close barrier", () => {
-	test("close waits for an admitted initial strict read without accepting its canonical state", async () => {
+	test.each(["file", "missing", "failure"])("close waits for an admitted initial strict %s read and records only its evidence", async outcome => {
 		const h = setup();
 		const read = deferred<Snapshot>();
+		const snapshot: Snapshot = outcome === "file"
+			? { kind: "file", raw: JSON.stringify({ providerSettings: [{ ...defaults, path: "unaccepted legacy" }] }) }
+			: { kind: "missing" };
 		h.readSnapshot.mockReturnValueOnce(read.promise);
 		const loading = h.store.load();
 		let settled = false;
 		const closing = h.store.close().then(result => { settled = true; return result; });
 		await nextTurn();
 		const settledBeforeRead = settled;
-		read.resolve({ kind: "file", raw: raw("initial external") });
+		if (outcome === "failure") read.reject(new Error("initial read failed during close"));
+		else read.resolve(snapshot);
 		expect(await loading).toBe(false);
 		expect(await closing).toBe(false);
 		expect(settledBeforeRead).toBe(false);
 		expect(h.store.isClosed).toBe(true);
 		expect(h.store.canonicalVersion).toBe(0);
 		expect(h.store.settings).toEqual({ schemaVersion: 1, providerSettings: [] });
+		expect(h.store).toMatchObject({ established: outcome === "file", disk: snapshot });
+		expect(h.createId).not.toHaveBeenCalled();
 		expect(h.changed).not.toHaveBeenCalled();
 		expect(h.writeSnapshot).not.toHaveBeenCalled();
 		expect(h.backupSnapshot).not.toHaveBeenCalled();

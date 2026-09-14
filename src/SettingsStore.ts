@@ -277,10 +277,10 @@ export class SettingsStore {
 			let candidate: Candidate | undefined;
 			if (this.persistence) {
 				const snapshot = await this.persistence.readSnapshot();
-				if (this.closed) return false;
 				this.disk = snapshot;
 				if (this.disk.kind === "file") this.established = true;
-				else if (this.established) throw new Error("The established settings file is missing. Restore it, then check again.");
+				if (this.closed) return false;
+				if (this.disk.kind === "missing" && this.established) throw new Error("The established settings file is missing. Restore it, then check again.");
 				original = parseSettingsSnapshot(this.disk);
 				if (this.disk.kind === "file") candidate = this.candidate(this.disk.raw);
 			} else original = await read!();
