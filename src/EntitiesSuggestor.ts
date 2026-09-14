@@ -166,8 +166,12 @@ export class EntitiesSuggestor extends EditorSuggest<EntitySuggestionItem> {
 		if (!session || !context || !this.lastSuggestionCount || context.editor !== session.context.editor || context.file !== session.context.file ||
 			context.query !== session.context.query || context.start.line !== session.context.start.line || context.start.ch !== session.context.start.ch ||
 			context.end.line !== session.context.end.line || context.end.ch !== session.context.end.ch) return;
-		const request = this.readTrigger(context.end, context.editor, context.file);
-		if (request?.syntax === "allowed" && this.sameSession(session, request.session) && request.session.context.query === context.query) this.dismissed = request.session;
+		// Rendered rows can lag typing until the native delayed request. Dismiss the
+		// current continuation only if it still belongs to that same starter session.
+		const state = session.binding.binding.view.state, head = state.selection.main.head;
+		const line = state.doc.lineAt(head);
+		const request = this.readTrigger({ line: line.number - 1, ch: head - line.from }, context.editor, context.file);
+		if (request?.syntax === "allowed" && this.sameSession(session, request.session)) this.dismissed = request.session;
 	}
 
 	/** Refresh on the next request while keeping displayed results selectable. */

@@ -164,13 +164,13 @@ test("syntax exceptions and false availability cannot reuse old eligibility or c
 	r.escape(); expect(r.trigger()).not.toBeNull();
 });
 
-test("mismatched editor text, cursor, file and stale displayed query fail quiet then retry", () => {
+test("mismatched editor text, cursor and file fail quiet then retry", () => {
 	const r = setup(); r.show();
 	r.editor.getLine.mockReturnValueOnce("other text"); expect(r.trigger()).toBeNull(); r.escape(); expect(r.trigger()).not.toBeNull();
 	expect(r.suggestor.onTrigger({ line: 0, ch: 999 }, r.editor, r.file)).toBeNull();
 	expect(r.suggestor.onTrigger({ line: 0, ch: 1 }, r.editor, r.file)).toBeNull();
 	expect(r.suggestor.onTrigger(r.editor.getCursor(), r.editor, new TFile())).toBeNull();
-	r.show(); r.append(" Hope"); r.escape(); expect(r.trigger()).not.toBeNull();
+	r.show(); r.append(" Hope"); r.escape(); expect(r.trigger()).toBeNull();
 });
 
 test("unsaved fence edits use the current tree and known blocked context ends dismissal", () => {
@@ -259,4 +259,25 @@ test.each(["activation", "superseded", "missing-info", "detach"])("a stale displ
 	if (reason === "detach") r.view.dom.remove();
 	expect(r.escape()).toBeUndefined();
 	expect(r.suggestor.context).toBeNull(); // Cleanup may close the obsolete popup without consuming this key.
+});
+
+
+test("Escape immediately after ordinary typing dismisses the current same phrase before native refresh", () => {
+	const r = setup(); r.show();
+	r.append(" Hope"); r.escape();
+	expect(r.suggestor.context).toBeNull();
+	expect(r.trigger()).toBeNull();
+	r.append(" family"); expect(r.trigger()).toBeNull();
+});
+
+test.each(["new-starter", "replaced-mark", "ineligible", "unavailable"])("Escape during native refresh delay does not dismiss a %s interaction", change => {
+	const r = setup(); r.show();
+	if (change === "new-starter") r.append(" @Alice");
+	if (change === "replaced-mark") r.view.dispatch({ changes: { from: 0, to: 1, insert: ":" }, selection: { anchor: 4 } });
+	if (change === "ineligible") r.append(" /todo ");
+	if (change === "unavailable") { r.append(" Hope"); r.view.dispatch({ effects: r.syntax.reconfigure([]) }); }
+	r.escape();
+	if (change === "unavailable") r.view.dispatch({ effects: r.syntax.reconfigure(replayLanguage()) });
+	if (change === "ineligible") r.view.dispatch({ changes: { from: 4, to: r.view.state.doc.length }, selection: { anchor: 4 } });
+	expect(r.trigger()).not.toBeNull();
 });
