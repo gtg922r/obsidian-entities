@@ -14,6 +14,7 @@ import { DateEntityProvider } from "../src/Providers/DateEntityProvider";
 import moment = require("moment");
 import { MetadataMenuProvider } from "../src/Providers/MetadataMenuProvider";
 import { TriggerCharacter } from "../src/entities.types";
+import { readSuggestionTarget, suggestionTargetKey } from "../src/suggestionTargets";
 
 jest.mock("obsidian", () => ({
 	...jest.requireActual("./__mocks__/obsidian"),
@@ -82,6 +83,157 @@ afterEach(destroyTestEditors);
 beforeEach(() => {
 	jest.clearAllMocks();
 	jest.mocked(prepareFuzzySearch).mockImplementation(query => text => text.toLowerCase().includes(query.toLowerCase()) ? { score: 10, matches: [] } : null);
+});
+
+interface RankingSource {
+	id: string;
+	ordinary: EntitySuggestionItem[];
+	creation: EntitySuggestionItem[];
+}
+
+// Accepted eager full-output algorithm, retained only as a test oracle for valid rows.
+function eagerOracle(sources: RankingSource[], match: ReturnType<typeof prepareFuzzySearch>): EntitySuggestionItem[] {
+	const ordinary: { item: EntitySuggestionItem; id: string }[] = [], creation: typeof ordinary = [];
+	for (const source of sources) {
+		for (const raw of source.ordinary) {
+			const result = match(raw.suggestionText);
+			if (result) ordinary.push({ item: { ...raw, target: readSuggestionTarget(raw.target), match: result }, id: source.id });
+		}
+		for (const raw of source.creation) creation.push({ item: { ...raw, target: readSuggestionTarget(raw.target) }, id: source.id });
+	}
+	const unique = new Map<string, EntitySuggestionItem>(), files = new Map<TFile, number>();
+	for (const { item, id } of [...ordinary, ...creation]) {
+		const key = suggestionTargetKey(item.target, id, files), previous = unique.get(key);
+		if (!previous || (item.match?.score ?? -10) > (previous.match?.score ?? -10)) unique.set(key, item);
+	}
+	return [...unique.values()].sort((a, b) => (b.match?.score ?? -10) - (a.match?.score ?? -10));
+}
+
+// Observed native host post-retrieval coercion, including its nonempty-before-slice branch.
+const hostRows = (rows: EntitySuggestionItem[], limit: number) => limit > 0 && rows.length > limit ? rows.slice(0, limit) : rows;
+
+test.each([1, 2, 100, 1000, 0, -1, Infinity, -Infinity, NaN, 0.5, 1.5, 2.75, Number.MAX_SAFE_INTEGER, Number.MAX_SAFE_INTEGER + 1])("limit %p preserves eager oracle order, winners and native coercion", limit => {
+	const h = harness(); h.suggestor.limit = limit;
+	const row = (key: string, label: string, score?: number): EntitySuggestionItem => ({ ...item({ kind: "text", text: key }, label), ...(score === undefined ? {} : { match: { score, matches: [] } }) });
+	const sources: RankingSource[] = [
+		{ id: "first", ordinary: [row("A", "A low"), row("B", "B tie"), row("hidden", "Hidden", 900)], creation: [row("C", "creation C", 2), row("missing", "missing"), row("zero", "zero", 0), row("negative", "negative", -12)] },
+		{ id: "later", ordinary: [row("A", "A winner"), row("C", "ordinary C")], creation: [row("late", "late high", 9), row("explicit", "explicit")] },
+		{ id: "equal", ordinary: [row("A", "A equal loser")], creation: [row("negative", "negative winner", -11)] },
+	];
+	sources[1].creation[1].match = undefined;
+	const match: ReturnType<typeof prepareFuzzySearch> = text => text === "Hidden" ? null : { score: text === "A low" ? 1 : 2, matches: [[0, 1]] };
+	jest.mocked(prepareFuzzySearch).mockReturnValue(match);
+	h.use(...sources.map(s => h.source(s.id, s.ordinary, s.creation)));
+	const expected = eagerOracle(sources, match), result = h.suggestor.getSuggestions(context());
+	expect(expected.map(r => r.suggestionText)).toEqual(["late high", "A winner", "B tie", "ordinary C", "zero", "missing", "explicit", "negative winner"]);
+	expect(hostRows(result, limit)).toStrictEqual(hostRows(expected, limit));
+	expect(result).toStrictEqual(Number.isSafeInteger(limit) && limit > 0 ? expected.slice(0, limit) : expected);
+	if (!(Number.isSafeInteger(limit) && limit > 0)) {
+		expect(Object.prototype.hasOwnProperty.call(result.find(r => r.suggestionText === "missing")!, "match")).toBe(false);
+		expect(Object.prototype.hasOwnProperty.call(result.find(r => r.suggestionText === "explicit")!, "match")).toBe(true);
+	}
+});
+
+test("fixed-seed mixed-target differential retains full stable ranking across cold and warm caps", () => {
+	const h = harness(), files = [file("Same.md"), file("Same.md"), file("Asset.png")];
+	const callback = jest.fn(), scores = new Map<string, number | null>();
+	let seed = 0x712345;
+	const random = (n: number) => { seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0; return seed % n; };
+	const sources = Array.from({ length: 4 }, (_, p): RankingSource => {
+		const rows = Array.from({ length: 240 }, (_, i) => {
+			const k = random(40), alias = [undefined, "", "Alias", " Alias ", "Asset.png"][random(5)];
+			const targets: SuggestionTarget[] = [{ kind: "file", file: files[k % 3], alias }, { kind: "text", text: `key-${k}` }, { kind: "unresolved-link", linkpath: `key-${k}`, alias }, { kind: "action", id: `key-${k}`, callback }];
+			const label = `source-${p}-row-${i}`, row = item(targets[random(4)], label, `metadata-${i}`);
+			scores.set(label, random(8) === 0 ? null : random(9) - 12);
+			if (random(3)) row.match = { score: random(9) - 12, matches: [[0, 2]] };
+			return row;
+		});
+		return { id: `provider-${p}`, ordinary: rows.slice(0, 200), creation: rows.slice(200) };
+	});
+	const match: ReturnType<typeof prepareFuzzySearch> = text => scores.get(text) === null ? null : { score: scores.get(text)!, matches: [[1, 3]] };
+	jest.mocked(prepareFuzzySearch).mockReturnValue(match);
+	const providers = sources.map(s => h.source(s.id, s.ordinary, s.creation)); h.use(...providers);
+	const expected = eagerOracle(sources, match), ctx = context();
+	for (const limit of [100, 1, 2, 0, 1.75, -1, Infinity, NaN, 1000]) {
+		h.suggestor.limit = limit;
+		expect(hostRows(h.suggestor.getSuggestions(ctx), limit)).toStrictEqual(hostRows(expected, limit));
+	}
+	for (const provider of providers) expect(provider.getEntityList).toHaveBeenCalledTimes(1);
+	expect(callback).not.toHaveBeenCalled();
+});
+
+test("reads inherited limit once per retrieval and observes later overrides", () => {
+	const h = harness(), prototype = Object.getPrototypeOf(EntitiesSuggestor.prototype), read = jest.fn(() => 1);
+	Object.defineProperty(prototype, "limit", { configurable: true, get: read });
+	try {
+		h.use(h.source("one", [item({ kind: "text", text: "a" }), item({ kind: "text", text: "b" })]));
+		const ctx = context();
+		expect(h.suggestor.getSuggestions(ctx)).toHaveLength(1);
+		read.mockReturnValue(0);
+		expect(h.suggestor.getSuggestions(ctx)).toHaveLength(2);
+		expect(read).toHaveBeenCalledTimes(2);
+	} finally { delete prototype.limit; }
+});
+
+test("keys observe final live file names after every provider's ordinary and creation calls", () => {
+	const h = harness(), f = file("Asset.png"), calls: string[] = [];
+	const first = h.source("first", [item({ kind: "file", file: f }, "ordinary first")], [item({ kind: "file", file: f, alias: "Renamed.png" }, "creation first")]);
+	const later = h.source("later", []);
+	for (const p of [first, later]) {
+		const ordinary = p.getEntityList("", TriggerCharacter.At), creation = p.getTemplateCreationSuggestions("");
+		jest.spyOn(p, "getEntityList").mockImplementation(() => { calls.push(`${p.providerInstanceId}:ordinary`); return ordinary; });
+		jest.spyOn(p, "getTemplateCreationSuggestions").mockImplementation(() => {
+			calls.push(`${p.providerInstanceId}:creation`);
+			if (p === later) f.name = "Renamed.png";
+			return creation;
+		});
+	}
+	h.use(first, later); h.suggestor.limit = 1;
+	expect(h.suggestor.getSuggestions(context()).map(r => r.suggestionText)).toEqual(["ordinary first"]);
+	expect(calls).toEqual(["first:ordinary", "first:creation", "later:ordinary", "later:creation"]);
+	// Full output proves the cap did not simply hide an incorrectly distinct creation key.
+	h.suggestor.limit = 0; f.name = "Asset.png";
+	expect(h.suggestor.getSuggestions(context())).toHaveLength(1);
+});
+
+test("capped later-provider file winner retains captured context and fresh cache-detached rows", () => {
+	const h = harness(), f = file("Target.md"), ctx = context(); h.files.set(f.path, f);
+	jest.mocked(prepareFuzzySearch).mockReturnValue(text => ({ score: text === "winner" ? 20 : 10, matches: [[0, 1]] }));
+	const raw = item({ kind: "file", file: f, alias: "Alias" }, "winner", "winning metadata");
+	const first = h.source("first", [item({ kind: "file", file: f, alias: "Alias" }, "loser")]), later = h.source("later", [raw]);
+	h.use(first, later); h.suggestor.limit = 1;
+	const [a] = h.suggestor.getSuggestions(ctx);
+	Object.assign(a, { suggestionText: "mutated" }); Object.assign(a.target, { alias: "mutated" });
+	raw.suggestionText = "provider mutated"; Object.assign(raw.target, { alias: "provider mutated" });
+	const [b] = h.suggestor.getSuggestions(ctx);
+	expect(b).not.toBe(a); expect(b.target).not.toBe(a.target); expect(b.target).not.toBe(raw.target);
+	expect(b.suggestionText).toBe("winner"); expect(b.noteText).toBe("winning metadata");
+	h.suggestor.selectSuggestion(a, {} as MouseEvent); expect(h.generate).not.toHaveBeenCalled();
+	h.use(later); // Selection must carry the winning provider identity, not the first key's provider.
+	h.suggestor.invalidateData(); h.suggestor.context = context("@", "Wrong.md"); h.suggestor.close();
+	h.suggestor.selectSuggestion(b, {} as MouseEvent);
+	expect(h.generate).toHaveBeenCalledWith(f, ctx.file.path, undefined, "Alias");
+	expect(ctx.editor.transaction).toHaveBeenCalledTimes(1);
+	expect(later.getEntityList).toHaveBeenCalledTimes(1);
+});
+
+test("provider-scoped actions at the cutoff retain callback identity and continue after data/retrieval changes", async () => {
+	const h = harness(), ctx = context();
+	let settle!: (value: { status: "target"; target: { kind: "text"; text: string } }) => void;
+	const first = jest.fn(() => ({ status: "cancelled" as const }));
+	const later = jest.fn(() => new Promise<{ status: "target"; target: { kind: "text"; text: string } }>(resolve => { settle = resolve; }));
+	h.use(h.source("first", [item({ kind: "action", id: "same", callback: first })]), h.source("later", [item({ kind: "action", id: "same", callback: later })]));
+	h.suggestor.limit = 2;
+	const rows = h.suggestor.getSuggestions(ctx);
+	expect(rows).toHaveLength(2); expect(first).not.toHaveBeenCalled(); expect(later).not.toHaveBeenCalled();
+	expect(rows[1].target).toEqual({ kind: "action", id: "same", callback: later });
+	h.suggestor.close(); h.suggestor.selectSuggestion(rows[1], {} as MouseEvent);
+	h.suggestor.invalidateData(); h.suggestor.getSuggestions(ctx);
+	h.suggestor.selectSuggestion(rows[0], {} as MouseEvent);
+	settle({ status: "target", target: { kind: "text", text: "completed" } });
+	await Promise.resolve(); await Promise.resolve();
+	expect(later).toHaveBeenCalledTimes(1); expect(first).not.toHaveBeenCalled();
+	expect(ctx.editor.getValue()).toBe("completed"); expect(ctx.editor.transaction).toHaveBeenCalledTimes(1);
 });
 
 test("Folder and Dataview retain duplicate paths/aliases and collapse the identical live file+alias", () => {
